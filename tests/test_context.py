@@ -1,0 +1,39 @@
+# Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+from imperal_sdk.context import Context
+from imperal_sdk.auth.user import User
+
+
+def test_context_creation():
+    user = User(id="imp_u_123", email="test@test.com", tenant_id="default")
+    ctx = Context(user=user)
+    assert ctx.user.id == "imp_u_123"
+    assert ctx.store is None
+    assert ctx.db is None
+    assert ctx.ai is None
+    assert ctx.billing is None
+
+
+def test_context_with_mock_store():
+    user = User(id="imp_u_123")
+
+    class MockStore:
+        async def create(self, collection, data): return {"id": "1", **data}
+        async def get(self, collection, doc_id): return {}
+        async def query(self, collection, where=None, order_by=None, limit=100): return []
+        async def update(self, collection, doc_id, data): return {}
+        async def delete(self, collection, doc_id): return True
+        async def count(self, collection, where=None): return 0
+
+    ctx = Context(user=user, store=MockStore())
+    assert ctx.store is not None
+
+
+def test_context_extension_id():
+    ctx = Context(user=User(id="imp_u_123"), _extension_id="sharelock-v2")
+    assert ctx._extension_id == "sharelock-v2"
+
+
+def test_context_metadata():
+    ctx = Context(user=User(id="imp_u_123"), _metadata={"trace_id": "abc"})
+    assert ctx._metadata["trace_id"] == "abc"
