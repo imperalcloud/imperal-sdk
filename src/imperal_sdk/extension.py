@@ -36,6 +36,7 @@ class Extension:
         version: str = "0.1.0",
         capabilities: list[str] | None = None,
         migrations_dir: str | None = None,
+        config_defaults: dict | None = None,
     ):
         self.app_id = app_id
         self.version = version
@@ -44,6 +45,7 @@ class Extension:
         self._tools: dict[str, ToolDef] = {}
         self._signals: dict[str, SignalDef] = {}
         self._schedules: dict[str, ScheduleDef] = {}
+        self.config_defaults = config_defaults or {}
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""

@@ -49,6 +49,9 @@ def generate_manifest(ext: Extension) -> dict:
     if ext.migrations_dir:
         manifest["migrations_dir"] = ext.migrations_dir
 
+    if ext.config_defaults:
+        manifest["config_defaults"] = ext.config_defaults
+
     return manifest
 
 

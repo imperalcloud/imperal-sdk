@@ -57,6 +57,19 @@ class HTTPProtocol(Protocol):
     async def post(self, url: str, **kwargs) -> Any: ...
 
 
+@runtime_checkable
+class ToolsProtocol(Protocol):
+    async def discover(self, query: str, top_k: int = 3) -> list: ...
+    async def call(self, activity_name: str, params: dict) -> Any: ...
+
+
+@runtime_checkable
+class ConfigProtocol(Protocol):
+    def get(self, key: str, default: Any = None) -> Any: ...
+    def get_section(self, section: str) -> dict: ...
+    def all(self) -> dict: ...
+
+
 @dataclass
 class Context:
     """The context object passed to every extension tool/signal/schedule call."""
@@ -70,5 +83,7 @@ class Context:
     notify: NotifyProtocol | None = None
     storage: StorageProtocol | None = None
     http: HTTPProtocol | None = None
+    tools: ToolsProtocol | None = None
+    config: ConfigProtocol | None = None
     _extension_id: str = ""
     _metadata: dict = field(default_factory=dict)

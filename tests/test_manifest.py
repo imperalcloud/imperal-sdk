@@ -73,3 +73,26 @@ def test_manifest_no_ctx_in_params():
     params = manifest["tools"][0]["parameters"]
     assert "ctx" not in params
     assert "arg1" in params
+
+
+def test_manifest_config_defaults():
+    ext = Extension("test-app", config_defaults={"models": {"primary_model": "claude-opus"}})
+
+    @ext.tool("hello", description="Say hello")
+    async def hello(ctx):
+        pass
+
+    manifest = generate_manifest(ext)
+    assert "config_defaults" in manifest
+    assert manifest["config_defaults"]["models"]["primary_model"] == "claude-opus"
+
+
+def test_manifest_no_config_defaults():
+    ext = Extension("test-app")
+
+    @ext.tool("hello", description="Say hello")
+    async def hello(ctx):
+        pass
+
+    manifest = generate_manifest(ext)
+    assert "config_defaults" not in manifest
