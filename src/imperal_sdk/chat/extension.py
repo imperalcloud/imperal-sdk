@@ -104,6 +104,9 @@ def _enforce_response_style(text: str) -> str:
         "что-то ещё", "чем-то помочь", "нужна ли", "нужно ли",
     )
     lines = text.split("\n")
+    non_empty_lines = [l for l in lines if l.strip()]
+    # Only strip filler if there are OTHER non-filler lines to keep
+    # Never strip ALL lines — that results in empty response
     cleaned = []
     for line in lines:
         line_lower = line.strip().lower()
@@ -111,8 +114,12 @@ def _enforce_response_style(text: str) -> str:
             cleaned.append(line)
             continue
         if any(f in line_lower for f in _filler):
-            log.info(f"Response style: stripped filler: {line.strip()[:80]}")
-            continue
+            # Check: would removing this leave us with zero content?
+            remaining = [l for l in non_empty_lines if l.strip().lower() != line_lower and not any(f in l.strip().lower() for f in _filler)]
+            if remaining:
+                log.info(f"Response style: stripped filler: {line.strip()[:80]}")
+                continue
+            # else: this is the only meaningful line, keep it
         cleaned.append(line)
     text = "\n".join(cleaned)
     # 3. Collapse excessive blank lines (max 1)

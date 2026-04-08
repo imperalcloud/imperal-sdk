@@ -196,6 +196,19 @@ class LLMProvider:
         self._listener_task: asyncio.Task | None = None
         self._listener_started: bool = False
 
+        # Per-action call log for LLM step tracking
+        self._call_log: list[dict] = []
+
+    # ------------------------------------------------------------------
+    # Call log -- per-action LLM step tracking
+    # ------------------------------------------------------------------
+
+    def reset_call_log(self):
+        self._call_log = []
+
+    def get_call_log(self) -> list:
+        return list(self._call_log)
+
     # ------------------------------------------------------------------
     # Public API — preserved for all call sites
     # ------------------------------------------------------------------
@@ -247,6 +260,7 @@ class LLMProvider:
         self._last_call_info = {"provider": cfg.provider, "model": cfg.model}
 
         is_failover = False
+        import time as _t; _call_start = _t.time()
         try:
             resp = await self._call(cfg, messages, system, max_tokens, tools, tool_choice, temperature)
         except Exception as primary_err:
@@ -279,6 +293,11 @@ class LLMProvider:
                 latency_ms=latency_ms,
             )
             asyncio.ensure_future(self._track_usage(usage))
+
+        # Append to per-action call log
+        _call_ms = int((_t.time() - _call_start) * 1000)
+        _usage = getattr(resp, "usage", None)
+        self._call_log.append({"purpose": purpose or "default", "provider": cfg.provider, "model": cfg.model, "input_tokens": getattr(_usage, "input_tokens", 0) if _usage else 0, "output_tokens": getattr(_usage, "output_tokens", 0) if _usage else 0, "latency_ms": _call_ms, "is_failover": is_failover})
 
         return resp
 

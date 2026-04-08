@@ -12,6 +12,8 @@ class User:
     org_id: str | None = None
     role: str = "user"
     scopes: list[str] = field(default_factory=list)
+    attributes: dict = field(default_factory=dict)
+    is_active: bool = True
 
     def has_scope(self, scope: str) -> bool:
         if "*" in self.scopes:

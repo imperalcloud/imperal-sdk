@@ -24,15 +24,15 @@ class Document:
 class StoreClient:
     """Tier 1: Managed document storage via Auth Gateway internal API."""
 
-    def __init__(self, gateway_url: str, auth_token: str, extension_id: str, user_id: str, tenant_id: str):
+    def __init__(self, gateway_url: str, auth_token: str = "", extension_id: str = "", user_id: str = "", tenant_id: str = "default", service_token: str = ""):
         self._gateway_url = gateway_url.rstrip("/")
-        self._auth_token = auth_token
+        self._auth_token = auth_token or service_token
         self._extension_id = extension_id
         self._user_id = user_id
         self._tenant_id = tenant_id
 
     def _headers(self) -> dict:
-        return {"Authorization": f"Bearer {self._auth_token}", "X-Extension-ID": self._extension_id, "X-Tenant-ID": self._tenant_id}
+        return {"X-Service-Token": self._auth_token, "X-Extension-ID": self._extension_id, "X-Tenant-ID": self._tenant_id}
 
     async def create(self, collection: str, data: dict) -> Document:
         async with httpx.AsyncClient() as client:

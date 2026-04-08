@@ -32,9 +32,9 @@ class SubscriptionInfo:
 class BillingClient:
     """Read-only billing client for extensions."""
 
-    def __init__(self, gateway_url: str, auth_token: str):
+    def __init__(self, gateway_url: str, auth_token: str = "", service_token: str = ""):
         self._gateway_url = gateway_url.rstrip("/")
-        self._auth_token = auth_token
+        self._auth_token = auth_token or service_token
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._auth_token}"}
