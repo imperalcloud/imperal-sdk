@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "0.2.0"
-description = "SDK for building Imperal Cloud extensions — includes Auth SDK (JWT verification, scopes, FastAPI middleware), extension framework, and CLI"
+version = "0.3.0"
+description = "SDK for building Imperal Cloud extensions — ActionResult, Event Publishing, ChatExtension, Auth SDK, CLI"
 license = "AGPL-3.0-or-later"
 authors = [
     { name = "Valentin Scerbacov" },
