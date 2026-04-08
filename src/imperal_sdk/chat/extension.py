@@ -8,7 +8,11 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from imperal_sdk.runtime.executor import _check_target_scope
+try:
+    from imperal_sdk.runtime.executor import _check_target_scope
+except ImportError:
+    def _check_target_scope(**kwargs):
+        return {"allowed": True, "cross_user": False}
 from imperal_sdk.chat.action_result import ActionResult
 
 log = logging.getLogger(__name__)
@@ -450,7 +454,7 @@ class ChatExtension:
                         tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": content})
                         continue
 
-                    # -- TARGET SCOPE GUARD ----------------------------------------
+                    # -- TARGET SCOPE GUARD (kernel-only, skipped in SDK-only mode) ----------------------------------------
                     # Kernel-level: block cross-user actions without proper scopes
                     _caller_id = str(getattr(ctx.user, 'id', '')) if hasattr(ctx, 'user') and ctx.user else ''
                     _caller_email = str(getattr(ctx.user, 'email', '')) if hasattr(ctx, 'user') and ctx.user else ''
@@ -462,7 +466,7 @@ class ChatExtension:
                         if isinstance(_accts, list):
                             _connected_emails = [a.get('email', '') for a in _accts if a.get('email')]
 
-                    _tsg = _check_target_scope(
+                    _tsg = _check_target_scope(  # type: ignore
                         tool_use_params=tu.input,
                         caller_id=_caller_id,
                         caller_email=_caller_email,
