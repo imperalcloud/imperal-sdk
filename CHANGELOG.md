@@ -16,9 +16,10 @@
   - `resolve_dot_path()` — nested dict/list traversal with missing-field safety
   - `resolve_params()` — batch-resolve all string values in a params dict
   - Namespaces: `{{event.data.*}}`, `{{steps.N.data.*}}`, `{{prev.data.*}}`, `{{user.*}}`
-- Hub Kernel Gate — `discover_tools` embeddings score as deterministic pre-filter
-  - Score < 0.25 -> navigate (no extension dispatch)
-  - Score >= 0.25 -> LLM routing -> extension with `tool_choice="any"`
+- Hub Routing Architecture — embeddings as optimization, LLM as multilingual arbiter
+  - Score >= 0.5 -> FAST PATH (direct dispatch, skip LLM, saves ~200ms)
+  - Score < 0.5 -> LLM routing decides (Haiku handles ANY language)
+  - LLM "none" -> navigate. Extension -> dispatch with `tool_choice="any"`
 - Hub chain variable passing — `{{steps.N.data.*}}` templates resolved between chain steps
 - Navigate proactive mode — skeleton data + time injected into navigate prompt
 
