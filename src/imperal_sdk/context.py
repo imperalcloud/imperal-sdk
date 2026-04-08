@@ -71,6 +71,17 @@ class ConfigProtocol(Protocol):
 
 
 @dataclass
+class TimeContext:
+    """Kernel-injected time context. Read-only, no network call."""
+    timezone: str = "UTC"
+    utc_offset: str = "+00:00"
+    now_utc: str = ""
+    now_local: str = ""
+    hour_local: int = 0
+    is_business_hours: bool = False
+
+
+@dataclass
 class Context:
     """The context object passed to every extension tool/signal/schedule call."""
     user: Any
@@ -85,5 +96,6 @@ class Context:
     http: HTTPProtocol | None = None
     tools: ToolsProtocol | None = None
     config: ConfigProtocol | None = None
+    time: TimeContext = field(default_factory=TimeContext)
     _extension_id: str = ""
     _metadata: dict = field(default_factory=dict)
