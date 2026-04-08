@@ -38,11 +38,11 @@ def _format_list(lst: list) -> str:
 
 def resolve_dot_path(context: dict, path: str):
     """Resolve a dot-separated path against a nested dict/list structure.
-
+    
     Examples:
         resolve_dot_path(ctx, "steps.1.data.message_id") -> "abc"
         resolve_dot_path(ctx, "steps.1.data.emails.0.from") -> "x@y.com"
-
+    
     Returns the resolved value, or "" if any segment is missing.
     When the final value is a dict or list, formats it as readable text.
     """
@@ -75,7 +75,7 @@ def resolve_dot_path(context: dict, path: str):
 
 def resolve_template(template: str, context: dict) -> str:
     """Replace all {{path.to.var}} with resolved values from context.
-
+    
     Missing values resolve to empty string.
     Dicts/lists are formatted as readable text (not raw Python repr).
     """
@@ -84,7 +84,7 @@ def resolve_template(template: str, context: dict) -> str:
         value = resolve_dot_path(context, path)
         # resolve_dot_path already formats dicts/lists as readable strings
         return str(value) if value != "" else ""
-
+    
     return _TEMPLATE_RE.sub(_replace, template)
 
 

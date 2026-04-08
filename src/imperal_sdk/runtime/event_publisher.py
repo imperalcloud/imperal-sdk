@@ -17,7 +17,7 @@ async def publish_kernel_event(
     timestamp: str,
 ):
     """Publish a kernel event to Redis pub/sub for automations and SSE.
-
+    
     Non-blocking: errors are logged, never raised.
     """
     event = {

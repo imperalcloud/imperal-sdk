@@ -19,8 +19,6 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
 
@@ -33,9 +31,9 @@ _HUB_SESSION_TTL = 3600
 _FOLLOWUP_MAX_WORDS = 6
 _FOLLOWUP_STALE_SECONDS = 600
 
-# FAST PATH threshold: embeddings score >= this → skip LLM routing (saves ~200ms).
-# Below this → LLM routing decides (Haiku is multilingual, handles any language).
-_FAST_PATH_THRESHOLD = 0.5
+# KERNEL GATE threshold: if ALL embedding scores are below this, skip LLM routing
+# Embeddings are semantic and language-independent — handles follow-ups naturally.
+_NAVIGATE_THRESHOLD = 0.15
 
 async def _get_hub_redis():
     global _hub_redis
@@ -273,17 +271,9 @@ Rules:
 - For notes (create, list, search, delete notes) → notes
 - For user/role/extension management, system health, automations, platform config → admin
 - For multiple topics (emails AND cases) → list both
+- For greetings, small talk, general questions about the system, or questions that no extension handles → none
+- SHORT MESSAGES like "yes", "ok", "do it", "go ahead" are FOLLOW-UPS to the previous conversation. Route to the SAME extension as the previous request.
 - If truly unclear → pick the most likely ONE
-
-CRITICAL CONVERSATIONAL DETECTION (ANY language):
-- Greetings (Привет, Hello, Bonjour, こんにちは, مرحبا, Hola, Hi, Hey, Здравствуйте) → ALWAYS "none"
-- Thanks (Спасибо, Thank you, Merci, ありがとう, شكرا, Gracias, Thanks, Благодарю) → ALWAYS "none"
-- Acknowledgments (Ок, Понятно, Хорошо, OK, Got it, Sure, はい, Ладно, Ясно, Alright) → ALWAYS "none"
-- Farewells (Пока, Bye, До свидания, Goodbye, See you, さようなら) → ALWAYS "none"
-- General questions about the system (what can you do, что умеешь) → "none"
-- These are NEVER follow-ups to extensions, regardless of session context.
-- When in doubt about a short message: if it has NO action verb → "none"
-- SHORT MESSAGES like "yes", "ok", "do it", "go ahead" WITH a LAST USED EXTENSION are FOLLOW-UPS → route to that extension
 
 Intent classification:
 - READ = viewing, listing, searching, checking status (no changes)
@@ -493,7 +483,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
 
     # ── Capabilities query → always navigate (show ALL extensions) ──
     if _is_capabilities_query(message):
-        return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
+        return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps)
 
     # ── Step 1: DISCOVER (embeddings) ─────────────────────────────
     if pre_discovered:
@@ -516,35 +506,32 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
         if score >= 0.15 and (app_id not in all_extensions or score > all_extensions[app_id].get("relevance", 0)):
             all_extensions[app_id] = t
 
-    # ── Embeddings as OPTIMIZATION, not GATE ─────────────────────
-    # High score → FAST PATH (skip LLM, save ~200ms).
-    # Low score → LLM routing decides (Haiku handles ANY language).
-    # LLM returns "none" → navigate. Embeddings never block LLM.
+    # ── KERNEL GATE: embeddings decide if message is actionable ───
+    # discover_tools uses semantic embeddings — fast (~50ms), language-independent.
+    # If no tool scores above threshold → navigate directly (no LLM routing cost).
+    # This prevents greetings, small talk, "Привет!", "Спасибо!" from reaching extensions.
+    # Embeddings are semantic — "да, отправь" matches send tools, "спасибо" matches nothing.
+    # EXCEPTION: automation messages bypass gate (they use _detect_automation_target).
     is_automation = bool(context.get("automation_rule_id"))
     _max_score = max((t.get("relevance", 0) for t in found_tools), default=0)
 
+    if not is_automation:
+        if not found_tools or _max_score < _NAVIGATE_THRESHOLD:
+            log.info(f"Hub KERNEL GATE: no tools matched (max_score={_max_score:.3f} < {_NAVIGATE_THRESHOLD}) → navigate")
+            return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps)
+
+    # ── Step 1b: LLM ROUTING — single source of truth ─────────────
+    # One LLM call handles everything: domain routing + intent classification.
+    # No separate management classifier — _route_with_llm already knows
+    # "user/role/extension management → admin" and "email operations → gmail".
     is_multi = _is_multi_topic(message)
     intent_type = "read"  # default intent
-    _used_fast_path = False
-
-    if not is_automation:
-        if found_tools and _max_score >= _FAST_PATH_THRESHOLD:
-            # FAST PATH: embeddings are confident → skip LLM routing
-            _fast_app = found_tools[0].get("app_id") if found_tools else None
-            if _fast_app:
-                log.info(f"Hub FAST PATH: {_fast_app} (score={_max_score:.3f} >= {_FAST_PATH_THRESHOLD})")
-                all_extensions = {_fast_app: all_extensions[_fast_app]} if _fast_app in all_extensions else all_extensions
-                intent_type = "read"  # will be refined by extension
-                _used_fast_path = True
-            # else: embeddings found tools but no app_id → fall through to LLM routing
 
     # ── Automation intent detection (keyword-based, no LLM needed) ──
     if is_automation:
         _msg_lower = message.lower()
         _write_kw = ("send", "reply", "create", "forward", "compose", "save", "update",
-                     "replace", "modify", "edit", "change", "move", "switch", "set", "put",
-                     "отправь", "создай", "ответь", "перешли", "сохрани", "обнови",
-                     "замени", "измени", "редактируй", "перемести", "установи")
+                     "отправь", "создай", "ответь", "перешли", "сохрани", "обнови")
         _destructive_kw = ("delete", "remove", "archive", "trash", "suspend",
                            "удали", "убери", "заархивируй")
         if any(w in _msg_lower for w in _destructive_kw):
@@ -553,7 +540,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
             intent_type = "write"
         log.info(f"Hub automation intent: {intent_type} for '{message[:60]}'")
 
-    if not is_automation and not _used_fast_path and catalog and catalog.loaded:
+    if not is_automation and catalog and catalog.loaded:
         llm_app_ids, intent_type = await _route_with_llm(message, catalog, history, user_id=user_info.get("id", ""), allowed_apps=_user_allowed_apps)
         if llm_app_ids:
             # LLM routing succeeded — use as PRIMARY, override embedding candidates
@@ -570,10 +557,6 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
             if llm_extensions:
                 all_extensions = llm_extensions
                 log.info(f"Hub LLM routing PRIMARY: {list(all_extensions.keys())} (intent={intent_type})")
-        else:
-            # LLM routing returned "none" or empty → navigate (conversational/greeting)
-            log.info(f"Hub LLM routing: none → navigate (max_emb_score={_max_score:.3f})")
-            return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
 
     # Store intent_type in context for executor KAV verification
     context["_intent_type"] = intent_type
@@ -641,7 +624,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
             if isinstance(result, dict):
                 return result
             return {"response": str(result), "_handled": True}
-        return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
+        return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps)
 
     # Single extension — fast path with auto-reroute
     if len(extensions) == 1:
@@ -719,7 +702,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
                             _fb_result["_message_type"] = "function_call"
                         return _fb_result
             # All fallbacks failed — navigate
-            return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
+            return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps)
         context.pop("_suppress_promotion", None)
         await _save_session_state(user_id, app_id, result if isinstance(result, dict) else {"response": result_text})
         _result = {"response": result_text, **_truth_flags}
@@ -789,10 +772,18 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
         enriched_msg = f"{_chain_ctx}\n\n{step_message}" if _chain_ctx else step_message
         
         # Suppress task promotion in chain mode — we need all results for combine.
-        # Chain mode: don't set _intent_type from keywords — they break non-EN/RU languages.
-        # The function's @chat.function(action_type=...) is the source of truth.
-        # ChatExtension reads action_type from the decorator, not from Hub intent.
-        context["_intent_type"] = "chain"  # Special value: bypasses intent guard in extension
+        # Detect intent per chain step from step message keywords.
+        _step_lower = step_message.lower()
+        _write_words = ("send", "create", "reply", "forward", "compose", "save", "update",
+                        "отправь", "создай", "ответь", "перешли", "сохрани", "обнови")
+        _destructive_words = ("delete", "remove", "archive", "trash",
+                              "удали", "убери", "заархивируй")
+        if any(w in _step_lower for w in _destructive_words):
+            context["_intent_type"] = "destructive"
+        elif any(w in _step_lower for w in _write_words):
+            context["_intent_type"] = "write"
+        else:
+            context["_intent_type"] = "read"
         context["_suppress_promotion"] = True
         context["_chain_mode"] = True
         result = await _dispatch_one(
@@ -836,7 +827,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
         log.info(f"Hub chain: {app_id} step {_chain_idx+1} done, passing context to next")
     
     if not successful:
-        return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
+        return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps)
 
     _last_app, _last_result = successful[-1]
     await _save_session_state(user_id, _last_app, {"response": _last_result})
@@ -913,7 +904,7 @@ async def _dispatch_one(execute_fn, app_id: str, tool_name: str, message: str,
         log.error(f"Hub dispatch error {app_id}/{tool_name}: {e}")
         return {"response": "An error occurred while processing your request.", "_handled": False}
 
-async def _hub_navigate(message: str, history: list, user_info: dict, catalog, allowed_apps: set = None, context: dict = None, skeleton: dict = None) -> dict:
+async def _hub_navigate(message: str, history: list, user_info: dict, catalog, allowed_apps: set = None) -> dict:
     """Navigation mode — conversational assistant when no extension matches."""
     capabilities = []
     user_scopes = user_info.get("scopes", ["*"])
@@ -946,37 +937,11 @@ async def _hub_navigate(message: str, history: list, user_info: dict, catalog, a
     user_email = user_info.get("email", "unknown")
     user_role = user_info.get("role", "user")
 
-    # ── Fresh time calculation (never stale) ──────────────────────
-    _user_tz_str = "UTC"
-    # Source 1: user_info attributes (most reliable)
-    _ui_attrs = user_info.get("attributes", {})
-    if isinstance(_ui_attrs, dict) and _ui_attrs.get("timezone"):
-        _user_tz_str = _ui_attrs["timezone"]
-    # Source 2: context._time (may have timezone even if time is stale)
-    if _user_tz_str == "UTC" and context:
-        _time_ctx = context.get("_time", {})
-        if isinstance(_time_ctx, dict):
-            _user_tz_str = _time_ctx.get("timezone") or _user_tz_str
-        elif hasattr(_time_ctx, "timezone") and _time_ctx.timezone:
-            _user_tz_str = _time_ctx.timezone
-    # Source 3: skeleton user attributes
-    if _user_tz_str == "UTC" and skeleton and isinstance(skeleton, dict):
-        for _section in skeleton.values():
-            if isinstance(_section, dict) and _section.get("timezone"):
-                _user_tz_str = _section["timezone"]
-                break
-    try:
-        _tz = ZoneInfo(_user_tz_str)
-    except Exception:
-        _tz = ZoneInfo("UTC")
-    _now = datetime.now(timezone.utc).astimezone(_tz)
-    _time_line = f"\nCurrent time: {_now.strftime('%Y-%m-%d %H:%M')} ({_user_tz_str})"
-
     system_prompt = f"""You are Imperal Cloud — the world's first AI Cloud Operating System powered by ICNLI.
 
 You are a conversational assistant. You can answer questions about the system and its capabilities, but right now you are in a conversation-only context — you cannot execute actions directly.
 
-CURRENT USER: {user_email} (role: {user_role}){_time_line}
+CURRENT USER: {user_email} (role: {user_role})
 
 YOUR CAPABILITIES (real, from live catalog):
 {capabilities_text}

@@ -237,6 +237,15 @@ class LLMProvider:
         # Ensure background invalidation listener is running
         self._ensure_listener()
 
+        # Log resolved config for visibility
+        _byollm_tag = " [BYOLLM]" if cfg.is_byollm else ""
+        _purpose_tag = f" purpose={purpose}" if purpose else ""
+        _ext_tag = f" ext={extension_id}" if extension_id else ""
+        log.info(f"LLM call: {cfg.provider}/{cfg.model}{_purpose_tag}{_ext_tag}{_byollm_tag}")
+
+        # Track last call config for action_writer (executor reads this)
+        self._last_call_info = {"provider": cfg.provider, "model": cfg.model}
+
         is_failover = False
         try:
             resp = await self._call(cfg, messages, system, max_tokens, tools, tool_choice, temperature)

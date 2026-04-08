@@ -21,7 +21,6 @@ from imperal_sdk.runtime.task_manager import (
     count_active_tasks, update_progress, is_cancelled,
 )
 from imperal_sdk.runtime.action_writer import generate_trace_id, write_action
-from imperal_sdk.runtime.event_publisher import publish_kernel_event
 
 log = logging.getLogger(__name__)
 
@@ -1010,15 +1009,6 @@ async def execute_sdk_tool(tool_input: dict) -> dict:
                 "user_scopes": user_scopes,
                 "checked_scopes": required_scopes,
             }
-            # Enrich with LLM model info from provider's last call
-            try:
-                from imperal_sdk.runtime.llm_provider import get_llm_provider
-                _llm_info = getattr(get_llm_provider(), '_last_call_info', None)
-                if _llm_info:
-                    normalized["_action_meta"]["llm_provider"] = _llm_info.get("provider", "")
-                    normalized["_action_meta"]["llm_model"] = _llm_info.get("model", "")
-            except Exception:
-                pass
 
             # Enrich _action_meta with target scope audit data
             _fc_for_audit = normalized.get("_functions_called", [])
@@ -1046,34 +1036,6 @@ async def execute_sdk_tool(tool_input: dict) -> dict:
                 message=message,
                 result=normalized,
             )
-
-        # ── 10b. Kernel Event Publishing (ActionResult events for automations) ──
-        from imperal_sdk.chat.action_result import ActionResult  # lazy import to avoid circular
-        _fc_list_ev = normalized.get("_functions_called", []) if isinstance(normalized, dict) else []
-        for _fc_ev in _fc_list_ev:
-            _fc_result = _fc_ev.get("result")
-            _fc_event = _fc_ev.get("event")
-            if (_fc_result is not None
-                    and isinstance(_fc_result, ActionResult)
-                    and _fc_result.status == "success"
-                    and _fc_event
-                    and _fc_ev.get("action_type") in ("write", "destructive")):
-                try:
-                    _ev_redis = await _get_redis()
-                    if _ev_redis:
-                        await publish_kernel_event(
-                            redis_client=_ev_redis,
-                            tenant_id=enriched_user.get("tenant_id", "default"),
-                            event_type=f"{app_id}.{_fc_event}",
-                            data=_fc_result.data,
-                            user_id=user_info.get("id", ""),
-                            app_id=app_id,
-                            function_name=_fc_ev.get("name", ""),
-                            action_type=_fc_ev.get("action_type", ""),
-                            timestamp=_now_utc.isoformat(),
-                        )
-                except Exception as _ev_err:
-                    log.error(f"Kernel event publish error: {_ev_err}")
 
         return normalized
 

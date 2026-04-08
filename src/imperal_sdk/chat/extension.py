@@ -430,8 +430,13 @@ class ChatExtension:
 
                     # KERNEL GUARD: if intent=read but LLM tries write/destructive → block
                     # Prevents "are you sure?" being interpreted as delete command
+                    # Special intents that bypass the guard:
+                    #   "chain"      — chain mode: function's @chat.function(action_type=...) is authoritative
+                    #   "automation" — automation mode: system-initiated, all actions allowed
                     _ctx_intent = getattr(ctx, "_intent_type", None) or "read"
-                    if _ctx_intent == "read" and action_type in ("write", "destructive"):
+                    if _ctx_intent in ("chain", "automation"):
+                        pass  # Bypass: function's own action_type is the source of truth
+                    elif _ctx_intent == "read" and action_type in ("write", "destructive"):
                         log.warning(f"ChatExtension {self.tool_name}: BLOCKED {tu.name} (action={action_type}) — intent is read")
                         self._functions_called.append({
                             "name": tu.name, "params": tu.input,
