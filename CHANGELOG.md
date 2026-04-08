@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.0 — 2026-04-08
+
+### Added
+- `ActionResult` — universal return type for `@chat.function`
+  - Factory methods: `.success(data, summary)` / `.error(msg, retryable)`
+  - Serialization: `.to_dict()` / `.from_dict()` for Redis/JSON
+  - Three-layer model: ActionResult (SDK) -> Event (Redis pub/sub) -> Action Record (billing DB)
+- `event=` parameter on `@chat.function` decorator
+  - Kernel auto-publishes events for successful write/destructive actions
+  - Format: `{event_type: "app_id.event", data: ActionResult.data, context: {...}}`
+- `event_publisher` module — `publish_kernel_event()` for Redis pub/sub
+- `template_resolver` module — variable interpolation for automation steps
+  - `resolve_template()` — replaces `{{path.to.var}}` with values
+  - `resolve_dot_path()` — nested dict/list traversal with missing-field safety
+  - `resolve_params()` — batch-resolve all string values in a params dict
+  - Namespaces: `{{event.data.*}}`, `{{steps.N.data.*}}`, `{{prev.data.*}}`, `{{user.*}}`
+- Hub Kernel Gate — `discover_tools` embeddings score as deterministic pre-filter
+  - Score < 0.25 -> navigate (no extension dispatch)
+  - Score >= 0.25 -> LLM routing -> extension with `tool_choice="any"`
+- Hub chain variable passing — `{{steps.N.data.*}}` templates resolved between chain steps
+- Navigate proactive mode — skeleton data + time injected into navigate prompt
+
+### Changed
+- `ChatExtension._handle()` — validates ActionResult returns, stores in enriched `_functions_called`
+- `FunctionDef` dataclass — added `event: str` field
+- `_functions_called` entries — new `result` (ActionResult) and `event` (str) fields
+- Executor Step 10b — kernel event publishing after extension returns
+- Hub — `_routed_intent` propagated in result dict for fabrication detection
+- Truth Gate — deterministic via ActionResult.status (zero LLM, any language)
+
 ## 0.2.0 — 2026-04-03
 
 ### Added
