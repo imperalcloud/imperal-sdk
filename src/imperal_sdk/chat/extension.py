@@ -277,7 +277,11 @@ class ChatExtension:
             if integrity and integrity.get("rules"):
                 parts.append("\nKERNEL INTEGRITY:\n" + "\n".join(f"- {r}" for r in integrity["rules"]))
         if hasattr(ctx, "user") and ctx.user:
-            parts.append(f"\nCURRENT USER: {getattr(ctx.user, 'email', 'unknown')} (role: {getattr(ctx.user, 'role', 'user')})")
+            parts.append(f"\nCURRENT USER: {getattr(ctx.user, 'email', 'unknown')}")
+        # Kernel Language Enforcement
+        _lang_name = getattr(ctx, '_user_language_name', None)
+        if _lang_name:
+            parts.append(f"\nKERNEL LANGUAGE RULE (NON-NEGOTIABLE): You MUST respond ONLY in {_lang_name}.")
         return "\n".join(parts)
 
     def _build_messages(self, history: list, message: str,
@@ -517,8 +521,16 @@ class ChatExtension:
                         tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": content})
                         continue
 
-                    # 2-step confirmation: intercept write/destructive actions
+                    # 2-step confirmation: intercept based on EXACT category match
+                    # ctx._confirmation_actions = {"destructive": True, "write": False} etc.
+                    _should_confirm = False
                     if confirmation_required and action_type in ("write", "destructive"):
+                        _conf_acts = getattr(ctx, "_confirmation_actions", {})
+                        if isinstance(_conf_acts, dict):
+                            _should_confirm = _conf_acts.get(action_type, False) or _conf_acts.get("all", False)
+                        else:
+                            _should_confirm = action_type in _conf_acts or "all" in _conf_acts
+                    if _should_confirm:
                         call_record = {
                             "name": tu.name,
                             "params": tu.input,

@@ -433,6 +433,58 @@ def init_runtime(gateway_url: str, service_token: str, extensions_dir: str = "/o
     log.info(f"ICNLI OS Runtime initialized: gateway={gateway_url}, extensions={extensions_dir}")
 
 
+async def publish_event_catalog():
+    """Scan all loaded extensions and publish available events to Redis.
+    Called at worker startup so automation parser uses REAL events, not hardcoded list.
+    Key: imperal:automation:event_catalog (JSON, TTL 1h, refreshed on restart).
+    """
+    if _loader is None:
+        return
+    import redis.asyncio as _aioredis
+    try:
+        redis_url = os.getenv("REDIS_URL", "")
+        if not redis_url:
+            return
+        r = _aioredis.from_url(redis_url, decode_responses=True)
+        
+        events = []
+        extensions_dir = _loader._extensions_dir
+        # Scan all extension directories
+        for app_id in os.listdir(extensions_dir):
+            main_path = os.path.join(extensions_dir, app_id, "main.py")
+            if not os.path.isfile(main_path):
+                continue
+            # Load extension to get functions
+            try:
+                ext = _loader.load(app_id)
+                if ext and hasattr(ext, "_chat_extensions"):
+                    for tool_name, chat_ext in ext._chat_extensions.items():
+                        if hasattr(chat_ext, "_functions"):
+                            for func_name, func_def in chat_ext._functions.items():
+                                if func_def.event:
+                                    events.append({
+                                        "event_type": f"{app_id}.{func_def.event}",
+                                        "app_id": app_id,
+                                        "function": func_name,
+                                        "action_type": func_def.action_type,
+                                        "description": func_def.description[:150] if func_def.description else "",
+                                    })
+            except Exception as e:
+                log.warning(f"Event catalog: failed to scan {app_id}: {e}")
+        
+        # Also add kernel events (email.received from event_poller, system events)
+        events.extend([
+            {"event_type": "email.received", "app_id": "gmail", "function": "_kernel_poller", "action_type": "event", "description": "New email received (from kernel event poller)"},
+            {"event_type": "system.scheduled", "app_id": "_system", "function": "_kernel_scheduler", "action_type": "event", "description": "Cron schedule triggered"},
+        ])
+        
+        await r.setex("imperal:automation:event_catalog", 3600, _json.dumps(events))
+        log.info(f"Event catalog published to Redis: {len(events)} events from {len(set(e['app_id'] for e in events))} extensions")
+        await r.aclose()
+    except Exception as e:
+        log.error(f"Failed to publish event catalog: {e}")
+
+
 async def execute_sdk_tool(tool_input: dict) -> dict:
     """ICNLI OS syscall — the ONLY way extensions execute.
 
@@ -553,8 +605,6 @@ async def execute_sdk_tool(tool_input: dict) -> dict:
                 result=_hub_result,
             )
         return _hub_result
-    if tool_name == "manage_automations":
-        return await _handle_manage_automations(tool_input)
 
     # ── Extension tool dispatch ───────────────────────────────────
     app_id = tool_input.get("app_id", "")
@@ -641,6 +691,13 @@ async def execute_sdk_tool(tool_input: dict) -> dict:
         # Extensions must know what they CAN and CANNOT do to prevent hallucination
         _inject_capability_boundary(ctx, app_id, ext)
 
+        # ── 4a2. Kernel Language Enforcement ──────────────────────────
+        # Detected in Hub, passed through context. Injected into ChatExtension.
+        _user_lang = ctx_data.get("_user_language", "en")
+        _user_lang_name = ctx_data.get("_user_language_name", "English")
+        ctx._user_language = _user_lang
+        ctx._user_language_name = _user_lang_name
+
         # ── 4b. Confirmation + KAV pre-check ─────────────────────────
         _intent_type = ctx_data.get("_intent_type", "read")
         _is_write_intent = _intent_type in ("write", "destructive")
@@ -648,23 +705,36 @@ async def execute_sdk_tool(tool_input: dict) -> dict:
         log.info(f"KAV check: {app_id}/{tool_name} intent={_intent_type} is_write={_is_write_intent} user={user_id_raw}")
 
         _confirmation_bypassed = ctx_data.get("_confirmation_bypassed", False)
-        if _is_write_intent and not _confirmation_bypassed:
+        # Detect system tasks early — they NEVER need confirmation
+        _is_system_task_early = (
+            tool_name.startswith("skeleton_")
+            or tool_name.startswith("_internal_")
+            or ctx_data.get("_is_skeleton_call")
+            or ctx_data.get("_is_system_call")
+        )
+        # Automations NEVER need confirmation — no user to confirm
+        _is_automation = ctx_data.get("_intent_type") == "automation" or bool(ctx_data.get("automation_rule_id"))
+        # KERNEL FIX: Load confirmation for user tasks regardless of Hub intent.
+        # Skip for system/skeleton tasks — they are internal, never need confirmation.
+        if not _confirmation_bypassed and not _is_system_task_early and not _is_automation:
             _confirmation_settings = await _resolve_confirmation_settings(user_id_raw, _tenant_id)
             log.info(f"KAV settings: enabled={_confirmation_settings.get('confirmation_enabled')} actions={_confirmation_settings.get('confirmation_actions')} for user={user_id_raw}")
             if _confirmation_settings.get("confirmation_enabled"):
-                # Check if this action type requires confirmation
                 _conf_actions = _confirmation_settings.get("confirmation_actions", {})
-                # Support both dict {"write": true} and list ["write"] formats
+                # Check if ANY write/destructive action requires confirmation
                 if isinstance(_conf_actions, dict):
-                    should_confirm = _conf_actions.get(_intent_type, False) or _conf_actions.get("all", False)
+                    has_any_confirm = (_conf_actions.get("write", False) or 
+                                       _conf_actions.get("destructive", False) or 
+                                       _conf_actions.get("all", False))
                 else:
-                    should_confirm = _intent_type in _conf_actions or "all" in _conf_actions
-                log.info(f"KAV confirm check: intent={_intent_type} actions={_conf_actions} should_confirm={should_confirm}")
-                if should_confirm:
+                    has_any_confirm = bool(set(_conf_actions) & {"write", "destructive", "all"})
+                log.info(f"KAV confirm check: actions={_conf_actions} has_any_confirm={has_any_confirm}")
+                if has_any_confirm:
                     ctx_data["_confirmation_required"] = True
-                    ctx._confirmation_required = True  # Also set on ctx object for ChatExtension
+                    ctx._confirmation_required = True
                     ctx._confirmation_settings = _confirmation_settings
-                    log.info(f"KAV: confirmation required for {app_id}/{tool_name} intent={_intent_type}")
+                    ctx._confirmation_actions = _conf_actions  # Pass exact categories to ChatExtension
+                    log.info(f"KAV: confirmation flag set for {app_id}/{tool_name} (ChatExtension will check action_type)")
 
         # Chain mode: kernel forces function calling in ChatExtension
         if ctx_data.get("_chain_mode"):
@@ -998,7 +1068,7 @@ async def execute_sdk_tool(tool_input: dict) -> dict:
         # Session_workflow owns Action Writer — writes AFTER Truth Gate verification.
         # We pack all executor-local data needed for recording.
         _is_navigate = tool_name in ("hub_chat", "system_chat", "discover_tools")
-        _was_handled = normalized.get("_handled", True) if isinstance(normalized, dict) else True
+        _was_handled = normalized.get("_handled", False) if isinstance(normalized, dict) else False
         if isinstance(normalized, dict) and not _is_system_task and not _is_navigate and (_had_function_calls or _was_handled):
             normalized["_action_meta"] = {
                 "app_id": app_id,
@@ -1678,292 +1748,3 @@ ABSOLUTE RULES — VIOLATION IS SYSTEM FAILURE:
         return {"response": "Hello! I'm the Imperal Cloud OS. How can I help you today?"}
 
 
-async def _handle_manage_automations(tool_input: dict) -> dict:
-    """System tool: manage user automations via Auth Gateway API.
-    
-    Available to any user with automations:* scope.
-    No admin extension needed — direct API calls.
-    """
-    import httpx
-    import json as _json
-
-    gw_url = os.getenv("IMPERAL_GATEWAY_URL", "http://104.224.88.155:8085")
-    svc_token = os.getenv("IMPERAL_SERVICE_TOKEN", "")
-    
-    message = tool_input.get("message", "")
-    user_info = tool_input.get("user", {})
-    user_id = user_info.get("id", "")
-    user_role = user_info.get("role", "user")
-    history = tool_input.get("history", [])
-
-    # Scope check
-    user_scopes = user_info.get("scopes", [])
-    has_automations = (
-        "*" in user_scopes
-        or "automations:*" in user_scopes
-        or "automations:read" in user_scopes
-        or "extensions:read" in user_scopes
-    )
-    if not has_automations:
-        return {"response": "You don't have permission to manage automations."}
-
-    can_write = (
-        "*" in user_scopes
-        or "automations:*" in user_scopes
-        or "automations:write" in user_scopes
-        or "extensions:write" in user_scopes
-    )
-
-    # Fetch user's automations for context
-    try:
-        tz = user_info.get("attributes", {}).get("timezone", "UTC")
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"{gw_url}/v1/automations",
-                headers={"X-Service-Token": svc_token},
-                params={"user_id": user_id, "tenant_id": "default", "timezone": tz},
-            )
-            my_rules = resp.json() if resp.status_code == 200 else []
-    except Exception:
-        my_rules = []
-
-    rules_summary = ""
-    if my_rules:
-        for r in my_rules:
-            rules_summary += f"- Rule #{r['id']}: \"{r.get('prompt','')}\" status={r.get('status','?')} triggers={r.get('trigger_count',0)}\n"
-    else:
-        rules_summary = "(no automations yet)"
-
-    # Define tools for Haiku
-    tools = [
-        {
-            "name": "list_automations",
-            "description": "List all user's automation rules with their status and trigger counts",
-            "input_schema": {"type": "object", "properties": {}, "required": []},
-        },
-        {
-            "name": "create_automation",
-            "description": "Create a new automation rule from a natural language prompt. Example: 'When I receive an email from boss@company.com, create a note with the summary'",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "prompt": {"type": "string", "description": "Natural language description of the automation rule"},
-                    "cooldown_seconds": {"type": "integer", "description": "Minimum seconds between triggers (default 60)", "default": 60},
-                    "max_per_hour": {"type": "integer", "description": "Maximum triggers per hour (default 10)", "default": 10},
-                },
-                "required": ["prompt"],
-            },
-        },
-        {
-            "name": "pause_automation",
-            "description": "Pause an active automation rule",
-            "input_schema": {
-                "type": "object",
-                "properties": {"rule_id": {"type": "integer", "description": "The rule ID to pause"}},
-                "required": ["rule_id"],
-            },
-        },
-        {
-            "name": "resume_automation",
-            "description": "Resume a paused automation rule",
-            "input_schema": {
-                "type": "object",
-                "properties": {"rule_id": {"type": "integer", "description": "The rule ID to resume"}},
-                "required": ["rule_id"],
-            },
-        },
-        {
-            "name": "delete_automation",
-            "description": "Permanently delete an automation rule",
-            "input_schema": {
-                "type": "object",
-                "properties": {"rule_id": {"type": "integer", "description": "The rule ID to delete"}},
-                "required": ["rule_id"],
-            },
-        },
-    ]
-
-    # Remove write tools if user only has read
-    if not can_write:
-        tools = [t for t in tools if t["name"] == "list_automations"]
-
-    system = f"""You are the Imperal Cloud automation manager. Help the user manage their automation rules.
-
-CURRENT USER AUTOMATIONS:
-{rules_summary}
-
-RULES:
-- Users can only manage their OWN automations (already filtered).
-- Be concise. Respond in the user's language.
-- When creating automations, the 'prompt' should be a clear natural language description of the trigger and action.
-- When listing, format nicely with rule ID, description, status, and trigger count.
-- "Imperal" not "Imperial". No emojis."""
-
-    msgs = []
-    for h in (history or [])[-4:]:
-        if h.get("role") in ("user", "assistant") and h.get("content"):
-            msgs.append({"role": h["role"], "content": h["content"]})
-    msgs.append({"role": "user", "content": message})
-
-    try:
-        aclient = _get_llm()
-        
-        # Round 1: Haiku decides what to do
-        resp = await aclient.create_message(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            system=system,
-            messages=msgs,
-            tools=tools,
-        )
-
-        functions_called = []
-        response_text = ""
-
-        for block in resp.content:
-            if block.type == "text":
-                response_text += block.text
-            elif block.type == "tool_use":
-                fn_name = block.name
-                fn_input = block.input
-                fn_result = await _execute_automation_fn(fn_name, fn_input, user_id, gw_url, svc_token)
-                functions_called.append({"name": fn_name, "success": "error" not in str(fn_result).lower()})
-
-                # Round 2: Haiku formats the result
-                msgs.append({"role": "assistant", "content": resp.content})
-                msgs.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": block.id, "content": _json.dumps(fn_result, ensure_ascii=False)}]})
-                resp2 = await aclient.create_message(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=1024,
-                    system=system,
-                    messages=msgs,
-                    tools=tools,
-                )
-                for b2 in resp2.content:
-                    if b2.type == "text":
-                        response_text += b2.text
-
-        return {
-            "response": response_text or "I can help you manage your automations. Try asking me to list, create, pause, resume, or delete automation rules.",
-            "_had_function_calls": len(functions_called) > 0,
-            "_had_successful_action": any(fc.get("success") for fc in functions_called),
-            "_handled": True,
-            "_functions_called": functions_called,
-        }
-
-    except Exception as e:
-        log.error(f"manage_automations error: {e}")
-        return {"response": f"Failed to process automation request: {e}", "_handled": True}
-
-
-async def _execute_automation_fn(fn_name: str, fn_input: dict, user_id: str, gw_url: str, svc_token: str) -> dict:
-    """Execute a single automation management function via Auth Gateway API."""
-    import httpx
-
-    headers = {"X-Service-Token": svc_token, "Content-Type": "application/json"}
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            if fn_name == "list_automations":
-                resp = await client.get(
-                    f"{gw_url}/v1/automations",
-                    headers=headers,
-                    params={"user_id": user_id, "tenant_id": "default"},
-                )
-                if resp.status_code == 200:
-                    rules = resp.json()
-                    return {"rules": rules, "count": len(rules)}
-                return {"error": f"Failed to list automations: {resp.status_code}"}
-
-            elif fn_name == "create_automation":
-                prompt = fn_input.get("prompt", "")
-                if not prompt:
-                    return {"error": "Prompt is required"}
-                
-                # Use Haiku to interpret the rule
-                aclient = _get_llm()
-                interp = await aclient.create_message(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=300,
-                    messages=[{"role": "user", "content": f"""Parse this automation rule into structured format.
-
-Rule: "{prompt}"
-
-Return JSON only:
-{{"event_type": "email.received|schedule.cron|...", "interpretation": "one sentence summary", "actions": [{{"message": "natural language action step"}}], "cooldown_seconds": 60}}"""}],
-                )
-                import json as _json
-                raw = interp.content[0].text.strip()
-                if raw.startswith("```"):
-                    raw = "\n".join(l for l in raw.split("\n") if not l.strip().startswith("```"))
-                parsed = _json.loads(raw)
-
-                # Validate cron schedule if system.scheduled
-                _evt_type = parsed.get("event_type", "email.received")
-                _schedule = parsed.get("schedule", "")
-                if _evt_type == "system.scheduled" and _schedule:
-                    try:
-                        from croniter import croniter as _cron
-                        _cron(_schedule)
-                    except (ValueError, KeyError) as _ce:
-                        return {"error": f"Invalid cron expression '{_schedule}': {_ce}"}
-
-                body = {
-                    "user_id": user_id,
-                    "tenant_id": "default",
-                    "prompt": prompt,
-                    "trigger_filter": {"event_type": _evt_type, **(
-                        {"schedule": _schedule} if _schedule else {}
-                    )},
-                    "actions": parsed.get("actions", [{"message": prompt}]),
-                    "interpretation": parsed.get("interpretation", prompt),
-                    "cooldown_seconds": fn_input.get("cooldown_seconds", parsed.get("cooldown_seconds", 60)),
-                    "max_per_hour": fn_input.get("max_per_hour", 10),
-                    "max_iterations": 50,
-                    "status": "active",
-                }
-                resp = await client.post(f"{gw_url}/v1/automations", headers=headers, json=body)
-                if resp.status_code in (200, 201):
-                    return {"created": True, "rule": resp.json()}
-                return {"error": f"Failed to create: {resp.status_code} {resp.text}"}
-
-            elif fn_name == "pause_automation":
-                rule_id = fn_input.get("rule_id")
-                resp = await client.patch(
-                    f"{gw_url}/v1/automations/{rule_id}",
-                    headers=headers,
-                    json={"status": "paused"},
-                    params={"user_id": user_id},
-                )
-                if resp.status_code == 200:
-                    return {"paused": True, "rule_id": rule_id}
-                return {"error": f"Failed to pause: {resp.status_code}"}
-
-            elif fn_name == "resume_automation":
-                rule_id = fn_input.get("rule_id")
-                resp = await client.patch(
-                    f"{gw_url}/v1/automations/{rule_id}",
-                    headers=headers,
-                    json={"status": "active"},
-                    params={"user_id": user_id},
-                )
-                if resp.status_code == 200:
-                    return {"resumed": True, "rule_id": rule_id}
-                return {"error": f"Failed to resume: {resp.status_code}"}
-
-            elif fn_name == "delete_automation":
-                rule_id = fn_input.get("rule_id")
-                resp = await client.delete(
-                    f"{gw_url}/v1/automations/{rule_id}",
-                    headers=headers,
-                    params={"user_id": user_id},
-                )
-                if resp.status_code in (200, 204):
-                    return {"deleted": True, "rule_id": rule_id}
-                return {"error": f"Failed to delete: {resp.status_code}"}
-
-            else:
-                return {"error": f"Unknown function: {fn_name}"}
-
-    except Exception as e:
-        return {"error": str(e)}

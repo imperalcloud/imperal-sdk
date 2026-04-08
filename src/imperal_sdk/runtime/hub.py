@@ -41,7 +41,7 @@ _FOLLOWUP_STALE_SECONDS = 600
 
 # FAST PATH threshold: embeddings score >= this → skip LLM routing (saves ~200ms).
 # Below this → LLM routing decides (Haiku is multilingual, handles any language).
-_FAST_PATH_THRESHOLD = 0.5
+# _FAST_PATH_THRESHOLD removed (2026-04-08) — Haiku always runs
 
 async def _get_hub_redis():
     global _hub_redis
@@ -219,6 +219,43 @@ def _is_capabilities_query(message: str) -> bool:
     """Detect if user is asking about system-wide capabilities."""
     return bool(_CAPABILITIES_PATTERN.search(message))
 
+def _is_short_ack(message: str) -> bool:
+    """Detect short acknowledgments/dismissals that should NEVER dispatch to extensions.
+    These are conversational fillers — always navigate, never function call."""
+    _msg = message.strip().lower()
+    # Single-word acks in multiple languages
+    _ack_words = {
+        # Russian
+        'не', 'нет', 'да', 'ок', 'окей', 'ладно', 'понял', 'понятно', 'хорошо',
+        'спасибо', 'благодарю', 'пока', 'привет', 'здравствуйте', 'круто', 'супер',
+        'отлично', 'ясно', 'угу', 'ага', 'неа', 'норм', 'збс', 'ну',
+        # English
+        'no', 'yes', 'ok', 'okay', 'sure', 'thanks', 'thank', 'bye', 'hi', 'hello',
+        'hey', 'nope', 'yep', 'yeah', 'nah', 'cool', 'great', 'fine', 'got it',
+        'alright', 'right', 'nice', 'wow', 'hmm', 'hm',
+        # French/German/Spanish basics
+        'non', 'oui', 'merci', 'salut', 'nein', 'ja', 'danke', 'hola', 'gracias', 'si',
+    }
+    # Check single word or very short (1-2 words)
+    words = _msg.split()
+    if len(words) <= 2:
+        # Check if ALL words are ack words
+        if all(w.rstrip('!?.,:;') in _ack_words for w in words):
+            return True
+    # Also catch emoji-only or punctuation-only
+    stripped = _msg.strip('!?.,:; ')
+    if not stripped:
+        return True
+    return False
+
+
+_LANG_NAMES = {
+    "ru": "Russian", "en": "English", "es": "Spanish", "fr": "French",
+    "de": "German", "ar": "Arabic", "zh": "Chinese", "ja": "Japanese",
+    "ko": "Korean", "pt": "Portuguese", "it": "Italian", "tr": "Turkish",
+}
+
+
 def _is_multi_topic(message: str) -> bool:
     """Detect if message explicitly mentions multiple topics (conjunctions, commas)."""
     return bool(_MULTI_TOPIC_PATTERN.search(message))
@@ -232,12 +269,13 @@ async def _route_with_llm(message: str, catalog, history: list = None, user_id: 
     Cost: ~$0.0005, ~150ms.
     
     Returns:
-        tuple of (app_ids list, intent_type string).
+        tuple of (app_ids list, intent_type string, language string).
         intent_type is one of: "read", "write", "destructive".
-        Defaults to "read" if classification fails.
+        language is ISO 639-1 code (e.g. "ru", "en").
+        Defaults to ("read", "") if classification fails.
     """
     if not catalog or not catalog.loaded:
-        return [], "read"
+        return [], "read", ""
     
     # Build extension list for Haiku
     ext_descriptions = []
@@ -247,7 +285,7 @@ async def _route_with_llm(message: str, catalog, history: list = None, user_id: 
         if _app in _seen_apps:
             continue
         _seen_apps.add(_app)
-        if allowed_apps and _app not in allowed_apps:
+        if allowed_apps is not None and _app not in allowed_apps:
             continue
         ext_descriptions.append(f"- {_app}: {t.get('description', t.get('name', ''))[:150]}")
     ext_list = "\n".join(ext_descriptions)
@@ -269,11 +307,11 @@ AVAILABLE EXTENSIONS:
 {ext_list}
 
 USER MESSAGE: "{message}"
-{f"RECENT CONVERSATION CONTEXT: {chr(10).join(h.get('role','') + ': ' + h.get('content','')[:100] for h in (history or [])[-4:])}" if history else ""}
+{('RECENT CONVERSATION CONTEXT (most recent last):' + chr(10) + chr(10).join(h.get("role","").upper() + ": " + h.get("content","")[:500] for h in (history or [])[-6:])) if history else ""}
 {_session_hint}
 
 Rules:
-- SHORT MESSAGES like "yes", "ok", "do it", "go ahead" are FOLLOW-UPS to the previous conversation. Route to the SAME extension as the previous request.
+- ACTION follow-ups like "do it", "go ahead", "send it", "yes send", "давай", "отправь" are FOLLOW-UPS. Route to the SAME extension.
 - For email operations (send, read, inbox, reply, compose, show emails, list emails) → gmail
 - For case management, investigation, analysis → sharelock-v2
 - For notes (create, list, search, delete notes) → notes
@@ -286,12 +324,12 @@ Rules:
 CRITICAL CONVERSATIONAL DETECTION (ANY language):
 - Greetings (Привет, Hello, Bonjour, こんにちは, مرحبا, Hola, Hi, Hey, Здравствуйте) → ALWAYS "none"
 - Thanks (Спасибо, Thank you, Merci, ありがとう, شكرا, Gracias, Thanks, Благодарю) → ALWAYS "none"
-- Acknowledgments (Ок, Понятно, Хорошо, OK, Got it, Sure, はい, Ладно, Ясно, Alright) → ALWAYS "none"
+- Acknowledgments/Dismissals (Ок, Понятно, Хорошо, OK, Got it, Sure, Ладно, Ясно, Alright, Не, Нет, Неа, No, Nope, Nah, Круто, Nice, Cool) → ALWAYS "none"
 - Farewells (Пока, Bye, До свидания, Goodbye, See you, さようなら) → ALWAYS "none"
 - General questions about the system (what can you do, что умеешь) → "none"
 - These are NEVER follow-ups to extensions, regardless of session context.
 - When in doubt about a short message: if it has NO action verb → "none"
-- SHORT MESSAGES like "yes", "ok", "do it", "go ahead" WITH a LAST USED EXTENSION are FOLLOW-UPS → route to that extension
+- ACTION follow-ups ("do it", "send it", "давай", "отправь") WITH a LAST USED EXTENSION → route to that extension
 
 Intent classification:
 - READ = viewing, listing, searching, checking status (no changes)
@@ -299,19 +337,30 @@ Intent classification:
 - DESTRUCTIVE = deleting, removing, suspending, revoking, trashing (irreversible changes)
 - IMPORTANT: delete/remove/удали/trash/suspend = ALWAYS DESTRUCTIVE, never WRITE
 
-Answer format: app_id1,app_id2|INTENT_TYPE (or "none|READ" for greetings/general conversation)
-Examples: gmail|WRITE, admin,gmail|WRITE, gmail|READ, admin|DESTRUCTIVE, none|READ
+Also detect the LANGUAGE of the user's message (ISO 639-1 code).
+
+Answer format: app_id1,app_id2|INTENT_TYPE|LANG_CODE
+Examples: gmail|WRITE|ru, admin,gmail|WRITE|en, gmail|READ|es, admin|DESTRUCTIVE|fr, none|READ|ru
+LANG_CODE: 2-letter ISO 639-1 (ru, en, es, fr, de, ar, zh, ja, ko, pt, it, tr, etc.)
 Nothing else."""}],
         )
         answer = resp.content[0].text.strip().lower() if resp.content else ""
         
-        # Parse intent_type from pipe separator
+        # Parse intent_type + language from pipe separators
+        # Format: app_ids|INTENT|LANG (e.g. "gmail|WRITE|ru")
         intent_type = "read"
+        _llm_language = ""
         apps_part = answer
-        if "|" in answer:
-            parts = answer.rsplit("|", 1)
-            apps_part = parts[0].strip()
-            raw_intent = parts[1].strip()
+        _pipe_parts = answer.split("|")
+        if len(_pipe_parts) >= 3:
+            apps_part = _pipe_parts[0].strip()
+            raw_intent = _pipe_parts[1].strip()
+            _llm_language = _pipe_parts[2].strip()
+            if raw_intent in _VALID_INTENT_TYPES:
+                intent_type = raw_intent
+        elif len(_pipe_parts) == 2:
+            apps_part = _pipe_parts[0].strip()
+            raw_intent = _pipe_parts[1].strip()
             if raw_intent in _VALID_INTENT_TYPES:
                 intent_type = raw_intent
         
@@ -319,18 +368,18 @@ Nothing else."""}],
         app_ids = [a.strip() for a in apps_part.replace("\n", ",").split(",") if a.strip()]
         # Handle "none" → navigate mode (greetings, general conversation)
         if app_ids == ["none"] or (len(app_ids) == 1 and app_ids[0] == "none"):
-            log.info(f"Hub LLM routing: '{message[:50]}' → navigate (none)")
-            return [], intent_type
+            log.info(f"Hub LLM routing: '{message[:50]}' → navigate (none) lang={_llm_language}")
+            return [], intent_type, _llm_language
         # Validate against catalog
         valid_apps = {t["app_id"] for t in catalog.tools}
         result = [a for a in app_ids if a in valid_apps]
         if result:
-            log.info(f"Hub LLM routing: '{message[:50]}' → {result} (intent={intent_type})")
-            return result, intent_type
+            log.info(f"Hub LLM routing: '{message[:50]}' → {result} (intent={intent_type}, lang={_llm_language})")
+            return result, intent_type, _llm_language
     except Exception as e:
         log.warning(f"Hub LLM routing failed: {e}")
     
-    return [], "read"
+    return [], "read", ""
 
 def _detect_automation_target(message: str, extensions: dict) -> str | None:
     """Determine target extension for automation action from message content.
@@ -493,15 +542,64 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
 
     pre_discovered = tool_input.get("_discovered", [])
 
+    # ── Kernel Language Detection — LLM-only, persisted in Redis ──
+    # Read last known language from Redis (set by previous LLM routing call)
+    _user_id_for_lang = user_info.get("id", "")
+    _cached_lang = ""
+    try:
+        _hr = await _get_hub_redis()
+        _cached_lang = await _hr.get(f"imperal:user_lang:{_user_id_for_lang}") or ""
+    except Exception:
+        pass
+    if _cached_lang:
+        context["_user_language"] = _cached_lang
+        context["_user_language_name"] = _LANG_NAMES.get(_cached_lang, _cached_lang.upper())
+
     # Extract allowed extensions for this user (pre-filtered by session_workflow access_policy)
-    _user_allowed_apps = set()
+    # Build allowed apps from skeleton context (pre-filtered by session_workflow access_policy)
+    # None = backwards compat (no filter). set() = strict filter (even if empty = show nothing)
     _skel_ctx = skeleton.get("_context", {}) if isinstance(skeleton, dict) else {}
-    for _ei in _skel_ctx.get("extensions_info", []):
-        _user_allowed_apps.add(_ei.get("app_id", ""))
+    _ext_info = _skel_ctx.get("extensions_info", [])
+    if _ext_info:
+        _user_allowed_apps = {_ei.get("app_id", "") for _ei in _ext_info}
+        _user_allowed_apps.discard("")  # remove empty strings
+    else:
+        _user_allowed_apps = set()  # empty set = strict, show nothing
 
     # ── Capabilities query → always navigate (show ALL extensions) ──
     if _is_capabilities_query(message):
         return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
+
+    # ── KERNEL GUARD: Short ack/dismissal → ALWAYS navigate, NEVER dispatch ──
+    # "Не", "ок", "спасибо" etc. must never trigger function calls.
+    if _is_short_ack(message):
+        log.info(f"Hub: short ack detected ('{message[:30]}') → navigate (no dispatch)")
+        return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
+
+    # ── KERNEL GUARD: Automation request → manage_automations BEFORE routing ──
+    # If message is clearly about creating/managing automations AND user has scope,
+    # route directly to manage_automations. Don't let gmail/notes steal the request
+    # because the message happens to contain an email address or note keyword.
+    _auto_kw = ("автоматизац", "автоматизир", "automation", "automate", "правило автомат", "создай правило", "create rule", "create automation", "триггер", "trigger")
+    _msg_lower = message.lower()
+    _is_auto_request = any(kw in _msg_lower for kw in _auto_kw)
+    if _is_auto_request:
+        _u_scopes = user_info.get("scopes", ["*"])
+        _has_auto_scope = "*" in _u_scopes or "automations:*" in _u_scopes or "automations:write" in _u_scopes or "extensions:write" in _u_scopes
+        if _has_auto_scope:
+            log.info(f"Hub: automation request detected EARLY → manage_automations (msg='{message[:50]}')")
+            result = await execute_fn({
+                "app_id": "__system__",
+                "tool_name": "manage_automations",
+                "message": message,
+                "user": user_info,
+                "history": history,
+                "skeleton": skeleton,
+                "context": context,
+            })
+            if isinstance(result, dict):
+                return result
+            return {"response": str(result), "_handled": True}
 
     # ── Step 1: DISCOVER (embeddings) ─────────────────────────────
     if pre_discovered:
@@ -535,16 +633,13 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
     intent_type = "read"  # default intent
     _used_fast_path = False
 
-    if not is_automation:
-        if found_tools and _max_score >= _FAST_PATH_THRESHOLD:
-            # FAST PATH: embeddings are confident → skip LLM routing
-            _fast_app = found_tools[0].get("app_id") if found_tools else None
-            if _fast_app:
-                log.info(f"Hub FAST PATH: {_fast_app} (score={_max_score:.3f} >= {_FAST_PATH_THRESHOLD})")
-                all_extensions = {_fast_app: all_extensions[_fast_app]} if _fast_app in all_extensions else all_extensions
-                intent_type = "read"  # will be refined by extension
-                _used_fast_path = True
-            # else: embeddings found tools but no app_id → fall through to LLM routing
+    # No fast path — ALWAYS route through Haiku for consistent:
+    # 1. Routing (multilingual, context-aware)
+    # 2. Intent classification (read/write/destructive)
+    # 3. Language detection (authoritative, every message)
+    # Cost: ~$0.0005/msg, ~150ms. Worth it for AI Cloud OS correctness.
+    if False:  # fast path disabled
+        pass
 
     # ── Automation intent detection (keyword-based, no LLM needed) ──
     if is_automation:
@@ -561,8 +656,18 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
             intent_type = "write"
         log.info(f"Hub automation intent: {intent_type} for '{message[:60]}'")
 
-    if not is_automation and not _used_fast_path and catalog and catalog.loaded:
-        llm_app_ids, intent_type = await _route_with_llm(message, catalog, history, user_id=user_info.get("id", ""), allowed_apps=_user_allowed_apps)
+    if not is_automation and catalog and catalog.loaded:
+        llm_app_ids, intent_type, _llm_lang = await _route_with_llm(message, catalog, history, user_id=user_info.get("id", ""), allowed_apps=_user_allowed_apps)
+        # LLM-detected language is authoritative (Haiku understands ALL languages)
+        if _llm_lang and len(_llm_lang) == 2:
+            context["_user_language"] = _llm_lang
+            context["_user_language_name"] = _LANG_NAMES.get(_llm_lang, _llm_lang.upper())
+            # Persist for future messages (ack/greetings skip LLM routing)
+            try:
+                _hr = await _get_hub_redis()
+                await _hr.setex(f"imperal:user_lang:{user_info.get('id', '')}", 86400, _llm_lang)
+            except Exception:
+                pass
         if llm_app_ids:
             # LLM routing succeeded — use as PRIMARY, override embedding candidates
             llm_extensions = {}
@@ -587,7 +692,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
             _msg_lower = message.lower()
             _is_mgmt_followup = any(kw in _msg_lower for kw in _mgmt_keywords)
             
-            if _is_mgmt_followup and (not _user_allowed_apps or "admin" in _user_allowed_apps):
+            if _is_mgmt_followup and ("admin" in _user_allowed_apps):
                 # Route to admin as management fallback
                 for t in catalog.tools:
                     if t.get("app_id") == "admin":
@@ -633,7 +738,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
         if session_state and session_state.get("last_app") and catalog and catalog.loaded:
             last_app = session_state["last_app"]
             # Try last_app first — but ONLY if user has access (RBAC check)
-            if not _user_allowed_apps or last_app in _user_allowed_apps:
+            if last_app in _user_allowed_apps:
                 for t in catalog.tools:
                     if t.get("app_id") == last_app:
                         extensions = {last_app: {**t, "relevance": 0.8}}
@@ -641,7 +746,7 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
                         break
             # last_app not accessible -> admin fallback (only if user has access)
             if not extensions:
-                if not _user_allowed_apps or "admin" in _user_allowed_apps:
+                if "admin" in _user_allowed_apps:
                     for t in catalog.tools:
                         if t.get("app_id") == "admin":
                             extensions = {"admin": {**t, "relevance": 0.8}}
@@ -949,14 +1054,14 @@ async def _hub_navigate(message: str, history: list, user_info: dict, catalog, a
 
     # Filter capabilities using allowed_extensions from skeleton context
     # This is already filtered by access_policy in load_all_user_extensions
-    _allowed_apps = allowed_apps or set()
+    _allowed_apps = allowed_apps  # None = no filter, empty set = NO extensions visible
 
     if catalog and catalog.loaded:
         ext_tools = {}
         for t in catalog.tools:
             app_id = t.get("app_id", "")
             # Only show extensions the user has access to (pre-filtered by session_workflow)
-            if _allowed_apps and app_id not in _allowed_apps:
+            if _allowed_apps is not None and app_id not in _allowed_apps:
                 continue
             app = t.get("app_display_name", t.get("app_id", "unknown"))
             desc = t.get("description", t.get("name", ""))
@@ -964,7 +1069,7 @@ async def _hub_navigate(message: str, history: list, user_info: dict, catalog, a
         for app_name, tools in ext_tools.items():
             tool_list = "; ".join(t for t in tools if t)
             capabilities.append(f"- **{app_name}**: {tool_list}" if tool_list else f"- **{app_name}**")
-        # Always show automations capability for users with automations scope
+        # Show automations capability only if user has automations scope AND has extensions
         _has_auto = "*" in user_scopes or "automations:*" in user_scopes or "automations:read" in user_scopes
         if _has_auto:
             capabilities.append("- **Automations**: create, list, pause, resume, and delete automation rules")
@@ -977,6 +1082,19 @@ async def _hub_navigate(message: str, history: list, user_info: dict, catalog, a
     _user_tz_str = "UTC"
     # Source 1: user_info attributes (most reliable)
     _ui_attrs = user_info.get("attributes", {})
+    # Assistant name/avatar: Redis cache (set by admin via platform config)
+    _assistant_name = "Webbee"
+    _assistant_avatar = ""
+    try:
+        _hr = await _get_hub_redis()
+        _assistant_raw = await _hr.get("imperal:platform:assistant")
+        if _assistant_raw:
+            import json as _json_assist
+            _assist_data = _json_assist.loads(_assistant_raw)
+            _assistant_name = _assist_data.get("name", "Webbee")
+            _assistant_avatar = _assist_data.get("avatar", "")
+    except Exception:
+        pass
     if isinstance(_ui_attrs, dict) and _ui_attrs.get("timezone"):
         _user_tz_str = _ui_attrs["timezone"]
     # Source 2: context._time (may have timezone even if time is stale)
@@ -997,32 +1115,35 @@ async def _hub_navigate(message: str, history: list, user_info: dict, catalog, a
     except Exception:
         _tz = ZoneInfo("UTC")
     _now = datetime.now(timezone.utc).astimezone(_tz)
+    # Build automations section conditionally (only if user has automations scope)
+    _has_auto = "*" in user_scopes or "automations:*" in user_scopes or "automations:read" in user_scopes
+    if _has_auto:
+        _automations_section = """
+AI CLOUD AGENTS (automation power):
+Users can create intelligent agents that run automatically:
+- Cron-based schedules, event-driven triggers, multi-step workflows
+- Direct + Agent steps: zero-LLM function calls + intelligent dispatch
+- Template variables: steps can reference previous step results
+When users ask about automation ideas — suggest combinations of the tools from YOUR CAPABILITIES above."""
+    else:
+        _automations_section = ""
+
     _time_line = f"\nCurrent time: {_now.strftime('%Y-%m-%d %H:%M')} ({_user_tz_str})"
 
     system_prompt = f"""You are Imperal Cloud — the world's first AI Cloud Operating System powered by ICNLI (Natural Language + Deep Context + Real Actions + Safety).
 
-You are Webbee — the AI assistant of Imperal Cloud. You are intelligent, proactive, and confident.
+You are {_assistant_name} — the AI assistant of Imperal Cloud. You are intelligent, proactive, and confident.
 
-CURRENT USER: {user_email} (role: {user_role}){_time_line}
+CURRENT USER: {user_email}{_time_line}
 
 YOUR CAPABILITIES (real, from live catalog):
 {capabilities_text}
 
 WHAT YOU CAN DO:
-- Execute ANY action from the catalog above: read/send emails, manage notes, administer users/extensions, analyze cases
-- Chain multiple actions: "покажи заметки и последние 5 писем" — you handle both in one request
-- Create and manage AI Cloud Agents (automated rules): cron schedules, event-driven triggers, multi-step workflows with conditions and branching
-- AI Cloud Agents can: send scheduled emails, monitor inbox for VIP senders, auto-create notes from emails, escalation chains, and ANY combination of your tools
+- Execute ONLY actions listed in YOUR CAPABILITIES above. You have NO other capabilities.
+- Chain multiple actions from your catalog in one request
 - Work in ANY language — Russian, English, French, Chinese, Arabic, etc.
-
-AI CLOUD AGENTS (automation power):
-Users can create intelligent agents that run automatically:
-- Cron-based: "Every morning at 10AM, send me a summary of unread emails"
-- Event-driven: "When I receive an email from boss@company.com, create a note with the subject"
-- Multi-step chains: "Send email → wait for reply → check if positive → reply accordingly"
-- Direct + Agent steps: zero-LLM function calls + intelligent Hub dispatch
-- Template variables: steps can reference previous step results
-When users ask about automation ideas — be CREATIVE and suggest powerful combinations of your tools!
+{_automations_section}
 
 CONVERSATION RULES:
 1. You ARE Imperal Cloud. NEVER say "I'm the Notes helper" or "ask extension X". ALL capabilities are YOURS.
@@ -1032,11 +1153,12 @@ CONVERSATION RULES:
 5. Be confident, concise, and proactive. Suggest what you can do. Offer next steps.
 6. NEVER mention internal routing, extensions by name, or technical architecture.
 7. When user says thanks/goodbye — respond briefly and warmly. No function calls needed.
-8. When asked "what can you do?" — describe your capabilities as YOUR OWN powers, organized by domain (email, notes, admin, analysis, automation). Include AI Cloud Agents prominently.
+8. When asked "what can you do?" — describe ONLY capabilities from YOUR CAPABILITIES section above. NEVER mention features not in your catalog.
 9. Be PROACTIVE: if user shows interest in a topic, suggest related actions. "Показать письма? Хочешь чтобы я также проверил непрочитанные?"
 10. For greetings: introduce yourself briefly, mention your key capabilities, and ask what the user needs. Include current time if relevant.
 11. LANGUAGE: ALWAYS respond in the SAME language as the user's message. Russian message → Russian response. English → English. NEVER mix languages. This is non-negotiable.
-12. NO EMOJIS. Never use emoji characters. Professional tone only."""
+12. NO EMOJIS. Never use emoji characters. Professional tone only.
+13. CRITICAL: NEVER describe or suggest capabilities not listed in YOUR CAPABILITIES. If a user asks about a feature not in your catalog, say you cannot help with that. NEVER assume admin, cases, or other features exist unless they appear in YOUR CAPABILITIES."""
 
     messages = []
     for h in (history or [])[-6:]:
@@ -1065,7 +1187,7 @@ CONVERSATION RULES:
         return {"response": text.strip()}
     except Exception as e:
         log.error(f"Hub navigate error: {e}")
-        return {"response": "Hello! I'm the Imperal Cloud assistant. How can I help you?"}
+        return {"response": f"Hello! I'm {_assistant_name}, the Imperal Cloud assistant. How can I help you?"}
 
 async def _hub_combine(message: str, results: dict, user_info: dict) -> dict:
     """Combine results from multiple extensions into one response."""
