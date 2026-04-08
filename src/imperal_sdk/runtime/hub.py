@@ -576,30 +576,6 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
         log.info(f"Hub: short ack detected ('{message[:30]}') → navigate (no dispatch)")
         return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
 
-    # ── KERNEL GUARD: Automation request → manage_automations BEFORE routing ──
-    # If message is clearly about creating/managing automations AND user has scope,
-    # route directly to manage_automations. Don't let gmail/notes steal the request
-    # because the message happens to contain an email address or note keyword.
-    _auto_kw = ("автоматизац", "автоматизир", "automation", "automate", "правило автомат", "создай правило", "create rule", "create automation", "триггер", "trigger")
-    _msg_lower = message.lower()
-    _is_auto_request = any(kw in _msg_lower for kw in _auto_kw)
-    if _is_auto_request:
-        _u_scopes = user_info.get("scopes", ["*"])
-        _has_auto_scope = "*" in _u_scopes or "automations:*" in _u_scopes or "automations:write" in _u_scopes or "extensions:write" in _u_scopes
-        if _has_auto_scope:
-            log.info(f"Hub: automation request detected EARLY → manage_automations (msg='{message[:50]}')")
-            result = await execute_fn({
-                "app_id": "__system__",
-                "tool_name": "manage_automations",
-                "message": message,
-                "user": user_info,
-                "history": history,
-                "skeleton": skeleton,
-                "context": context,
-            })
-            if isinstance(result, dict):
-                return result
-            return {"response": str(result), "_handled": True}
 
     # ── Step 1: DISCOVER (embeddings) ─────────────────────────────
     if pre_discovered:
@@ -754,49 +730,11 @@ async def handle_hub_chat(tool_input: dict, execute_fn, catalog, relations: dict
                             break
 
     if not extensions:
-        # Check if automation request from user with automations scope
-        _automation_kw2 = ("automation", "automat", "rule", "trigger", "автоматиз", "правило", "триггер")
-        _is_auto_msg = any(w in message.lower() for w in _automation_kw2)
-        _u_scopes = user_info.get("scopes", ["*"])
-        _has_auto_scope = "*" in _u_scopes or "automations:*" in _u_scopes or "automations:read" in _u_scopes or "extensions:read" in _u_scopes
-        if _is_auto_msg and _has_auto_scope:
-            log.info(f"Hub: no extensions matched but automation request detected -> manage_automations")
-            result = await execute_fn({
-                "app_id": "__system__",
-                "tool_name": "manage_automations",
-                "message": enriched_message,
-                "user": user_info,
-                "history": history,
-                "skeleton": skeleton,
-                "context": context,
-            })
-            if isinstance(result, dict):
-                return result
-            return {"response": str(result), "_handled": True}
         return await _hub_navigate(message, history, user_info, catalog, _user_allowed_apps, context=context, skeleton=skeleton)
 
     # Single extension — fast path with auto-reroute
     if len(extensions) == 1:
         app_id, candidate = next(iter(extensions.items()))
-        # Automation fallback: if routed to admin but user lacks admin:* → manage_automations
-        _user_scopes = user_info.get("scopes", ["*"])
-        _has_admin = "*" in _user_scopes or "admin:*" in _user_scopes
-        _automation_kw = ("automation", "automat", "rule", "trigger", "автоматиз", "правило", "триггер")
-        _is_automation_msg = any(w in message.lower() for w in _automation_kw)
-        if app_id == "admin" and not _has_admin and _is_automation_msg:
-            log.info(f"Hub: admin not accessible, routing automation to manage_automations")
-            result = await execute_fn({
-                "app_id": "__system__",
-                "tool_name": "manage_automations",
-                "message": enriched_message,
-                "user": user_info,
-                "history": history,
-                "skeleton": skeleton,
-                "context": context,
-            })
-            if isinstance(result, dict):
-                return result
-            return {"response": str(result), "_handled": True}
         # Hub ALWAYS waits for full result — no sub-extension promotion.
         # Outer hub_chat is already inline (300s timeout from session_workflow).
         context["_suppress_promotion"] = True
