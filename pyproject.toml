@@ -4,26 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "0.3.0"
-description = "SDK for building Imperal Cloud extensions — ActionResult, Event Publishing, ChatExtension, Auth SDK, CLI"
-license = "AGPL-3.0-or-later"
-authors = [
-    { name = "Valentin Scerbacov" },
-    { name = "Imperal, Inc." },
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Security",
-    "Framework :: FastAPI",
-]
-requires-python = ">=3.9"
+version = "0.4.0"
+description = "SDK for building Imperal Cloud extensions"
+requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.28.0",
     "pyjwt[crypto]>=2.10.0",

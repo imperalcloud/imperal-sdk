@@ -1,108 +1,78 @@
 # Imperal SDK
 
-The official Python SDK for building extensions on [Imperal Cloud](https://imperal.io) -- the world's first AI Cloud OS powered by [ICNLI](https://icnli.org).
+SDK for building extensions on the Imperal Cloud ICNLI platform.
 
-## Installation
+## Install
 
 ```bash
 pip install imperal-sdk
 ```
 
-With FastAPI authentication middleware:
-
-```bash
-pip install imperal-sdk[fastapi]
-```
-
 ## Quick Start
 
 ```python
-from imperal_sdk import Extension
+from imperal_sdk import Extension, ChatExtension, ActionResult
 
-ext = Extension("my-extension", version="1.0.0")
+ext = Extension("my-extension")
+chat = ChatExtension(ext, "my_tool", "My extension", system_prompt="You help users.")
 
-@ext.tool("greet", scopes=["*"], description="Greet a user")
-async def greet(ctx, name: str = "World") -> dict:
-    return {"response": f"Hello, {name}! You are {ctx.user.email}."}
+@chat.function("greet", description="Greet the user", params={"name": {"type": "string"}})
+async def greet(ctx, name="World"):
+    return ActionResult.success({"greeting": f"Hello, {name}!"}, summary=f"Greeted {name}")
+
+if __name__ == "__main__":
+    ext.run()
 ```
 
-## What's Included
+## Multi-Model LLM Support
 
-| Module | Access | Purpose |
-|--------|--------|---------|
-| **Extension** | `Extension()` | Define tools, signals, schedules |
-| **Context** | `ctx` | Request context with user, history, clients |
-| **Auth SDK** | `ImperalAuth` | JWT verification, scopes, FastAPI middleware |
-| **AI** | `ctx.ai` | LLM completions (Claude, GPT) with metering |
-| **Store** | `ctx.store` | Document CRUD (schemaless JSON) |
-| **Storage** | `ctx.storage` | File upload/download |
-| **Database** | `ctx.db` | SQL access (PostgreSQL) |
-| **Billing** | `ctx.billing` | Usage limits and subscription info |
-| **Notify** | `ctx.notify` | Push notifications |
-| **HTTP** | `ctx.http` | Outbound HTTP with logging |
-| **Skeleton** | `ctx.skeleton` | Background state with TTL and alerts |
-| **CLI** | `imperal` | init, dev, test, deploy, logs |
+The SDK supports multiple LLM providers. Extensions use `get_llm_provider()` for all LLM calls — the platform handles provider routing, failover, and usage tracking transparently.
 
-## Auth SDK
+**Supported providers:** Anthropic (Claude), OpenAI (GPT), Google (Gemini), any OpenAI-compatible API (Ollama, vLLM, LM Studio).
 
-Verify JWT tokens from Imperal Auth Gateway:
+**BYOLLM:** Users can bring their own LLM API keys. Configure via Panel Settings → AI Provider.
+
+**Per-purpose routing:** Different models for different tasks:
+- `routing` — fast/cheap model for intent classification
+- `execution` — accurate model for tool use in extensions
+- `navigate` — conversational model for general chat
 
 ```python
-from imperal_sdk.auth import ImperalAuth
+from imperal_sdk import get_llm_provider
 
-auth = ImperalAuth()
-user = auth.verify(token)
-print(user.id, user.role, user.scopes)
+provider = get_llm_provider()
+resp = await provider.create_message(
+    messages=[{"role": "user", "content": "Hello"}],
+    purpose="execution",        # routing | execution | navigate
+    extension_id="my-ext",      # per-extension model override
+    user_id="imp_u_xxx",        # BYOLLM lookup
+)
 ```
 
-Protect FastAPI endpoints:
+## Key Components
 
-```python
-from fastapi import FastAPI, Depends
-from imperal_sdk.auth.middleware import require_auth, require_scope
+- **Extension** — base class for all extensions
+- **ChatExtension** — LLM-powered chat interface with function calling
+- **ActionResult** — universal return type for chat functions (`.success()` / `.error()`)
+- **Context** — execution context with user info, config, skeleton, storage
+- **get_llm_provider()** — unified LLM access with multi-model routing and failover
 
-app = FastAPI()
+## Configuration
 
-@app.get("/protected")
-async def protected(user=Depends(require_auth())):
-    return {"user": user.id}
+Environment variables:
 
-@app.get("/admin")
-async def admin(user=Depends(require_scope("admin.users"))):
-    return {"admin": user.email}
+```bash
+LLM_PROVIDER=anthropic          # anthropic | openai | openai_compatible | google
+LLM_MODEL=claude-haiku-4-5-20251001
+LLM_API_KEY=sk-ant-...
+LLM_ROUTING_MODEL=...           # optional: model for routing
+LLM_EXECUTION_MODEL=...         # optional: model for execution
+LLM_NAVIGATE_MODEL=...          # optional: model for navigation
+LLM_FALLBACK_PROVIDER=openai    # optional: failover provider
+LLM_FALLBACK_MODEL=gpt-4.1-mini
+LLM_FALLBACK_API_KEY=sk-...
 ```
-
-## Extension UI Standard
-
-Every extension renders in a standardized 3-column layout:
-
-```
-Left Sidebar  |  Center Chat  |  Right Panel
-(navigation)  |  (AI chat)    |  (context data)
-```
-
-## Documentation
-
-Full documentation: [docs/imperal-cloud/sdk/](https://github.com/imperalcloud/imperal-sdk/tree/main/docs)
-
-| Document | Description |
-|----------|-------------|
-| [Quickstart](https://icnli.org) | Build your first extension in 5 minutes |
-| [Auth SDK](https://icnli.org) | JWT, scopes, FastAPI middleware |
-| [Extension UI](https://icnli.org) | 3-column layout standard |
-| [Clients Reference](https://icnli.org) | All ctx.* APIs |
-| [CLI Reference](https://icnli.org) | Command-line tools |
 
 ## License
 
-**AGPL-3.0-or-later**
-
-Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-
-See [LICENSE](LICENSE) for the full license text.
-
-## Links
-
-- [Imperal Cloud](https://imperal.io) -- AI Cloud OS
-- [ICNLI Protocol](https://icnli.org) -- The open protocol behind Imperal
-- [Author](https://www.linkedin.com/in/valentin-scerbacov/) -- Valentin Scerbacov
+AGPL-3.0
