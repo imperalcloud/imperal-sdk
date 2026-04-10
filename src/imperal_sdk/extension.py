@@ -27,6 +27,39 @@ class ScheduleDef:
     cron: str
 
 
+@dataclass
+class LifecycleHook:
+    name: str
+    func: Callable
+    version: str = ""  # only for on_upgrade
+
+
+@dataclass
+class HealthCheckDef:
+    func: Callable
+
+
+@dataclass
+class WebhookDef:
+    path: str
+    func: Callable
+    method: str = "POST"
+    secret_header: str = ""
+
+
+@dataclass
+class EventHandlerDef:
+    event_type: str
+    func: Callable
+
+
+@dataclass
+class ExposedMethod:
+    name: str
+    func: Callable
+    action_type: str = "read"
+
+
 class Extension:
     """Imperal Cloud Extension."""
 
@@ -46,6 +79,11 @@ class Extension:
         self._signals: dict[str, SignalDef] = {}
         self._schedules: dict[str, ScheduleDef] = {}
         self.config_defaults = config_defaults or {}
+        self._lifecycle: dict[str, LifecycleHook] = {}
+        self._health_check: HealthCheckDef | None = None
+        self._webhooks: dict[str, WebhookDef] = {}
+        self._event_handlers: list[EventHandlerDef] = []
+        self._exposed: dict[str, ExposedMethod] = {}
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""
@@ -73,6 +111,63 @@ class Extension:
             return func
         return decorator
 
+    def on_install(self, func: Callable) -> Callable:
+        """Register install hook. Called once when user installs extension."""
+        self._lifecycle["on_install"] = LifecycleHook(name="on_install", func=func)
+        return func
+
+    def on_upgrade(self, version: str):
+        """Register version-specific upgrade hook."""
+        def decorator(func: Callable) -> Callable:
+            self._lifecycle[f"on_upgrade:{version}"] = LifecycleHook(
+                name="on_upgrade", func=func, version=version,
+            )
+            return func
+        return decorator
+
+    def on_uninstall(self, func: Callable) -> Callable:
+        """Register uninstall hook. Clean up user data."""
+        self._lifecycle["on_uninstall"] = LifecycleHook(name="on_uninstall", func=func)
+        return func
+
+    def on_enable(self, func: Callable) -> Callable:
+        """Register enable hook. Called when admin enables for user/tenant."""
+        self._lifecycle["on_enable"] = LifecycleHook(name="on_enable", func=func)
+        return func
+
+    def on_disable(self, func: Callable) -> Callable:
+        """Register disable hook."""
+        self._lifecycle["on_disable"] = LifecycleHook(name="on_disable", func=func)
+        return func
+
+    def health_check(self, func: Callable) -> Callable:
+        """Register health check. Called every 60s by kernel."""
+        self._health_check = HealthCheckDef(func=func)
+        return func
+
+    def webhook(self, path: str, method: str = "POST", secret_header: str = ""):
+        """Register webhook endpoint. Kernel routes to /ext/{app_id}/webhook/{path}."""
+        def decorator(func: Callable) -> Callable:
+            self._webhooks[path] = WebhookDef(
+                path=path, func=func, method=method, secret_header=secret_header,
+            )
+            return func
+        return decorator
+
+    def on_event(self, event_type: str):
+        """Subscribe to a platform event."""
+        def decorator(func: Callable) -> Callable:
+            self._event_handlers.append(EventHandlerDef(event_type=event_type, func=func))
+            return func
+        return decorator
+
+    def expose(self, name: str, action_type: str = "read"):
+        """Expose a method for inter-extension calls via ctx.extensions.call()."""
+        def decorator(func: Callable) -> Callable:
+            self._exposed[name] = ExposedMethod(name=name, func=func, action_type=action_type)
+            return func
+        return decorator
+
     @property
     def tools(self) -> dict[str, ToolDef]:
         return self._tools
@@ -84,6 +179,22 @@ class Extension:
     @property
     def schedules(self) -> dict[str, ScheduleDef]:
         return self._schedules
+
+    @property
+    def lifecycle(self) -> dict[str, LifecycleHook]:
+        return self._lifecycle
+
+    @property
+    def webhooks(self) -> dict[str, WebhookDef]:
+        return self._webhooks
+
+    @property
+    def event_handlers(self) -> list[EventHandlerDef]:
+        return self._event_handlers
+
+    @property
+    def exposed(self) -> dict[str, ExposedMethod]:
+        return self._exposed
 
     async def call_tool(self, name: str, ctx: Any, **kwargs) -> Any:
         """Call a registered tool with context."""
