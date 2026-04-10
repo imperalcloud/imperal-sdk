@@ -46,7 +46,7 @@ def _validate_manifest(manifest: dict) -> list[str]:
 
 
 @click.group()
-@click.version_option(version="0.4.1")
+@click.version_option(version="1.0.0")
 def cli():
     """Imperal Cloud SDK — build extensions for the Imperal platform."""
     pass
