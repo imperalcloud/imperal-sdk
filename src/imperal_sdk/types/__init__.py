@@ -8,10 +8,12 @@ from imperal_sdk.types.models import (
 from imperal_sdk.types.pagination import Page
 from imperal_sdk.types.events import Event, WebhookRequest, WebhookResponse
 from imperal_sdk.types.health import HealthStatus
+from imperal_sdk.types.contributions import Panel, Widget, Command, ContextMenu, Setting, Theme
 
 __all__ = [
     "ActionResult", "ChatResult", "FunctionCall", "Page",
     "Document", "CompletionResult", "LimitsResult", "SubscriptionInfo",
     "BalanceInfo", "FileInfo", "HTTPResponse",
     "Event", "WebhookRequest", "WebhookResponse", "HealthStatus",
+    "Panel", "Widget", "Command", "ContextMenu", "Setting", "Theme",
 ]
