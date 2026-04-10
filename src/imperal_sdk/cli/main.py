@@ -46,7 +46,7 @@ def _validate_manifest(manifest: dict) -> list[str]:
 
 
 @click.group()
-@click.version_option(version="0.2.0")
+@click.version_option(version="0.4.1")
 def cli():
     """Imperal Cloud SDK — build extensions for the Imperal platform."""
     pass
@@ -54,50 +54,76 @@ def cli():
 
 @cli.command()
 @click.argument("name")
-def init(name: str):
+@click.option("--template", type=click.Choice(["chat", "tool"]), default="chat", help="Extension template")
+def init(name: str, template: str):
     """Scaffold a new extension project."""
     os.makedirs(name, exist_ok=True)
     os.makedirs(f"{name}/tests", exist_ok=True)
 
-    with open(f"{name}/main.py", "w") as f:
-        f.write(f'''from imperal_sdk import Extension
+    if template == "chat":
+        main_content = f'''"""{name} — Imperal Cloud Extension."""
+from pydantic import BaseModel
+from imperal_sdk import Extension, ChatExtension, ActionResult
 
-ext = Extension("{name}", version="0.1.0")
+ext = Extension("{name}", version="1.0.0")
+chat = ChatExtension(ext, tool_name="{name}", description="{name.replace('-', ' ').title()} extension")
 
 
-@ext.tool("hello", description="Say hello")
+class GreetParams(BaseModel):
+    name: str = "World"
+
+
+@chat.function("greet", description="Say hello", params={{}}, action_type="read")
+async def fn_greet(ctx, params: GreetParams) -> ActionResult:
+    """Greet someone by name."""
+    return ActionResult.success(
+        data={{"message": f"Hello, {{params.name}}!"}},
+        summary=f"Greeted {{params.name}}",
+    )
+'''
+    else:
+        main_content = f'''"""{name} — Imperal Cloud Extension."""
+from imperal_sdk import Extension
+
+ext = Extension("{name}", version="1.0.0")
+
+
+@ext.tool("{name}", description="{name.replace('-', ' ').title()}")
 async def hello(ctx, name: str = "World"):
     """Say hello."""
     return {{"message": f"Hello, {{name}}!"}}
-''')
+'''
+
+    with open(f"{name}/main.py", "w") as f:
+        f.write(main_content)
 
     with open(f"{name}/requirements.txt", "w") as f:
-        f.write("imperal-sdk>=0.2.0\n")
+        f.write("imperal-sdk>=1.0.0\n")
 
     with open(f"{name}/tests/__init__.py", "w") as f:
         pass
 
-    with open(f"{name}/tests/test_hello.py", "w") as f:
-        f.write(f'''import pytest
+    test_content = f'''"""Tests for {name} extension."""
+import pytest
+from imperal_sdk.testing import MockContext
 from main import ext
 
 
-def test_hello_tool_registered():
-    assert "hello" in ext.tools
+def test_extension_registered():
+    assert ext.app_id == "{name}"
+    assert ext.version == "1.0.0"
+'''
 
-
-@pytest.mark.asyncio
-async def test_hello_tool():
-    result = await ext.call_tool("hello", ctx=None, name="Imperal")
-    assert result == {{"message": "Hello, Imperal!"}}
-''')
+    with open(f"{name}/tests/test_main.py", "w") as f:
+        f.write(test_content)
 
     with open(f"{name}/.gitignore", "w") as f:
-        f.write("venv/\\n__pycache__/\\n*.pyc\\n.env\\nmanifest.json\\n.imperal/\\n")
+        f.write("venv/\n__pycache__/\n*.pyc\n.env\n.imperal/\n")
 
-    click.echo(f"Extension '{name}' created!")
+    click.echo(f"Extension '{name}' created! (template: {template})")
     click.echo(f"  cd {name}")
     click.echo(f"  pip install imperal-sdk")
+    click.echo(f"  imperal validate")
     click.echo(f"  imperal dev")
 
 
@@ -117,6 +143,53 @@ def dev():
     except ImportError:
         click.echo("Error: No main.py found with 'ext' Extension object.", err=True)
         raise SystemExit(1)
+
+
+@cli.command()
+@click.argument("path", default=".")
+def validate(path: str):
+    """Validate extension against SDK v1.0.0 rules."""
+    original_dir = os.getcwd()
+    try:
+        os.chdir(path)
+        sys.path.insert(0, ".")
+        try:
+            from main import ext
+        except ImportError:
+            click.echo("Error: No main.py found with 'ext' Extension object.", err=True)
+            raise SystemExit(1)
+
+        from imperal_sdk.validator import validate_extension
+        report = validate_extension(ext)
+
+        click.echo(f"\n── Imperal Extension Validator v1.0 {'─' * 40}")
+        click.echo(f"\nExtension: {report.app_id} v{report.version}")
+        click.echo(f"Tools: {report.tool_count}, Functions: {report.function_count}, Events: {report.event_count}")
+
+        if not report.issues:
+            click.echo("\n✅ No issues found!")
+            return
+
+        errors = report.errors
+        warnings = report.warnings
+        infos = [i for i in report.issues if i.level == "INFO"]
+
+        click.echo(f"\nRESULTS: {len(errors)} error(s), {len(warnings)} warning(s), {len(infos)} info")
+
+        for issue in report.issues:
+            prefix = {"ERROR": "  ERROR", "WARN": "  WARN ", "INFO": "  INFO "}[issue.level]
+            loc = f" {issue.file}:{issue.line}" if issue.file else ""
+            click.echo(f"\n  {prefix}{loc}  [{issue.rule}] {issue.message}")
+            if issue.fix:
+                click.echo(f"         Fix: {issue.fix}")
+
+        if errors:
+            click.echo(f"\n❌ {len(errors)} error(s) must be fixed before deployment.")
+            raise SystemExit(1)
+        else:
+            click.echo(f"\n⚠️  {len(warnings)} warning(s) — consider fixing.")
+    finally:
+        os.chdir(original_dir)
 
 
 @cli.command()
