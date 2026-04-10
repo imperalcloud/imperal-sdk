@@ -26,3 +26,7 @@ class User:
                 if scope.startswith(prefix + ".") or scope == prefix:
                     return True
         return False
+
+    def has_role(self, role: str) -> bool:
+        """Check if user has the specified role."""
+        return self.role == role
