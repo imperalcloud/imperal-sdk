@@ -5,60 +5,41 @@ Use factory methods .success() and .error() — do not construct directly.
 """
 from __future__ import annotations
 
-from typing import Generic, TypeVar, overload
+from dataclasses import dataclass, field
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
-_MISSING = object()
 
-
-def _error_factory(error: str, retryable: bool = False) -> ActionResult:
-    """Create an error result."""
-    return ActionResult(status="error", error=error, retryable=retryable)
-
-
-class _ErrorDescriptor:
-    """Descriptor that dispatches to factory when called on class,
-    and returns the error string when accessed on an instance."""
-
-    def __get__(self, obj: ActionResult | None, objtype: type | None = None):
-        if obj is None:
-            # Class-level access: return the factory function so
-            # ActionResult.error("msg") works.
-            return _error_factory
-        # Instance-level access: return the stored error string.
-        return obj.__dict__.get("_error_val")
-
-
+@dataclass
 class ActionResult(Generic[T]):
     """Universal return type for @chat.function handlers.
 
     Generic over T (Pydantic BaseModel). When T is not specified,
     data is treated as plain dict for backward compatibility.
+
+    NOTE: Always use factory methods .success() / .error(), or pass all kwargs
+    explicitly when constructing directly. The @staticmethod 'error' shadows
+    the field default — omitting error= in the constructor returns the method.
     """
 
-    error = _ErrorDescriptor()
-
-    def __init__(
-        self,
-        status: str,
-        data: T | dict | None = None,
-        summary: str = "",
-        error: str | None = None,
-        retryable: bool = False,
-    ) -> None:
-        self.status = status
-        self.data: T | dict = data if data is not None else {}
-        self.summary = summary
-        self.__dict__["_error_val"] = error
-        self.retryable = retryable
+    status: str
+    data: T | dict = field(default_factory=dict)
+    summary: str = ""
+    error: str | None = None
+    retryable: bool = False
 
     @staticmethod
     def success(data: T | dict, summary: str) -> ActionResult[T]:
         """Create a success result."""
-        return ActionResult(status="success", data=data, summary=summary)
+        return ActionResult(status="success", data=data, summary=summary, error=None, retryable=False)
+
+    @staticmethod
+    def error(error: str, retryable: bool = False) -> ActionResult:
+        """Create an error result."""
+        return ActionResult(status="error", data={}, summary="", error=error, retryable=retryable)
 
     def to_dict(self) -> dict:
         """Serialize to dict. Pydantic models are converted via model_dump()."""
@@ -67,9 +48,10 @@ class ActionResult(Generic[T]):
             d["data"] = self.data.model_dump()
         else:
             d["data"] = self.data
-        error_val = self.__dict__.get("_error_val")
-        if error_val is not None:
-            d["error"] = error_val
+        # Guard: error might be the staticmethod if constructed without explicit error=
+        err = self.error
+        if err is not None and isinstance(err, str):
+            d["error"] = err
         if self.retryable:
             d["retryable"] = self.retryable
         return d
@@ -81,25 +63,6 @@ class ActionResult(Generic[T]):
             status=d.get("status", "error"),
             data=d.get("data", {}),
             summary=d.get("summary", ""),
-            error=d.get("error"),
+            error=d.get("error", None),
             retryable=d.get("retryable", False),
-        )
-
-    def __repr__(self) -> str:
-        error_val = self.__dict__.get("_error_val")
-        return (
-            f"ActionResult(status={self.status!r}, data={self.data!r}, "
-            f"summary={self.summary!r}, error={error_val!r}, "
-            f"retryable={self.retryable!r})"
-        )
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ActionResult):
-            return NotImplemented
-        return (
-            self.status == other.status
-            and self.data == other.data
-            and self.summary == other.summary
-            and self.__dict__.get("_error_val") == other.__dict__.get("_error_val")
-            and self.retryable == other.retryable
         )
