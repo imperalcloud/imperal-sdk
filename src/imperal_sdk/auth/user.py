@@ -30,3 +30,12 @@ class User:
     def has_role(self, role: str) -> bool:
         """Check if user has the specified role."""
         return self.role == role
+
+
+@dataclass
+class Tenant:
+    """Tenant/organization info."""
+    id: str
+    name: str = ""
+    plan: str = ""
+    attributes: dict = field(default_factory=dict)

@@ -1,4 +1,4 @@
-"""Tests for User dataclass."""
+"""Tests for User and Tenant dataclasses."""
 import pytest
 from imperal_sdk.auth.user import User
 
@@ -57,3 +57,19 @@ class TestHasRole:
         u = User(id="u1")
         assert u.has_role("user") is True
         assert u.has_role("admin") is False
+
+
+class TestTenant:
+    def test_basic(self):
+        from imperal_sdk.auth.user import Tenant
+        t = Tenant(id="t1", name="Acme Corp", plan="pro")
+        assert t.id == "t1"
+        assert t.name == "Acme Corp"
+        assert t.plan == "pro"
+
+    def test_defaults(self):
+        from imperal_sdk.auth.user import Tenant
+        t = Tenant(id="t1")
+        assert t.name == ""
+        assert t.plan == ""
+        assert t.attributes == {}

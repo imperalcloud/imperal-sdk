@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from imperal_sdk.auth.user import User, Tenant
+
 if TYPE_CHECKING:
     from imperal_sdk.types.models import (
         Document, CompletionResult, LimitsResult, SubscriptionInfo,
@@ -103,8 +105,8 @@ class TimeContext:
 @dataclass
 class Context:
     """The context object passed to every extension tool/signal/schedule call."""
-    user: Any
-    tenant: Any = None
+    user: User
+    tenant: Tenant | None = None
     store: StoreProtocol | None = None
     db: DBProtocol | None = None
     ai: AIProtocol | None = None

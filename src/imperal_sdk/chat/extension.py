@@ -6,13 +6,18 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from imperal_sdk.context import Context as _Context
 
 try:
     from imperal_sdk.runtime.executor import _check_target_scope
 except ImportError:
+    import logging as _log_tsc
+    _log_tsc.getLogger(__name__).error("CRITICAL: _check_target_scope import failed — all cross-user actions will be BLOCKED")
     def _check_target_scope(**kwargs):
-        return {"allowed": True, "cross_user": False}
+        return {"allowed": False, "cross_user": True, "error": "target_scope_unavailable"}
 from imperal_sdk.chat.action_result import ActionResult
 
 log = logging.getLogger(__name__)
@@ -87,12 +92,17 @@ def _enforce_response_style(text: str) -> str:
     if not text:
         return text
     import re
-    # 1. Strip emojis (Unicode emoji ranges)
+    # 1. Strip emojis (Unicode emoji ranges, expanded to catch keycaps and misc)
     text = re.sub(
         r'[\U0001F300-\U0001F9FF\u2600-\u27BF\uFE00-\uFE0F'
         r'\u200D\u2702-\u27B0\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF'
-        r'\u2B50\u26A0\u2B06\u2194-\u21AA]+', '', text
+        r'\u2B50\u26A0\u2B06\u2194-\u21AA'
+        r'\u20E3\u2139\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA'
+        r'\U000E0020-\U000E007F\u200B-\u200F\u2028-\u202F'
+        r'\u2066-\u2069\uFFFC\uFFFD]+', '', text
     )
+    # Also strip keycap sequences: digit + U+FE0F + U+20E3 (e.g. 1️⃣)
+    text = re.sub(r'[\d#*]\uFE0F?\u20E3', '', text)
     # 2. Strip known filler phrases (case-insensitive line removal)
     _filler = (
         "дайте знать", "let me know", "feel free to",
@@ -192,6 +202,7 @@ class FunctionDef:
     params: dict = field(default_factory=dict)
     action_type: str = "read"  # "read", "write", or "destructive"
     event: str = ""  # event name for ActionResult publishing (e.g. "mail.sent")
+    event_schema: type | None = None  # Pydantic BaseModel for typed event data
 
 class ChatExtension:
     def __init__(self, ext, tool_name: str, description: str, system_prompt: str = "",
@@ -211,7 +222,8 @@ class ChatExtension:
             return await _self._handle(ctx, message, **kwargs)
 
     def function(self, name: str, description: str, params: dict | None = None,
-                 action_type: str = "read", event: str = ""):
+                 action_type: str = "read", event: str = "",
+                 event_schema: type | None = None):
         """Register a chat function.
 
         Args:
@@ -221,11 +233,13 @@ class ChatExtension:
             action_type: "read", "write", or "destructive". Default "read".
                          Used by KAV for action verification and 2-step confirmation.
             event: Event name for ActionResult publishing (e.g. "mail.sent").
+            event_schema: Optional Pydantic BaseModel class for typed event data validation.
         """
         def decorator(func: Callable) -> Callable:
             self._functions[name] = FunctionDef(
                 name=name, func=func, description=description,
                 params=params or {}, action_type=action_type, event=event,
+                event_schema=event_schema,
             )
             return func
         return decorator
@@ -282,6 +296,28 @@ class ChatExtension:
         _lang_name = getattr(ctx, '_user_language_name', None)
         if _lang_name:
             parts.append(f"\nKERNEL LANGUAGE RULE (NON-NEGOTIABLE): You MUST respond ONLY in {_lang_name}.")
+        # Kernel Markdown Formatting
+        parts.append("""
+KERNEL FORMATTING RULE (NON-NEGOTIABLE): ALWAYS format responses using Markdown:
+- Use **bold** for labels, names, subjects, and key terms
+- Use bullet lists (- item) for listing items (emails, notes, results)
+- Use numbered lists (1. 2. 3.) for sequential steps or ordered items
+- Use `code` for IDs, email addresses, technical values
+- Use --- for section separators when showing multiple categories
+- Use > blockquotes for important notices or warnings
+- Structure data with clear visual hierarchy. NEVER dump plain text walls.
+- For email lists: **Subject** — from Sender, date | status
+- For notes: **Title** — word count | tags
+- Keep it clean and scannable. Every response must be visually structured.""")
+        # Kernel Proactivity
+        parts.append("""
+KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
+- NEVER say "I can't", "I don't have access", or "I need you to provide". If you need data, CALL THE FUNCTION to get it.
+- If user asks to "show", "read", "analyze" — DO IT by calling functions. Don't ask for IDs, don't ask which account. Use the active account, call inbox/list first if needed.
+- If user asks to analyze/summarize multiple items — call list function, then read each important one, then analyze. Chain your function calls across multiple rounds.
+- Be PROACTIVE: suggest next actions after completing a task. "Want me to reply?" "Should I archive these?"
+- If a function returns an error, try an alternative approach. Don't give up after one failure.
+- When user gives a short confirmation ("да", "давай", "покажи") — execute the last suggested action immediately.""")
         return "\n".join(parts)
 
     def _build_messages(self, history: list, message: str,
@@ -313,7 +349,7 @@ class ChatExtension:
             messages = messages[1:]
         return messages
 
-    async def _handle(self, ctx, message: str = "", **kwargs) -> dict:
+    async def _handle(self, ctx: _Context, message: str = "", **kwargs) -> dict:
         self._functions_called = []
 
         # ── Context Window config resolution ──────────────────────
@@ -344,9 +380,10 @@ class ChatExtension:
             or 6
         )
 
-        # Per-extension tool rounds: config > constructor default > 10
+        # Per-extension tool rounds: user_settings > context > constructor default > 10
         _max_tool_rounds = int(
-            (ctx.config.get("context.max_tool_rounds") if hasattr(ctx, 'config') and ctx.config else None)
+            (ctx.config.get("user_settings.max_tool_rounds") if hasattr(ctx, 'config') and ctx.config else None)
+            or (ctx.config.get("context.max_tool_rounds") if hasattr(ctx, 'config') and ctx.config else None)
             or self.max_rounds
         )
 
@@ -375,6 +412,18 @@ class ChatExtension:
             context_window=_effective_window,
             keep_recent=_keep_recent,
         )
+
+        # KERNEL LANGUAGE ENFORCEMENT (model-agnostic, works with Sonnet/Opus/GPT/any)
+        # Inject language rule into the LAST user message — models follow recent instructions best.
+        # System prompt rule alone is insufficient for some models (Sonnet ignores it).
+        _lang = getattr(ctx, '_user_language', None)
+        _lang_name = getattr(ctx, '_user_language_name', None)
+        if _lang and _lang != 'en' and _lang_name and messages:
+            _lang_suffix = "\n[RESPOND IN " + _lang_name.upper() + " ONLY]"
+            for _m in reversed(messages):
+                if _m["role"] == "user":
+                    _m["content"] += _lang_suffix
+                    break
 
         # KAV injection: kernel can inject a retry message telling LLM to actually call the function
         kav_injection = getattr(ctx, "_kav_injection", None) or kwargs.get("_kav_injection")
@@ -430,7 +479,8 @@ class ChatExtension:
                         f"total={_total_est} window={_effective_window} ext={self.tool_name}"
                     )
 
-                resp = await client.create_message(model=self.model, max_tokens=2048, system=system, messages=messages, tools=tools, **_api_kwargs)
+                _uid = str(getattr(ctx.user, "id", "")) if hasattr(ctx, "user") and ctx.user else ""
+                resp = await client.create_message(max_tokens=2048, system=system, messages=messages, tools=tools, purpose="execution", user_id=_uid, **_api_kwargs)
                 tool_uses = [b for b in resp.content if b.type == "tool_use"]
                 if not tool_uses:
                     text = next((b.text for b in resp.content if hasattr(b, "text")), "Done.")
@@ -629,27 +679,50 @@ class ChatExtension:
                     )
                     if has_successful_write:
                         log.info(f"ChatExtension {self.tool_name}: write action succeeded on round {_round+1}, building factual response")
-                        # KERNEL GUARANTEE: build factual response from function results ONLY.
-                        # Do NOT ask Haiku for summary — it hallucinates state claims.
-                        # This works for ALL extensions regardless of their prompts.
+                        # KERNEL GUARANTEE: build factual response from function results + data.
+                        # Includes ActionResult.summary for rich context.
                         _factual_parts = []
                         for fc in self._functions_called:
                             if fc.get("intercepted"):
                                 continue
                             _fname = fc.get("name", "action")
+                            _result = fc.get("result")
                             if fc.get("success"):
-                                _params = fc.get("params", {})
-                                _param_str = ", ".join(f"{k}={v}" for k, v in _params.items() if v) if _params else ""
-                                _factual_parts.append(f"{_fname}({_param_str}): OK")
+                                _summary = ""
+                                if _result and hasattr(_result, "summary") and _result.summary:
+                                    _summary = str(_result.summary)[:500]
+                                elif _result and hasattr(_result, "data") and _result.data:
+                                    _data = _result.data
+                                    if isinstance(_data, dict):
+                                        _summary = str(_data)[:500]
+                                    elif isinstance(_data, list):
+                                        _summary = f"{len(_data)} items"
+                                if _summary:
+                                    _factual_parts.append(f"{_fname}: SUCCESS — {_summary}")
+                                else:
+                                    _factual_parts.append(f"{_fname}: SUCCESS")
                             else:
-                                _factual_parts.append(f"{_fname}: FAILED")
-                        # Let Haiku format ONLY the factual results (no state claims allowed)
+                                _err = ""
+                                if _result and hasattr(_result, "error") and _result.error:
+                                    _err = str(_result.error)[:200]
+                                _factual_parts.append(f"{_fname}: FAILED" + (f" — {_err}" if _err else ""))
                         _factual_summary = "\n".join(_factual_parts) if _factual_parts else "Action completed."
+                        # Dynamic max_tokens from config (default 1024)
+                        _response_tokens = 1024
+                        if hasattr(ctx, "config") and ctx.config:
+                            _response_tokens = ctx.config.get("user_settings.max_response_tokens") or ctx.config.get("max_response_tokens", 1024)
                         try:
+                            _lang_hint = ""
+                            _ulang = getattr(ctx, "_user_language_name", "")
+                            if _ulang and _ulang.lower() != "english":
+                                _lang_hint = f" Respond in {_ulang}."
+                            _uid2 = str(getattr(ctx.user, "id", "")) if hasattr(ctx, "user") and ctx.user else ""
                             final_resp = await client.create_message(
-                                model=self.model, max_tokens=256,
-                                system="Format the action results into a brief, natural response in the user's language. ONLY describe what the functions DID. Do NOT claim any state you don't see in the results (e.g. never say 'no more items left' or 'all done' unless results explicitly confirm it). No emojis.",
+                                max_tokens=_response_tokens,
+                                system=f"Format the action results into a detailed, natural response.{_lang_hint} Describe what each function did with specifics from the results. Be thorough. No emojis.",
                                 messages=[{"role": "user", "content": f"Action results:\n{_factual_summary}"}],
+                                purpose="execution",
+                                user_id=_uid2,
                             )
                             text = next((b.text for b in final_resp.content if hasattr(b, "text")), _factual_summary)
                         except Exception:
