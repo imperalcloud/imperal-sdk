@@ -8,12 +8,25 @@ from imperal_sdk.chat.action_result import ActionResult
 from imperal_sdk.runtime.llm_provider import get_llm_provider, LLMProvider, LLMConfig, LLMUsage
 from imperal_sdk.runtime.message_adapter import MessageAdapter
 
+# v1.0.0 types
+from imperal_sdk.errors import (
+    ImperalError, APIError, NotFoundError, RateLimitError,
+    ValidationError, ExtensionError, QuotaExceededError,
+)
+from imperal_sdk.types import Page, ChatResult, FunctionCall
+
 __version__ = "0.4.1"
 
 __all__ = [
+    # Core
     "Extension", "ToolDef", "SignalDef", "ScheduleDef",
     "Context", "ImperalAuth", "AuthError", "User",
     "ChatExtension", "ActionResult",
     "generate_manifest", "save_manifest",
+    # LLM
     "get_llm_provider", "LLMProvider", "LLMConfig", "LLMUsage", "MessageAdapter",
+    # v1.0.0 types
+    "ImperalError", "APIError", "NotFoundError", "RateLimitError",
+    "ValidationError", "ExtensionError", "QuotaExceededError",
+    "Page", "ChatResult", "FunctionCall",
 ]
