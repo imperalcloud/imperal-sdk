@@ -106,7 +106,7 @@ def validate_extension(ext) -> ValidationReport:
             fix="Add a @ext.tool or create a ChatExtension",
         ))
 
-    # V4, V10, V11: check each @chat.function
+    # V4, V5, V6, V10, V11: check each @chat.function
     for fname, fdef in functions.items():
         # V4: explicit action_type
         action_type = getattr(fdef, "action_type", "")
@@ -119,6 +119,42 @@ def validate_extension(ext) -> ValidationReport:
                 ),
                 fix=f"Add action_type='read' (or 'write'/'destructive') to @chat.function('{fname}')",
             ))
+
+        # V5: must return ActionResult
+        func = getattr(fdef, "func", None)
+        if func:
+            ret_annotation = getattr(func, "__annotations__", {}).get("return", "")
+            if "ActionResult" not in str(ret_annotation):
+                report.issues.append(ValidationIssue(
+                    rule="V5", level="ERROR",
+                    message=f"@chat.function '{fname}' must return ActionResult",
+                    fix="Add return type annotation: -> ActionResult",
+                ))
+
+        # V6: params should be Pydantic BaseModel (WARN for now, ERROR in v2)
+        if func:
+            import inspect
+            sig = inspect.signature(func)
+            params_list = [p for p in sig.parameters.values() if p.name not in ("ctx", "self")]
+            has_pydantic_param = False
+            for p in params_list:
+                ann = p.annotation
+                if ann != inspect.Parameter.empty:
+                    try:
+                        from pydantic import BaseModel
+                        if isinstance(ann, type) and issubclass(ann, BaseModel):
+                            has_pydantic_param = True
+                    except (TypeError, ImportError):
+                        pass
+            if params_list and not has_pydantic_param:
+                report.issues.append(ValidationIssue(
+                    rule="V6", level="WARN",
+                    message=f"@chat.function '{fname}' params should be a Pydantic BaseModel subclass",
+                    fix=(
+                        f"Create a Pydantic model for params: "
+                        f"class {fname.title().replace('_', '')}Params(BaseModel): ..."
+                    ),
+                ))
 
         # V10: write/destructive without event=
         event = getattr(fdef, "event", "")
@@ -140,6 +176,24 @@ def validate_extension(ext) -> ValidationReport:
                 message=f"@chat.function '{fname}' missing docstring",
                 fix="Add a docstring to the function",
             ))
+
+    # V7: no direct import anthropic/openai — check each ChatExtension's module source
+    for ce in chat_extensions.values():
+        tool_func = getattr(ce, "_entry_func", None) or getattr(ce, "_handle", None)
+        if tool_func:
+            import inspect
+            try:
+                source = inspect.getsource(inspect.getmodule(tool_func))
+                for banned in ("import anthropic", "import openai", "from anthropic", "from openai"):
+                    if banned in source:
+                        report.issues.append(ValidationIssue(
+                            rule="V7", level="ERROR",
+                            message=f"Direct '{banned}' found. Use ctx.ai or get_llm_provider() instead",
+                            fix="Replace direct LLM imports with ctx.ai.complete() or get_llm_provider()",
+                        ))
+                        break
+            except (TypeError, OSError):
+                pass
 
     # Count events: functions with event= + @ext.on_event handlers
     event_count = sum(1 for f in functions.values() if getattr(f, "event", ""))

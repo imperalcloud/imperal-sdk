@@ -136,3 +136,164 @@ class TestValidationReport:
         assert report.app_id == "crm"
         assert report.version == "1.0.0"
         assert report.tool_count == 1
+
+
+class TestV5ReturnActionResult:
+    """V5: @chat.function must return ActionResult."""
+
+    def test_no_chat_extension_no_v5(self):
+        # V5 only applies to ChatExtension functions; plain @ext.tool extensions skip it
+        ext = Extension("test-app", version="1.0.0")
+
+        @ext.tool("test")
+        async def test(ctx):
+            pass
+
+        report = validate_extension(ext)
+        v5_errors = [i for i in report.errors if i.rule == "V5"]
+        assert len(v5_errors) == 0
+
+    def test_chat_function_with_action_result_passes(self):
+        # A @chat.function that annotates -> ActionResult should have no V5 error
+        from imperal_sdk.chat import ChatExtension
+        from imperal_sdk import ActionResult
+
+        ext = Extension("test-app", version="1.0.0")
+        chat = ChatExtension(ext, tool_name="test", description="Test chat")
+
+        @chat.function("get_something", description="Get something", action_type="read")
+        async def get_something(ctx) -> ActionResult:
+            """Get something."""
+            return ActionResult.success({})
+
+        report = validate_extension(ext)
+        v5_errors = [i for i in report.errors if i.rule == "V5"]
+        assert len(v5_errors) == 0
+
+    def test_chat_function_without_return_annotation_fails(self):
+        # A @chat.function with no return annotation should trigger V5
+        from imperal_sdk.chat import ChatExtension
+
+        ext = Extension("test-app", version="1.0.0")
+        chat = ChatExtension(ext, tool_name="test", description="Test chat")
+
+        @chat.function("get_something", description="Get something", action_type="read")
+        async def get_something(ctx):
+            """Get something."""
+            pass
+
+        report = validate_extension(ext)
+        v5_errors = [i for i in report.errors if i.rule == "V5"]
+        assert len(v5_errors) == 1
+        assert "ActionResult" in v5_errors[0].message
+
+    def test_chat_function_with_wrong_return_type_fails(self):
+        # A @chat.function returning dict instead of ActionResult should trigger V5
+        from imperal_sdk.chat import ChatExtension
+
+        ext = Extension("test-app", version="1.0.0")
+        chat = ChatExtension(ext, tool_name="test", description="Test chat")
+
+        @chat.function("get_something", description="Get something", action_type="read")
+        async def get_something(ctx) -> dict:
+            """Get something."""
+            return {}
+
+        report = validate_extension(ext)
+        v5_errors = [i for i in report.errors if i.rule == "V5"]
+        assert len(v5_errors) == 1
+
+
+class TestV6PydanticParams:
+    """V6: @chat.function params should be a Pydantic BaseModel subclass (WARN)."""
+
+    def test_no_params_no_v6(self):
+        # A function with no params beyond ctx should not trigger V6
+        from imperal_sdk.chat import ChatExtension
+        from imperal_sdk import ActionResult
+
+        ext = Extension("test-app", version="1.0.0")
+        chat = ChatExtension(ext, tool_name="test", description="Test chat")
+
+        @chat.function("list_items", description="List items", action_type="read")
+        async def list_items(ctx) -> ActionResult:
+            """List items."""
+            return ActionResult.success({})
+
+        report = validate_extension(ext)
+        v6_warns = [i for i in report.warnings if i.rule == "V6"]
+        assert len(v6_warns) == 0
+
+    def test_pydantic_param_passes(self):
+        # A function with a Pydantic BaseModel param should not trigger V6
+        from imperal_sdk.chat import ChatExtension
+        from imperal_sdk import ActionResult
+        from pydantic import BaseModel
+
+        ext = Extension("test-app", version="1.0.0")
+        chat = ChatExtension(ext, tool_name="test", description="Test chat")
+
+        class CreateParams(BaseModel):
+            name: str
+
+        @chat.function("create_item", description="Create item", action_type="write")
+        async def create_item(ctx, params: CreateParams) -> ActionResult:
+            """Create item."""
+            return ActionResult.success({})
+
+        report = validate_extension(ext)
+        v6_warns = [i for i in report.warnings if i.rule == "V6"]
+        assert len(v6_warns) == 0
+
+    def test_non_pydantic_param_warns(self):
+        # A function with a plain dict param should trigger V6 WARN
+        from imperal_sdk.chat import ChatExtension
+        from imperal_sdk import ActionResult
+
+        ext = Extension("test-app", version="1.0.0")
+        chat = ChatExtension(ext, tool_name="test", description="Test chat")
+
+        @chat.function("create_item", description="Create item", action_type="write")
+        async def create_item(ctx, params: dict) -> ActionResult:
+            """Create item."""
+            return ActionResult.success({})
+
+        report = validate_extension(ext)
+        v6_warns = [i for i in report.warnings if i.rule == "V6"]
+        assert len(v6_warns) == 1
+        assert "Pydantic" in v6_warns[0].message
+
+
+class TestV7NoDirectImports:
+    """V7: No direct import anthropic or openai."""
+
+    def test_clean_extension_no_v7(self):
+        # A plain extension with no ChatExtension should produce no V7 errors
+        ext = Extension("test-app", version="1.0.0")
+
+        @ext.tool("test")
+        async def test(ctx):
+            pass
+
+        report = validate_extension(ext)
+        v7_errors = [i for i in report.errors if i.rule == "V7"]
+        assert len(v7_errors) == 0
+
+    def test_clean_chat_extension_no_v7(self):
+        # A ChatExtension defined in this test module (no anthropic/openai imports)
+        # should not trigger V7
+        from imperal_sdk.chat import ChatExtension
+        from imperal_sdk import ActionResult
+
+        ext = Extension("test-app", version="1.0.0")
+        chat = ChatExtension(ext, tool_name="test", description="Test chat")
+
+        @chat.function("get_something", description="Get something", action_type="read")
+        async def get_something(ctx) -> ActionResult:
+            """Get something."""
+            return ActionResult.success({})
+
+        report = validate_extension(ext)
+        v7_errors = [i for i in report.errors if i.rule == "V7"]
+        # This test module does not import anthropic/openai so no V7 error expected
+        assert len(v7_errors) == 0
