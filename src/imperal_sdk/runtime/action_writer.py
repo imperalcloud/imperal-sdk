@@ -40,8 +40,6 @@ async def write_action(
     llm_steps: list | None = None,
     llm_total_calls: int = 0,
     llm_total_tokens: int = 0,
-    user_scopes: list | None = None,
-    checked_scopes: list | None = None,
 ) -> bool:
     """Write action record to Auth Gateway. Returns True on success."""
     if not gateway_url or not service_token:

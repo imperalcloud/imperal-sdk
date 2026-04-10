@@ -117,17 +117,26 @@ class MessageAdapter:
         """Anthropic tool schema -> OpenAI function calling format."""
         if not tools:
             return []
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": t.get("name", ""),
-                    "description": t.get("description", ""),
-                    "parameters": t.get("input_schema", {}),
-                },
-            }
-            for t in tools
-        ]
+        result = []
+        for t in tools:
+            fn_params = t.get("input_schema", {})
+            # Guard: OpenAI requires "items" on all array types
+            # Auto-add default if missing (prevents 400 schema errors)
+            if "properties" in fn_params:
+                for _pname, _pschema in fn_params["properties"].items():
+                    if isinstance(_pschema, dict) and _pschema.get("type") == "array" and "items" not in _pschema:
+                        _pschema["items"] = {"type": "string"}
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t.get("name", ""),
+                        "description": t.get("description", ""),
+                        "parameters": fn_params,
+                    },
+                }
+            )
+        return result
 
     @staticmethod
     def to_openai_tool_choice(tool_choice: dict | None) -> str | dict | None:
@@ -167,10 +176,18 @@ class MessageAdapter:
             if choice.finish_reason == "tool_calls":
                 stop_reason = "tool_use"
 
-        # Extract usage
+        # Normalize OpenAI usage to Anthropic format (input_tokens/output_tokens)
         usage = None
         if hasattr(response, "usage") and response.usage:
-            usage = response.usage
+            oai_usage = response.usage
+            # OpenAI uses prompt_tokens/completion_tokens
+            # Anthropic uses input_tokens/output_tokens
+            # Normalize to Anthropic format so LLM Provider tracking works uniformly
+            class _NormalizedUsage:
+                def __init__(self, u):
+                    self.input_tokens = getattr(u, 'input_tokens', 0) or getattr(u, 'prompt_tokens', 0) or 0
+                    self.output_tokens = getattr(u, 'output_tokens', 0) or getattr(u, 'completion_tokens', 0) or 0
+            usage = _NormalizedUsage(oai_usage)
 
         return AnthropicCompat(content_blocks, stop_reason, model, usage)
 

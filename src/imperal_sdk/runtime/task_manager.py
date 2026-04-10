@@ -14,7 +14,8 @@ import uuid
 
 log = logging.getLogger(__name__)
 
-TASK_TTL = 86400  # 24 hours
+TASK_TTL = 86400      # 24 hours — individual task record lifetime
+PROMOTED_TTL = 3600   # 1 hour — promoted tasks auto-expire from visible set
 STALE_THRESHOLD_S = 600  # 10 minutes
 
 
@@ -38,6 +39,8 @@ async def create_task(
     }
     await redis.set(f"imperal:task:{task_id}", json.dumps(record), ex=TASK_TTL)
     await redis.sadd(f"imperal:tasks:user:{user_id}", task_id)
+    # Ensure user set has a TTL so orphaned entries don't persist forever
+    await redis.expire(f"imperal:tasks:user:{user_id}", TASK_TTL)
     return record
 
 
@@ -48,7 +51,11 @@ async def promote_task(redis, task_id: str) -> None:
         record["status"] = "promoted"
         record["visible"] = True
         record["promoted_at"] = time.time()
-        await redis.set(f"imperal:task:{task_id}", json.dumps(record), ex=TASK_TTL)
+        user_id = record.get("user_id")
+        await redis.set(f"imperal:task:{task_id}", json.dumps(record), ex=PROMOTED_TTL)
+        # Refresh user set TTL to match promoted task lifetime
+        if user_id:
+            await redis.expire(f"imperal:tasks:user:{user_id}", PROMOTED_TTL)
 
 
 async def update_progress(redis, task_id: str, percent: int, message: str = "") -> bool:
@@ -116,6 +123,10 @@ async def get_active_tasks(redis, user_id: str) -> list:
     if not task_ids:
         return []
     task_ids = await _auto_fail_stale(redis, user_id, task_ids)
+    # If all tasks were orphaned/stale, delete the now-empty set and bail early
+    if not task_ids:
+        await redis.delete(f"imperal:tasks:user:{user_id}")
+        return []
     tasks = []
     for tid in task_ids:
         raw = await redis.get(f"imperal:task:{tid}")

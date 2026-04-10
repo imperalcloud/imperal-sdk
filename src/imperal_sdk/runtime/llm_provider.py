@@ -58,7 +58,6 @@ _ENV_FB_API_KEY    = os.getenv("LLM_FALLBACK_API_KEY", "")
 _ENV_FB_MODEL      = os.getenv("LLM_FALLBACK_MODEL", "")
 _ENV_FB_BASE_URL   = os.getenv("LLM_FALLBACK_BASE_URL", "")
 
-_REDIS_URL         = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 _GATEWAY_URL       = os.getenv("IMPERAL_GATEWAY_URL", "")
 _SERVICE_TOKEN     = os.getenv("IMPERAL_SERVICE_TOKEN", "")
 
@@ -102,6 +101,7 @@ class LLMConfig:
     api_key: str = ""
     base_url: str = ""
     is_byollm: bool = False
+    byollm_fallback: str = "platform"  # "platform" or "error"
 
     @property
     def client_key(self) -> str:
@@ -261,12 +261,15 @@ class LLMProvider:
 
         is_failover = False
         import time as _t; _call_start = _t.time()
+        _call_error = None
+        resp = None
         try:
             resp = await self._call(cfg, messages, system, max_tokens, tools, tool_choice, temperature)
         except Exception as primary_err:
             log.warning(f"LLMProvider primary call failed ({cfg.provider}/{cfg.model}): {primary_err}, trying failover")
             failover_cfg = self._resolve_failover(cfg)
             if failover_cfg is None:
+                _call_error = str(primary_err)[:200]
                 raise
             try:
                 resp = await self._call(failover_cfg, messages, system, max_tokens, tools, tool_choice, temperature)
@@ -274,7 +277,22 @@ class LLMProvider:
                 is_failover = True
             except Exception as fb_err:
                 log.error(f"LLMProvider failover also failed ({failover_cfg.provider}/{failover_cfg.model}): {fb_err}")
+                _call_error = str(fb_err)[:200]
                 raise fb_err
+        finally:
+            # ALWAYS append to call log — even on failure (for Activity visibility)
+            _call_ms = int((_t.time() - _call_start) * 1000)
+            _usage = getattr(resp, "usage", None) if resp is not None else None
+            self._call_log.append({
+                "purpose": purpose or "default",
+                "provider": cfg.provider,
+                "model": cfg.model,
+                "input_tokens": getattr(_usage, "input_tokens", 0) if _usage else 0,
+                "output_tokens": getattr(_usage, "output_tokens", 0) if _usage else 0,
+                "latency_ms": _call_ms,
+                "is_failover": is_failover,
+                "error": _call_error,
+            })
 
         latency_ms = int(time.monotonic() * 1000) - start_ms
 
@@ -294,11 +312,6 @@ class LLMProvider:
             )
             asyncio.ensure_future(self._track_usage(usage))
 
-        # Append to per-action call log
-        _call_ms = int((_t.time() - _call_start) * 1000)
-        _usage = getattr(resp, "usage", None)
-        self._call_log.append({"purpose": purpose or "default", "provider": cfg.provider, "model": cfg.model, "input_tokens": getattr(_usage, "input_tokens", 0) if _usage else 0, "output_tokens": getattr(_usage, "output_tokens", 0) if _usage else 0, "latency_ms": _call_ms, "is_failover": is_failover})
-
         return resp
 
     # ------------------------------------------------------------------
@@ -310,7 +323,7 @@ class LLMProvider:
 
         # 1. User BYOLLM
         if user_id:
-            byollm = await self._resolve_byollm(user_id)
+            byollm = await self._resolve_byollm(user_id, purpose=purpose)
             if byollm is not None:
                 return byollm
 
@@ -319,15 +332,35 @@ class LLMProvider:
 
         # 2. Extension override
         if extension_id and config_store:
-            ext_cfg = config_store.get("extensions", {}).get(extension_id)
+            ext_cfg = (config_store.get("extensions", {}).get(extension_id)
+                      or config_store.get("extension_overrides", {}).get(extension_id))
             if ext_cfg:
-                return self._config_from_store(ext_cfg)
+                resolved = self._config_from_store(ext_cfg)
+                if resolved:
+                    return resolved
+                log.info(f"LLMProvider: extension override for '{extension_id}' has no valid key, falling through")
 
         # 3. Purpose override
         if purpose and config_store:
-            purpose_cfg = config_store.get("purpose", {}).get(purpose)
+            _purpose_key = "navigate" if purpose == "navigation" else purpose
+            purpose_cfg = config_store.get("purpose", {}).get(purpose) or config_store.get("purpose", {}).get(_purpose_key)
+            # Nested format: {"purpose_overrides": {"execution": {"provider": ..., "model": ...}}}
+            if not purpose_cfg:
+                overrides = config_store.get("purpose_overrides", {})
+                purpose_cfg = overrides.get(purpose) or overrides.get(_purpose_key)
+            # Flat format from Panel: {"execution_model": "...", "execution_provider": "..."}
+            # Handle alias: Hub sends purpose="navigation" but Panel saves "navigate_model"
+            _purpose_key = "navigate" if purpose == "navigation" else purpose
+            if not purpose_cfg:
+                _flat_model = config_store.get(f"{_purpose_key}_model")
+                if _flat_model:
+                    _flat_provider = config_store.get(f"{_purpose_key}_provider", config_store.get("provider", ""))
+                    purpose_cfg = {"provider": _flat_provider, "model": _flat_model}
             if purpose_cfg:
-                return self._config_from_store(purpose_cfg)
+                resolved = self._config_from_store(purpose_cfg)
+                if resolved:
+                    return resolved
+                log.info(f"LLMProvider: purpose override '{purpose}' has no valid key, falling through")
 
         # 3b. ENV purpose override (LLM_ROUTING_MODEL etc.)
         if purpose:
@@ -346,9 +379,16 @@ class LLMProvider:
 
         # 4. Global default from Config Store
         if config_store:
+            # Nested format: {"default": {"provider": "openai", "model": "..."}}
             default_cfg = config_store.get("default")
+            if not default_cfg and config_store.get("provider"):
+                # Flat format from Panel: {"provider": "openai", "model": "...", "extension_overrides": {}}
+                default_cfg = config_store
             if default_cfg:
-                return self._config_from_store(default_cfg)
+                resolved = self._config_from_store(default_cfg)
+                if resolved:
+                    return resolved
+                log.info("LLMProvider: config store default has no valid key, falling through to ENV")
 
         # 5. ENV fallback
         return self._env_default_config()
@@ -368,81 +408,146 @@ class LLMProvider:
             base_url=base_url,
         )
 
-    def _config_from_store(self, cfg: dict) -> LLMConfig:
-        """Build LLMConfig from a Config Store dict entry."""
+    def _config_from_store(self, cfg: dict) -> LLMConfig | None:
+        """Build LLMConfig from a Config Store dict entry.
+
+        Returns None if provider has no valid API key (prevents using wrong provider's key).
+        """
         provider = cfg.get("provider", _ENV_PROVIDER)
+        # Map Panel "custom" to openai_compatible
+        if provider == "custom":
+            provider = "openai_compatible"
         defaults = _PROVIDER_DEFAULTS.get(provider, _PROVIDER_DEFAULTS["anthropic"])
         model = cfg.get("model", "") or defaults["model"]
-        api_key = _decrypt(cfg.get("api_key", "")) or _ENV_API_KEY
+
+        # Resolve API key — ONLY use _ENV_API_KEY if provider matches ENV provider
+        api_key = _decrypt(cfg.get("api_key", ""))
+        if not api_key:
+            # Check provider-specific ENV keys
+            _provider_env_keys = {
+                "anthropic": os.getenv("ANTHROPIC_API_KEY", ""),
+                "openai": os.getenv("OPENAI_API_KEY", ""),
+                "google": os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", ""),
+                "openai_compatible": os.getenv("LLM_API_KEY", ""),
+            }
+            api_key = _provider_env_keys.get(provider, "")
+
+            # Last resort: if provider matches ENV default provider, use generic LLM_API_KEY
+            if not api_key and provider == _ENV_PROVIDER:
+                api_key = _ENV_API_KEY
+
+            if not api_key:
+                log.warning(f"LLMProvider: no API key for provider '{provider}' — skipping config")
+                return None
+
         base_url = cfg.get("base_url", "")
+        # Inherit base_url from global config if purpose override doesn't specify one
+        if not base_url and self._config_cache and isinstance(self._config_cache, dict):
+            _global_provider = self._config_cache.get("provider", "")
+            if _global_provider == "custom":
+                _global_provider = "openai_compatible"
+            if provider == _global_provider:
+                base_url = self._config_cache.get("base_url", "")
         if provider == "google" and not base_url:
             base_url = _GOOGLE_BASE_URL
-        return LLMConfig(
-            provider=provider,
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-        )
+        return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base_url)
 
-    async def _resolve_byollm(self, user_id: str) -> LLMConfig | None:
-        """Lookup user's BYOLLM config from ext_store. Cached 60s."""
+    async def _resolve_byollm(self, user_id: str, purpose: str = "") -> LLMConfig | None:
+        """Lookup user's BYOLLM config from ext_store. Cached 60s.
+
+        Supports per-purpose model overrides from user's Settings > AI Provider.
+        """
         now = time.monotonic()
+
+        # Cache stores the raw data dict (not LLMConfig) so we can resolve per-purpose
         cached = self._byollm_cache.get(user_id)
         if cached and (now - cached["ts"]) < _BYOLLM_CACHE_TTL:
-            return cached["config"]
+            raw_data = cached.get("raw_data")
+        else:
+            raw_data = None
+            try:
+                raw_data = await self._fetch_byollm_data(user_id)
+            except Exception as e:
+                log.debug(f"LLMProvider: BYOLLM fetch failed for {user_id}: {e}")
+            self._byollm_cache[user_id] = {"raw_data": raw_data, "ts": now}
 
-        config = None
-        try:
-            config = await self._fetch_byollm(user_id)
-        except Exception as e:
-            log.debug(f"LLMProvider: BYOLLM fetch failed for {user_id}: {e}")
+        if raw_data is None:
+            return None
 
-        self._byollm_cache[user_id] = {"config": config, "ts": now}
-        return config
+        return self._build_byollm_config(raw_data, purpose)
 
-    async def _fetch_byollm(self, user_id: str) -> LLMConfig | None:
-        """Fetch BYOLLM config from Auth Gateway ext_store."""
+    async def _fetch_byollm_data(self, user_id: str) -> dict | None:
+        """Fetch raw BYOLLM config dict from Auth Gateway ext_store.
+
+        Returns the raw data dict (not LLMConfig) so per-purpose resolution
+        can happen at resolve time, not fetch time.
+        """
         if not _GATEWAY_URL or not _SERVICE_TOKEN:
             return None
 
         import httpx
-        url = f"{_GATEWAY_URL.rstrip('/')}/v1/internal/store/__llm__/query"
+        url = f"{_GATEWAY_URL.rstrip('/')}/v1/internal/store/user_llm_config/query"
         payload = {
-            "where": {"user_id": user_id},
-            "limit": 1,
-            "extension_id": "__system__",
             "user_id": user_id,
-            "tenant_id": "",
+            "extension_id": "__llm__",
+            "tenant_id": "default",
+            "limit": 1,
         }
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.post(
-                url,
-                json=payload,
-                headers={"X-Service-Token": _SERVICE_TOKEN},
-            )
-            if resp.status_code != 200:
-                return None
-            results = resp.json()
-            if not results:
-                return None
-            doc = results[0]
-            data = doc.get("data", {})
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.post(
+                    url, json=payload,
+                    headers={"X-Service-Token": _SERVICE_TOKEN},
+                )
+                if resp.status_code != 200:
+                    log.debug(f"LLMProvider: BYOLLM query failed status={resp.status_code} for {user_id}")
+                    return None
+                results = resp.json()
+        except Exception as fetch_err:
+            log.info(f"LLMProvider: BYOLLM fetch error for {user_id}: {fetch_err}")
+            return None
+
+        if not results:
+            log.debug(f"LLMProvider: BYOLLM not configured for {user_id}")
+            return None
+        doc = results[0] if isinstance(results, list) else results
+        data = doc.get("data", {})
+
+        if not data.get("enabled"):
+            return None
 
         provider = data.get("provider", "")
         if not provider:
             return None
-        model = data.get("model", "") or _PROVIDER_DEFAULTS.get(provider, {}).get("model", "")
+
+        log.info(f"LLMProvider: BYOLLM found for {user_id}: enabled=True provider={provider} fallback={data.get('fallback')}")
+        return data
+
+    def _build_byollm_config(self, data: dict, purpose: str = "") -> LLMConfig:
+        """Build LLMConfig from raw BYOLLM data, respecting per-purpose model overrides."""
+        provider = data.get("provider", "")
+        provider_key = "openai_compatible" if provider == "custom" else provider
+        model = data.get("model", "") or _PROVIDER_DEFAULTS.get(provider_key, {}).get("model", "")
         api_key = _decrypt(data.get("api_key", ""))
         base_url = data.get("base_url", "")
-        if provider == "google" and not base_url:
+        fallback = data.get("fallback", "platform")
+
+        # Per-purpose model override (user configured in Settings > AI Provider > Per Purpose)
+        if purpose and data.get("purpose"):
+            purpose_cfg = data["purpose"].get(purpose)
+            if purpose_cfg and purpose_cfg.get("model"):
+                model = purpose_cfg["model"]
+
+        if provider_key == "google" and not base_url:
             base_url = _GOOGLE_BASE_URL
 
         return LLMConfig(
-            provider=provider,
+            provider=provider_key,
             model=model,
             api_key=api_key,
             base_url=base_url,
             is_byollm=True,
+            byollm_fallback=fallback,
         )
 
     async def _load_config_store(self) -> dict | None:
@@ -452,10 +557,9 @@ class LLMProvider:
             return self._config_cache
 
         try:
-            import redis.asyncio as aioredis
-            r = aioredis.from_url(_REDIS_URL, decode_responses=True)
+            from shared_redis import get_shared_redis
+            r = get_shared_redis()
             raw = await r.get("imperal:config:llm")
-            await r.aclose()
             if raw:
                 self._config_cache = json.loads(raw)
                 self._config_cache_ts = now
@@ -466,10 +570,28 @@ class LLMProvider:
         return None
 
     def _resolve_failover(self, primary: LLMConfig) -> LLMConfig | None:
-        """Return failover config. BYOLLM fails → platform default. System fails → ENV fallback."""
+        """Return failover config. Respects fallback_enabled from Config Store.
+
+        BYOLLM fails → platform default (always, regardless of flag).
+        System fails → check fallback_enabled flag, then try ENV fallback.
+        """
         if primary.is_byollm:
-            # User BYOLLM failed — fall back to platform default (no BYOLLM flag)
+            if primary.byollm_fallback == "error":
+                log.info("LLMProvider: BYOLLM failed, user chose 'error' — no failover")
+                return None
+            # User chose 'platform' fallback (default)
             return self._env_default_config()
+
+        # Check fallback_enabled from Config Store (Panel toggle)
+        _fb_enabled = True  # default: enabled
+        if self._config_cache and isinstance(self._config_cache, dict):
+            _fb_flag = self._config_cache.get("fallback_enabled") if self._config_cache.get("fallback_enabled") is not None else self._config_cache.get("failover_enabled")
+            if _fb_flag is not None:
+                _fb_enabled = bool(_fb_flag)
+
+        if not _fb_enabled:
+            log.info("LLMProvider: failover disabled by config (fallback_enabled=false)")
+            return None
 
         # System config failed — try ENV fallback provider
         if _ENV_FB_PROVIDER:
@@ -484,7 +606,18 @@ class LLMProvider:
                 base_url=fb_base,
             )
 
-        return None  # No failover configured
+        # No explicit fallback provider — try Anthropic as implicit fallback
+        # (only if primary was NOT anthropic and Anthropic key exists)
+        _anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if primary.provider != "anthropic" and _anthropic_key:
+            log.info(f"LLMProvider: implicit failover from {primary.provider} to anthropic")
+            return LLMConfig(
+                provider="anthropic",
+                model=_PROVIDER_DEFAULTS["anthropic"]["model"],
+                api_key=_anthropic_key,
+            )
+
+        return None
 
     # ------------------------------------------------------------------
     # Provider dispatch
@@ -576,16 +709,42 @@ class LLMProvider:
         return AsyncOpenAI(**kwargs)
 
     # ------------------------------------------------------------------
+    # Available providers (for Panel endpoint)
+    # ------------------------------------------------------------------
+
+    def get_available_providers(self) -> list[dict]:
+        """Return list of providers that have valid API keys configured.
+
+        Used by Panel to show only actually available providers.
+        """
+        available = []
+        _keys = {
+            "anthropic": bool(os.getenv("ANTHROPIC_API_KEY", "")),
+            "openai": bool(os.getenv("OPENAI_API_KEY", "")),
+            "google": bool(os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")),
+        }
+        for provider, has_key in _keys.items():
+            if has_key:
+                defaults = _PROVIDER_DEFAULTS.get(provider, {})
+                available.append({
+                    "provider": provider,
+                    "has_key": True,
+                    "default_model": defaults.get("model", ""),
+                    "routing_model": defaults.get("routing_model", ""),
+                })
+        return available
+
+    # ------------------------------------------------------------------
     # Usage tracking (fire-and-forget)
     # ------------------------------------------------------------------
 
     async def _track_usage(self, usage: LLMUsage) -> None:
         """Write usage metrics to Redis. Fire-and-forget — never raises."""
         try:
-            import redis.asyncio as aioredis
             from datetime import date
+            from shared_redis import get_shared_redis
 
-            r = aioredis.from_url(_REDIS_URL, decode_responses=True)
+            r = get_shared_redis()
             day = date.today().isoformat()
             key = f"imperal:llm_usage:{usage.user_id}:{day}"
 
@@ -604,7 +763,6 @@ class LLMProvider:
             pipe.hincrby(key, "total_latency_ms", usage.latency_ms)
             pipe.expire(key, 90 * 86400)  # 90-day retention
             await pipe.execute()
-            await r.aclose()
         except Exception as e:
             log.debug(f"LLMProvider: usage tracking failed: {e}")
 
@@ -627,8 +785,8 @@ class LLMProvider:
     async def _invalidation_listener(self) -> None:
         """Subscribe to imperal:config:invalidate:* and flush BYOLLM cache entries."""
         try:
-            import redis.asyncio as aioredis
-            r = aioredis.from_url(_REDIS_URL, decode_responses=True)
+            from shared_redis import get_shared_redis
+            r = get_shared_redis()
             pubsub = r.pubsub()
             await pubsub.psubscribe("imperal:config:invalidate:*")
             async for message in pubsub.listen():
