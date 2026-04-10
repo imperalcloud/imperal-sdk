@@ -1,78 +1,318 @@
+<div align="center">
+
 # Imperal SDK
 
-SDK for building extensions on the Imperal Cloud ICNLI platform.
+### Build AI agents. Ship to marketplace. Get paid.
 
-## Install
+**The SDK for the first AI Cloud OS.**
+
+[![PyPI version](https://img.shields.io/pypi/v/imperal-sdk?color=blue&label=PyPI)](https://pypi.org/project/imperal-sdk/)
+[![Python](https://img.shields.io/pypi/pyversions/imperal-sdk)](https://pypi.org/project/imperal-sdk/)
+[![Tests](https://img.shields.io/badge/tests-249%20passing-brightgreen)]()
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+
+[Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
+
+</div>
+
+---
+
+## What is Imperal?
+
+Imperal is an **AI Cloud Operating System** — a complete platform where developers build AI-powered extensions (agents, tools, workflows), users install and use them, and everyone benefits from a shared ecosystem.
+
+Think **Shopify for AI agents**. You build it. Users install it. The platform handles auth, billing, LLM routing, real-time sync, and everything else.
+
+**The SDK** is how you build for the platform. One `pip install`. Five minutes to your first working AI agent.
 
 ```bash
 pip install imperal-sdk
 ```
 
-## Quick Start
+---
 
-```python
-from imperal_sdk import Extension, ChatExtension, ActionResult
+## 5-Minute Quickstart
 
-ext = Extension("my-extension")
-chat = ChatExtension(ext, "my_tool", "My extension", system_prompt="You help users.")
-
-@chat.function("greet", description="Greet the user", params={"name": {"type": "string"}})
-async def greet(ctx, name="World"):
-    return ActionResult.success({"greeting": f"Hello, {name}!"}, summary=f"Greeted {name}")
-
-if __name__ == "__main__":
-    ext.run()
+```bash
+imperal init my-agent --template chat
+cd my-agent
 ```
 
-## Multi-Model LLM Support
-
-The SDK supports multiple LLM providers. Extensions use `get_llm_provider()` for all LLM calls — the platform handles provider routing, failover, and usage tracking transparently.
-
-**Supported providers:** Anthropic (Claude), OpenAI (GPT), Google (Gemini), any OpenAI-compatible API (Ollama, vLLM, LM Studio).
-
-**BYOLLM:** Users can bring their own LLM API keys. Configure via Panel Settings → AI Provider.
-
-**Per-purpose routing:** Different models for different tasks:
-- `routing` — fast/cheap model for intent classification
-- `execution` — accurate model for tool use in extensions
-- `navigate` — conversational model for general chat
+That generates a complete AI agent:
 
 ```python
-from imperal_sdk import get_llm_provider
+from pydantic import BaseModel
+from imperal_sdk import Extension, ChatExtension, ActionResult
 
+ext = Extension("my-agent", version="1.0.0")
+chat = ChatExtension(ext, tool_name="my_agent", description="My first AI agent")
+
+
+class GreetParams(BaseModel):
+    name: str = "World"
+
+
+@chat.function("greet", description="Greet someone", action_type="read")
+async def fn_greet(ctx, params: GreetParams) -> ActionResult:
+    """Say hello to someone."""
+    return ActionResult.success(
+        data={"message": f"Hello, {params.name}!"},
+        summary=f"Greeted {params.name}",
+    )
+```
+
+Validate it:
+
+```bash
+imperal validate
+# Extension: my-agent v1.0.0
+# Tools: 1, Functions: 1, Events: 0
+# 0 errors, 0 warnings
+```
+
+Test it:
+
+```python
+from imperal_sdk.testing import MockContext
+
+async def test_greet():
+    ctx = MockContext(role="user")
+    result = await fn_greet(ctx, GreetParams(name="World"))
+    assert result.status == "success"
+    assert result.data["message"] == "Hello, World!"
+```
+
+---
+
+## What You Get
+
+### For Extension Developers
+
+| Feature | Description |
+|---------|-------------|
+| **Typed Everything** | Generic `ActionResult[T]`, `Page[T]`, typed Protocols, Pydantic params — full IDE autocomplete |
+| **10 SDK Clients** | `ctx.store`, `ctx.ai`, `ctx.billing`, `ctx.skeleton`, `ctx.notify`, `ctx.storage`, `ctx.http`, `ctx.config`, `ctx.extensions`, `ctx.time` |
+| **Error Hierarchy** | `ImperalError` > `APIError` > `NotFoundError`, `RateLimitError` — catch what you need |
+| **MockContext** | Drop-in test replacement with 10 mock clients. Test without a server. |
+| **CLI Tools** | `imperal init`, `imperal validate`, `imperal dev` — scaffold, validate, develop |
+| **Lifecycle Hooks** | `@ext.on_install`, `@ext.on_upgrade("0.9.0")`, `@ext.on_uninstall`, `@ext.health_check` |
+| **Events System** | `@ext.on_event("deal.created")` — subscribe to typed platform events |
+| **Webhooks** | `@ext.webhook("/stripe", secret_header="Stripe-Signature")` — external HTTP ingestion |
+| **Inter-Extension API** | `@ext.expose("get_deal")` + `ctx.extensions.call("crm", "get_deal")` — typed cross-extension calls |
+| **UI Contributions** | Panels, Widgets, Commands, Context Menus, Settings, Themes — declare UI from Python |
+| **Validator** | 12 rules (V1-V12) catch issues before deployment. Claude-friendly fix reports. |
+| **Pagination** | `Page[T]` with cursor, iteration, auto-pagination — built into every list operation |
+
+### For the Platform
+
+| Feature | What It Means |
+|---------|---------------|
+| **BYOLLM** | Users bring their own LLM keys. Anthropic, OpenAI, Google, Ollama, any OpenAI-compatible API. |
+| **Multi-Model Routing** | Different models for routing (fast/cheap), execution (accurate), navigation (conversational) |
+| **2-Step Confirmation** | Destructive actions require user approval. Kernel-enforced, not extension-optional. |
+| **RBAC + Scopes** | Fine-grained permissions per user, per extension, per function |
+| **Token Economy** | Built-in billing: token wallet, usage metering, subscription plans, marketplace payouts |
+| **Automation Engine** | Event-driven rules with cron scheduling. Users create "if X then Y" without code. |
+| **Self-Hosted** | Run on your servers. Your data never leaves. |
+
+---
+
+## Extension Architecture
+
+```
+@chat.function("create_deal", action_type="write", event="deal.created")
+     |
+     v
+[ Kernel Pipeline ]
+     |
+     +-- Scope Check (RBAC)
+     +-- 2-Step Confirmation (if destructive)
+     +-- Execute Function
+     +-- Truth Gate (ActionResult.status)
+     +-- Event Publishing (automations)
+     +-- Action Recording (audit trail)
+     |
+     v
+ActionResult.success(data={"deal_id": "d1"}, summary="Deal created")
+```
+
+Every function call goes through the full kernel pipeline. Security, billing, events — all automatic. You just write the business logic.
+
+---
+
+## SDK Type System
+
+```python
+# Generic ActionResult — works with dict or Pydantic models
+from pydantic import BaseModel
+
+class Deal(BaseModel):
+    id: str
+    name: str
+    value: float
+
+result = ActionResult.success(data=Deal(id="d1", name="Acme", value=50000), summary="Created")
+result.to_dict()  # {"status": "success", "data": {"id": "d1", "name": "Acme", "value": 50000}, ...}
+
+# Cursor-based pagination
+page = await ctx.store.query("deals", where={"status": "open"}, limit=20)
+for deal in page:  # Page[Document] supports iteration
+    print(deal.data["name"])
+if page.has_more:
+    next_page = await ctx.store.query("deals", cursor=page.cursor)
+
+# Error hierarchy — catch what you need
+from imperal_sdk.errors import NotFoundError, RateLimitError
+try:
+    deal = await ctx.store.get("deals", "nonexistent")
+except NotFoundError as e:
+    print(f"{e.resource} '{e.id}' not found")  # "deal 'nonexistent' not found"
+```
+
+---
+
+## Multi-Model LLM
+
+Extensions never import LLM libraries directly. The platform handles provider routing, failover, and per-user model preferences.
+
+```python
+# Extensions use ctx.ai — the platform routes to the right model
+result = await ctx.ai.complete("Summarize this deal", model="")  # uses user's configured model
+
+# Or use the LLM provider directly for advanced use cases
+from imperal_sdk import get_llm_provider
 provider = get_llm_provider()
 resp = await provider.create_message(
     messages=[{"role": "user", "content": "Hello"}],
-    purpose="execution",        # routing | execution | navigate
-    extension_id="my-ext",      # per-extension model override
-    user_id="imp_u_xxx",        # BYOLLM lookup
+    purpose="execution",       # routing | execution | navigate
+    user_id="imp_u_xxx",       # BYOLLM: uses the user's own API key
 )
 ```
 
-## Key Components
+**Supported:** Anthropic (Claude), OpenAI (GPT), Google (Gemini), Ollama, vLLM, LM Studio, any OpenAI-compatible API.
 
-- **Extension** — base class for all extensions
-- **ChatExtension** — LLM-powered chat interface with function calling
-- **ActionResult** — universal return type for chat functions (`.success()` / `.error()`)
-- **Context** — execution context with user info, config, skeleton, storage
-- **get_llm_provider()** — unified LLM access with multi-model routing and failover
+---
 
-## Configuration
+## Testing
 
-Environment variables:
+Every extension is testable without a server:
 
-```bash
-LLM_PROVIDER=anthropic          # anthropic | openai | openai_compatible | google
-LLM_MODEL=claude-haiku-4-5-20251001
-LLM_API_KEY=sk-ant-...
-LLM_ROUTING_MODEL=...           # optional: model for routing
-LLM_EXECUTION_MODEL=...         # optional: model for execution
-LLM_NAVIGATE_MODEL=...          # optional: model for navigation
-LLM_FALLBACK_PROVIDER=openai    # optional: failover provider
-LLM_FALLBACK_MODEL=gpt-4.1-mini
-LLM_FALLBACK_API_KEY=sk-...
+```python
+from imperal_sdk.testing import MockContext
+
+async def test_full_workflow():
+    ctx = MockContext(role="admin", config={"api_url": "https://example.com"})
+
+    # MockStore — in-memory, full CRUD
+    doc = await ctx.store.create("deals", {"name": "Big Deal", "value": 50000})
+    assert doc.id is not None
+
+    page = await ctx.store.query("deals", where={"name": "Big Deal"})
+    assert len(page) == 1
+
+    # MockAI — configurable responses
+    ctx.ai.set_response("summarize", "This is a big deal worth $50K")
+    result = await ctx.ai.complete("Summarize this deal")
+    assert "50K" in result.text
+
+    # MockHTTP — register mock endpoints
+    ctx.http.mock_get("api.example.com", {"status": "ok"})
+    resp = await ctx.http.get("https://api.example.com/health")
+    assert resp.ok
+
+    # MockNotify — verify notifications were sent
+    await ctx.notify.send("Deal created!", channel="email")
+    assert len(ctx.notify.sent) == 1
 ```
 
-## License
+---
 
-AGPL-3.0
+## Validation
+
+```bash
+$ imperal validate ./my-extension
+
+── Imperal Extension Validator v1.0 ────────────────────
+
+Extension: crm v1.0.0
+Tools: 1, Functions: 12, Events: 5
+
+RESULTS: 1 error, 2 warnings
+
+  ERROR  [V5] @chat.function 'create_deal' must return ActionResult
+         Fix: Add return type annotation: -> ActionResult
+
+  WARN   [V10] @chat.function 'update_deal' (action_type="write") has no event=
+         Fix: Add event='crm.update_deal' to the decorator
+
+  WARN   [V9] No @ext.health_check registered
+         Fix: Add @ext.health_check decorator to a health check function
+```
+
+12 rules. Catches type issues, missing annotations, banned imports, missing events. Runs in CI, in CLI, and at kernel load time.
+
+---
+
+## Lifecycle & Events
+
+```python
+@ext.on_install
+async def setup(ctx):
+    """Called once when user installs your extension."""
+    await ctx.store.create("settings", {"initialized": True})
+
+@ext.on_upgrade("0.9.0")
+async def migrate(ctx):
+    """Called when upgrading from 0.9.x."""
+    await ctx.store.query("deals")  # migrate data
+
+@ext.health_check
+async def health(ctx):
+    """Called every 60s. Return health status."""
+    return HealthStatus.ok({"connections": 5})
+
+@ext.on_event("email.received")
+async def on_email(ctx, event):
+    """React to platform events from other extensions."""
+    await ctx.notify.send(f"New email: {event.data['subject']}")
+
+@ext.webhook("/stripe", method="POST", secret_header="Stripe-Signature")
+async def handle_stripe(ctx, request):
+    """Receive webhooks from external services."""
+    data = request.json()
+    return WebhookResponse.ok({"received": True})
+```
+
+---
+
+## Project Structure
+
+```
+my-extension/
+  main.py              # Extension + ChatExtension + @chat.functions
+  imperal.json         # Manifest (optional — auto-discovered from code)
+  tests/
+    test_main.py       # Tests using MockContext
+  requirements.txt     # imperal-sdk>=1.0.0
+```
+
+---
+
+## Links
+
+- **Documentation:** [docs.imperal.io](https://docs.imperal.io)
+- **Platform:** [imperal.io](https://imperal.io)
+- **Discord:** [discord.gg/imperal](https://discord.gg/imperal)
+- **PyPI:** [pypi.org/project/imperal-sdk](https://pypi.org/project/imperal-sdk/)
+- **GitHub:** [github.com/imperalcloud](https://github.com/imperalcloud)
+- **License:** [AGPL-3.0](LICENSE)
+
+---
+
+<div align="center">
+
+**Built by [Imperal, Inc.](https://imperal.io)**
+
+*The AI Cloud OS.*
+
+</div>
