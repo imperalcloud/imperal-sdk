@@ -6,9 +6,12 @@ from imperal_sdk.types.models import (
     BalanceInfo, FileInfo, HTTPResponse,
 )
 from imperal_sdk.types.pagination import Page
+from imperal_sdk.types.events import Event, WebhookRequest, WebhookResponse
+from imperal_sdk.types.health import HealthStatus
 
 __all__ = [
     "ActionResult", "ChatResult", "FunctionCall", "Page",
     "Document", "CompletionResult", "LimitsResult", "SubscriptionInfo",
     "BalanceInfo", "FileInfo", "HTTPResponse",
+    "Event", "WebhookRequest", "WebhookResponse", "HealthStatus",
 ]
