@@ -1,15 +1,18 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import httpx
 
 
 @dataclass
 class CompletionResult:
     text: str
-    tokens_used: int = 0
     model: str = ""
+    usage: dict = field(default_factory=dict)
+    stop_reason: str = ""
+    # Backward compat: tokens_used mirrors usage total_tokens when available
+    tokens_used: int = 0
 
 
 class AIClient:
@@ -25,4 +28,12 @@ class AIClient:
             resp = await client.post(f"{self._gateway_url}/v1/internal/ai/complete", json={"prompt": prompt, "model": model, "extension_id": self._extension_id, **kwargs}, headers={"Authorization": f"Bearer {self._auth_token}"}, timeout=120)
             resp.raise_for_status()
             data = resp.json()
-            return CompletionResult(text=data.get("text", ""), tokens_used=data.get("tokens_used", 0), model=data.get("model", model))
+            usage = data.get("usage", {})
+            tokens_used = data.get("tokens_used", usage.get("total_tokens", 0))
+            return CompletionResult(
+                text=data.get("text", ""),
+                model=data.get("model", model),
+                usage=usage,
+                stop_reason=data.get("stop_reason", ""),
+                tokens_used=tokens_used,
+            )

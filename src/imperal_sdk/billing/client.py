@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Any
 import httpx
 
+from imperal_sdk.types.models import BalanceInfo
+
 
 @dataclass
 class LimitsResult:
@@ -51,3 +53,17 @@ class BillingClient:
             resp = await client.get(f"{self._gateway_url}/v1/billing/subscription", headers=self._headers(), timeout=10)
             resp.raise_for_status()
             return SubscriptionInfo(**resp.json())
+
+    async def track_usage(self, meter: str, amount: int = 1, user: Any = None) -> bool:
+        """Track usage for a given meter. Returns True on success."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/usage/track", json={"meter": meter, "amount": amount}, headers=self._headers(), timeout=10)
+            return resp.status_code == 200
+
+    async def get_balance(self, user: Any = None) -> BalanceInfo:
+        """Get current token balance and plan cap."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{self._gateway_url}/v1/billing/balance", headers=self._headers(), timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            return BalanceInfo(balance=data.get("balance", 0), plan=data.get("plan", ""), cap=data.get("cap", 0))

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Any
 import httpx
 
+from imperal_sdk.types.pagination import Page
+
 
 @dataclass
 class Document:
@@ -49,11 +51,17 @@ class StoreClient:
             r = resp.json()
             return Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at"), updated_at=r.get("updated_at"))
 
-    async def query(self, collection: str, where: dict | None = None, order_by: str | None = None, limit: int = 100) -> list[Document]:
+    async def query(self, collection: str, where: dict | None = None, order_by: str | None = None, limit: int = 100) -> Page[Document]:
         async with httpx.AsyncClient() as client:
             resp = await client.post(f"{self._gateway_url}/v1/internal/store/{collection}/query", json={"where": where or {}, "order_by": order_by, "limit": limit, "extension_id": self._extension_id, "user_id": self._user_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             resp.raise_for_status()
-            return [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at"), updated_at=r.get("updated_at")) for r in resp.json()]
+            raw = resp.json()
+            # Support both list response and paginated envelope {"data": [...], "cursor": ..., "has_more": ...}
+            if isinstance(raw, list):
+                items = [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at"), updated_at=r.get("updated_at")) for r in raw]
+                return Page(data=items, has_more=False)
+            items = [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at"), updated_at=r.get("updated_at")) for r in raw.get("data", [])]
+            return Page(data=items, cursor=raw.get("cursor"), has_more=raw.get("has_more", False), total=raw.get("total"))
 
     async def update(self, collection: str, doc_id: str, data: dict) -> Document:
         async with httpx.AsyncClient() as client:
