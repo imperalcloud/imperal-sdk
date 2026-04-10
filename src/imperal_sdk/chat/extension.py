@@ -236,9 +236,37 @@ class ChatExtension:
             event_schema: Optional Pydantic BaseModel class for typed event data validation.
         """
         def decorator(func: Callable) -> Callable:
+            # Auto-detect Pydantic BaseModel params
+            resolved_params = params
+            if resolved_params is None:
+                import inspect
+                sig = inspect.signature(func)
+                for pname, param in sig.parameters.items():
+                    if pname in ("ctx", "self"):
+                        continue
+                    ann = param.annotation
+                    if ann != inspect.Parameter.empty:
+                        try:
+                            from pydantic import BaseModel
+                            if isinstance(ann, type) and issubclass(ann, BaseModel):
+                                schema = ann.model_json_schema()
+                                resolved_params = {}
+                                for field_name, field_info in schema.get("properties", {}).items():
+                                    resolved_params[field_name] = {
+                                        "type": field_info.get("type", "string"),
+                                        "description": field_info.get("description", field_info.get("title", "")),
+                                    }
+                                    if field_name not in schema.get("required", []):
+                                        resolved_params[field_name]["default"] = field_info.get("default")
+                                break
+                        except (TypeError, ImportError):
+                            pass
+            if resolved_params is None:
+                resolved_params = {}
+
             self._functions[name] = FunctionDef(
                 name=name, func=func, description=description,
-                params=params or {}, action_type=action_type, event=event,
+                params=resolved_params, action_type=action_type, event=event,
                 event_schema=event_schema,
             )
             return func
@@ -247,6 +275,38 @@ class ChatExtension:
     @property
     def functions(self) -> dict[str, FunctionDef]:
         return self._functions
+
+    def _make_chat_result(self, response: str, handled: bool = False,
+                          message_type: str = "text", intercepted: bool = False,
+                          task_cancelled: bool = False, action_meta: dict = None) -> dict:
+        """Build return dict using ChatResult for typed construction."""
+        from imperal_sdk.types.chat_result import ChatResult, FunctionCall as FC
+
+        fcs = []
+        for fc_dict in self._functions_called:
+            fcs.append(FC(
+                name=fc_dict.get("name", ""),
+                params=fc_dict.get("params", {}),
+                action_type=fc_dict.get("action_type", "read"),
+                success=fc_dict.get("success", False),
+                intercepted=fc_dict.get("intercepted", False),
+                event=fc_dict.get("event", ""),
+            ))
+
+        cr = ChatResult(
+            response=response,
+            handled=handled,
+            functions_called=fcs,
+            had_successful_action=any(
+                fc.success and fc.action_type in ("write", "destructive")
+                for fc in fcs
+            ),
+            message_type=message_type,
+            action_meta=action_meta or {},
+            intercepted=intercepted,
+            task_cancelled=task_cancelled,
+        )
+        return cr.to_dict()
 
     def _get_action_type(self, func_name: str) -> str:
         """Return the action_type for a function. Falls back to name-based detection."""
@@ -396,7 +456,7 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
         from imperal_sdk.runtime.llm_provider import get_llm_provider
         client = get_llm_provider()
         tools = self._build_tool_schemas()
-        if not tools: return {"response": "No functions registered", "_functions_called": self._functions_called, "_handled": False}
+        if not tools: return self._make_chat_result(response="No functions registered")
         system = self._build_system_prompt(ctx)
         # System prompt awareness: reduce window if prompt is very large
         _sys_tokens_est = len(system) // 3
@@ -486,7 +546,7 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                     text = next((b.text for b in resp.content if hasattr(b, "text")), "Done.")
                     text = _enforce_os_identity(text)
                     text = _enforce_response_style(text)
-                    return {"response": text, "_functions_called": self._functions_called, "_handled": bool(self._functions_called)}
+                    return self._make_chat_result(response=text, handled=bool(self._functions_called))
                 messages.append({"role": "assistant", "content": resp.content})
                 tool_results = []
                 for tu in tool_uses:
@@ -660,11 +720,11 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
 
                 # If any function was intercepted, return immediately for confirmation
                 if any(fc["intercepted"] for fc in self._functions_called):
-                    return {
-                        "response": "Action requires confirmation.",
-                        "_functions_called": self._functions_called,
-                        "_intercepted": True,
-                    }
+                    return self._make_chat_result(
+                        response="Action requires confirmation.",
+                        intercepted=True,
+                        message_type="confirmation",
+                    )
 
                 messages.append({"role": "user", "content": tool_results})
 
@@ -729,15 +789,15 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                             text = _factual_summary
                         text = _enforce_os_identity(text)
                         text = _enforce_response_style(text)
-                        return {"response": text, "_functions_called": self._functions_called, "_handled": True}
-            return {"response": "Request required too many steps. Please simplify.", "_functions_called": self._functions_called, "_handled": bool(self._functions_called)}
+                        return self._make_chat_result(response=text, handled=True)
+            return self._make_chat_result(response="Request required too many steps. Please simplify.", handled=bool(self._functions_called))
         except TaskCancelled:
             self._functions_called.append({
                 "name": "__cancelled__", "params": {}, "action_type": "read",
                 "success": False, "intercepted": False, "error": "Task cancelled by user",
                 "event": "", "result": None,
             })
-            return {"response": "Task cancelled.", "_functions_called": self._functions_called, "_task_cancelled": True, "_handled": bool(self._functions_called)}
+            return self._make_chat_result(response="Task cancelled.", task_cancelled=True, handled=bool(self._functions_called))
         except Exception as e:
             log.error(f"ChatExtension error: {e}")
-            return {"response": f"Error: {e}", "_functions_called": self._functions_called, "_handled": False}
+            return self._make_chat_result(response=f"Error: {e}")
