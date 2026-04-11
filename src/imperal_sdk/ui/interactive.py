@@ -72,3 +72,23 @@ def Link(label: str, href: str = "", on_click: UIAction | None = None) -> UINode
     if href: props["href"] = href
     if on_click: props["on_click"] = on_click
     return UINode(type="Link", props=props)
+
+
+def SlideOver(
+    title: str,
+    children: list[UINode] | None = None,
+    subtitle: str = "",
+    open: bool = True,
+    width: str = "md",
+    on_close: UIAction | None = None,
+) -> UINode:
+    """Side panel sliding in from right. width: sm/md/lg/xl."""
+    props: dict[str, Any] = {
+        "title": title,
+        "subtitle": subtitle,
+        "open": open,
+        "width": width,
+    }
+    if children: props["children"] = children
+    if on_close: props["on_close"] = on_close
+    return UINode(type="SlideOver", props=props)

@@ -30,10 +30,18 @@ def ListItem(
     selected: bool = False,
     on_click: UIAction | None = None,
     actions: list[dict] | None = None,
+    draggable: bool = False,
+    droppable: bool = False,
+    on_drop: UIAction | None = None,
+    icon: str = "",
+    expandable: bool = False,
+    expanded_content: list[UINode] | None = None,
 ) -> UINode:
     """Single list entry — used inside List.
 
     actions: hover actions, e.g. [{"icon": "Trash2", "on_click": Call(...), "confirm": "Delete?"}]
+    expandable: if True, clicking toggles expanded_content instead of firing on_click.
+    expanded_content: list of UINodes rendered when expanded.
     """
     props: dict[str, Any] = {"id": id, "title": title}
     if subtitle: props["subtitle"] = subtitle
@@ -43,6 +51,12 @@ def ListItem(
     if selected: props["selected"] = selected
     if on_click: props["on_click"] = on_click
     if actions: props["actions"] = actions
+    if draggable: props["draggable"] = draggable
+    if droppable: props["droppable"] = droppable
+    if on_drop: props["on_drop"] = on_drop
+    if icon: props["icon"] = icon
+    if expandable: props["expandable"] = expandable
+    if expanded_content: props["expanded_content"] = expanded_content
     return UINode(type="ListItem", props=props)
 
 

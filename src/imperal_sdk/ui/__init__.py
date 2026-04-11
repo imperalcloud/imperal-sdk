@@ -20,7 +20,7 @@ from .data import (
     Badge, Avatar, Timeline, Tree, KeyValue,
 )
 from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider
-from .interactive import Button, Card, Menu, Dialog, Tooltip, Link
+from .interactive import Button, Card, Menu, Dialog, Tooltip, Link, SlideOver
 from .feedback import Alert, Progress, Chart, Loading, Error
 from .input_components import (
     Input, Form, Select, MultiSelect, Toggle,
@@ -37,7 +37,7 @@ __all__ = [
     # Display
     "Text", "Icon", "Header", "Image", "Code", "Markdown", "Empty", "Divider",
     # Interactive
-    "Button", "Card", "Menu", "Dialog", "Tooltip", "Link",
+    "Button", "Card", "Menu", "Dialog", "Tooltip", "Link", "SlideOver",
     # Feedback
     "Alert", "Progress", "Chart", "Loading", "Error",
     # Input
