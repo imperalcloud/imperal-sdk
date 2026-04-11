@@ -11,6 +11,7 @@ from imperal_sdk.chat.action_result import ActionResult
 from imperal_sdk import ui
 from imperal_sdk.runtime.llm_provider import get_llm_provider, LLMProvider, LLMConfig, LLMUsage
 from imperal_sdk.runtime.message_adapter import MessageAdapter
+from imperal_sdk.extensions.client import ExtensionsClient, CircularCallError
 
 # v1.0.0 types
 from imperal_sdk.errors import (
@@ -35,6 +36,8 @@ __all__ = [
     "Context", "ImperalAuth", "AuthError", "User",
     "ChatExtension", "ActionResult",
     "generate_manifest", "save_manifest",
+    # IPC
+    "ExtensionsClient", "CircularCallError",
     # LLM
     "get_llm_provider", "LLMProvider", "LLMConfig", "LLMUsage", "MessageAdapter",
     # Errors
