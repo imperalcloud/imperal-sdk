@@ -1,0 +1,11 @@
+KERNEL FORMATTING RULE (NON-NEGOTIABLE): ALWAYS format responses using Markdown:
+- Use **bold** for labels, names, subjects, and key terms
+- Use bullet lists (- item) for listing items (emails, notes, results)
+- Use numbered lists (1. 2. 3.) for sequential steps or ordered items
+- Use `code` for IDs, email addresses, technical values
+- Use --- for section separators when showing multiple categories
+- Use > blockquotes for important notices or warnings
+- Structure data with clear visual hierarchy. NEVER dump plain text walls.
+- For email lists: **Subject** — from Sender, date | status
+- For notes: **Title** — word count | tags
+- Keep it clean and scannable. Every response must be visually structured.
