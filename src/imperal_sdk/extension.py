@@ -84,6 +84,7 @@ class Extension:
         self._webhooks: dict[str, WebhookDef] = {}
         self._event_handlers: list[EventHandlerDef] = []
         self._exposed: dict[str, ExposedMethod] = {}
+        self._panels: dict[str, dict] = {}
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""
@@ -168,6 +169,40 @@ class Extension:
             return func
         return decorator
 
+    def panel(self, panel_id: str, slot: str = "main", title: str = "",
+              icon: str = "", refresh: str = "manual", **kwargs):
+        """Declare a UI panel. Handler returns UINode tree.
+        Panel fetched via /call endpoint with function __panel__{panel_id}."""
+        def decorator(func: Callable) -> Callable:
+            async def wrapper(ctx, **params):
+                result = await func(ctx, **params)
+                if hasattr(result, 'to_dict'):
+                    return {"ui": result.to_dict(), "panel_id": panel_id}
+                return result
+            self._tools[f"__panel__{panel_id}"] = ToolDef(
+                name=f"__panel__{panel_id}", func=wrapper,
+                description=f"Panel: {title or panel_id}",
+            )
+            self._panels[panel_id] = {"slot": slot, "title": title, "icon": icon, "refresh": refresh, **kwargs}
+            return func
+        return decorator
+
+    def widget(self, widget_id: str, slot: str = "dashboard.stats",
+               label: str = "", icon: str = "", **kwargs):
+        """Declare a UI widget for injection points."""
+        def decorator(func: Callable) -> Callable:
+            async def wrapper(ctx, **params):
+                result = await func(ctx, **params)
+                if hasattr(result, 'to_dict'):
+                    return {"ui": result.to_dict(), "widget_id": widget_id}
+                return result
+            self._tools[f"__widget__{widget_id}"] = ToolDef(
+                name=f"__widget__{widget_id}", func=wrapper,
+                description=f"Widget: {label or widget_id}",
+            )
+            return func
+        return decorator
+
     @property
     def tools(self) -> dict[str, ToolDef]:
         return self._tools
@@ -195,6 +230,10 @@ class Extension:
     @property
     def exposed(self) -> dict[str, ExposedMethod]:
         return self._exposed
+
+    @property
+    def panels(self) -> dict[str, dict]:
+        return self._panels
 
     async def call_tool(self, name: str, ctx: Any, **kwargs) -> Any:
         """Call a registered tool with context."""

@@ -6,7 +6,7 @@ Use factory methods .success() and .error() — do not construct directly.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -30,6 +30,7 @@ class ActionResult(Generic[T]):
     summary: str = ""
     error: str | None = None
     retryable: bool = False
+    ui: Any | None = None  # Inline UI component tree for chat rendering
 
     @staticmethod
     def success(data: T | dict, summary: str) -> ActionResult[T]:
@@ -54,6 +55,8 @@ class ActionResult(Generic[T]):
             d["error"] = err
         if self.retryable:
             d["retryable"] = self.retryable
+        if self.ui is not None:
+            d["ui"] = self.ui.to_dict() if hasattr(self.ui, 'to_dict') else self.ui
         return d
 
     @staticmethod
