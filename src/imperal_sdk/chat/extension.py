@@ -19,6 +19,8 @@ except ImportError:
     def _check_target_scope(**kwargs):
         return {"allowed": False, "cross_user": True, "error": "target_scope_unavailable"}
 from imperal_sdk.chat.action_result import ActionResult
+from imperal_sdk.chat.filters import enforce_os_identity, enforce_response_style, trim_tool_result
+from imperal_sdk.prompts import load_prompt as _load_sdk_prompt
 
 log = logging.getLogger(__name__)
 
@@ -28,166 +30,7 @@ class TaskCancelled(Exception):
     pass
 
 
-ICNLI_INTEGRITY_RULES = """
-ICNLI INTEGRITY RULES (enforced by kernel — you CANNOT ignore these):
-- ALWAYS call a function for any data request. Never answer from memory or cached data.
-- If a function returns an error, report the EXACT error to the user. Never pretend success.
-- NEVER fabricate, invent, or guess data, URLs, links, tokens, or credentials.
-- NEVER claim to have performed an action that a function did not confirm as successful.
-- If NONE of your functions can handle the user's request, say "I can't do that right now." Do NOT mention other extensions, apps, or services by name.
-- Respond in the user's language. No emojis. "Imperal" not "Imperial".
-- After performing an action, confirm with ONE sentence what happened based on the function result.
-"""
-
-
-def _enforce_os_identity(text: str) -> str:
-    """Kernel-level OS identity enforcement.
-
-    Removes any sentences that redirect user to other extensions.
-    Extensions are internal implementation — user sees only Imperal Cloud.
-    """
-    if not text:
-        return text
-
-    _redirect_phrases = (
-        "extension", "расширение", "расширении",
-        "handled by", "use the", "through the",
-        "обрабатывается", "используйте",
-    )
-    _redirect_patterns = (
-        "gmail extension", "notes extension", "admin extension",
-        "sharelock extension", "mail extension", "case extension",
-        "gmail app", "notes app", "another extension", "other extension",
-        "separate extension", "different extension",
-        "другое расширение", "другом расширении",
-    )
-
-    text_lower = text.lower()
-    has_redirect = any(p in text_lower for p in _redirect_patterns)
-    if not has_redirect:
-        return text
-
-    # Remove redirect sentences
-    import re
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    cleaned = []
-    for s in sentences:
-        s_lower = s.lower()
-        if any(p in s_lower for p in _redirect_patterns):
-            log.info(f"OS Identity: stripped redirect sentence: {s[:80]}")
-            continue
-        cleaned.append(s)
-
-    result = " ".join(cleaned).strip()
-    return result if result else text
-
-
-def _enforce_response_style(text: str) -> str:
-    """Kernel-level response style enforcement. CODE, not prompt.
-
-    1. Strips Unicode emojis (no extension should use them)
-    2. Strips known filler/reassurance phrases
-    3. Collapses excessive whitespace
-    """
-    if not text:
-        return text
-    import re
-    # 1. Strip emojis (Unicode emoji ranges, expanded to catch keycaps and misc)
-    text = re.sub(
-        r'[\U0001F300-\U0001F9FF\u2600-\u27BF\uFE00-\uFE0F'
-        r'\u200D\u2702-\u27B0\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF'
-        r'\u2B50\u26A0\u2B06\u2194-\u21AA'
-        r'\u20E3\u2139\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA'
-        r'\U000E0020-\U000E007F\u200B-\u200F\u2028-\u202F'
-        r'\u2066-\u2069\uFFFC\uFFFD]+', '', text
-    )
-    # Also strip keycap sequences: digit + U+FE0F + U+20E3 (e.g. 1️⃣)
-    text = re.sub(r'[\d#*]\uFE0F?\u20E3', '', text)
-    # 2. Strip known filler phrases (case-insensitive line removal)
-    _filler = (
-        "дайте знать", "let me know", "feel free to",
-        "если вы хотите", "if you want to", "if you need",
-        "ваши данные", "your data", "остаются сохранен",
-        "в любой момент", "at any time", "anytime",
-        "вы сможете снова", "you can re-enable", "you can always",
-        "могу ещё чем-то помочь", "anything else",
-        "что-то ещё", "чем-то помочь", "нужна ли", "нужно ли",
-    )
-    lines = text.split("\n")
-    non_empty_lines = [l for l in lines if l.strip()]
-    # Only strip filler if there are OTHER non-filler lines to keep
-    # Never strip ALL lines — that results in empty response
-    cleaned = []
-    for line in lines:
-        line_lower = line.strip().lower()
-        if not line_lower:
-            cleaned.append(line)
-            continue
-        if any(f in line_lower for f in _filler):
-            # Check: would removing this leave us with zero content?
-            remaining = [l for l in non_empty_lines if l.strip().lower() != line_lower and not any(f in l.strip().lower() for f in _filler)]
-            if remaining:
-                log.info(f"Response style: stripped filler: {line.strip()[:80]}")
-                continue
-            # else: this is the only meaningful line, keep it
-        cleaned.append(line)
-    text = "\n".join(cleaned)
-    # 3. Collapse excessive blank lines (max 1)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
-
-
-# ── Guard 1: Tool Result Trimmer ──────────────────────────────────────────
-_KEEP_FIELDS = frozenset({
-    "id", "message_id", "thread_id", "note_id", "from", "to", "cc", "bcc",
-    "subject", "name", "email", "status", "RESULT", "error",
-    "success", "sent", "archived", "deleted", "folder", "account",
-    "note_id", "folder_id", "tag", "tags",
-})
-_TRIM_FIELDS = frozenset({
-    "body", "content", "text", "html", "snippet", "preview",
-    "description", "analysis", "summary", "message", "plain",
-})
-
-
-def _truncate_deep(obj, list_max: int = 5, str_max: int = 500):
-    if isinstance(obj, str):
-        return obj
-    if isinstance(obj, list):
-        if len(obj) > list_max:
-            trimmed = [_truncate_deep(item, list_max, str_max) for item in obj[:list_max]]
-            trimmed.append(f"[...{len(obj) - list_max} more items]")
-            return trimmed
-        return [_truncate_deep(item, list_max, str_max) for item in obj]
-    if isinstance(obj, dict):
-        result = {}
-        for k, v in obj.items():
-            if k in _KEEP_FIELDS:
-                result[k] = v
-            elif k in _TRIM_FIELDS and isinstance(v, str) and len(v) > str_max:
-                result[k] = v[:str_max] + f"... [{len(v)} chars total]"
-            else:
-                result[k] = _truncate_deep(v, list_max, str_max)
-        return result
-    return obj
-
-
-def _trim_tool_result(content: str, max_tokens: int = 3000,
-                      list_max: int = 5, str_max: int = 500) -> str:
-    estimated_tokens = len(content) / 3
-    if estimated_tokens <= max_tokens:
-        return content
-    max_chars = max_tokens * 3
-    try:
-        data = json.loads(content)
-        trimmed = _truncate_deep(data, list_max, str_max)
-        result = json.dumps(trimmed, ensure_ascii=False)
-        if len(result) > max_chars:
-            return result[:max_chars] + f"\n[...truncated, {len(content)} chars total]"
-        return result
-    except (json.JSONDecodeError, TypeError):
-        pass
-    return content[:max_chars] + f"\n[...truncated, {len(content)} chars total]"
+ICNLI_INTEGRITY_RULES = "\n" + _load_sdk_prompt("icnli_integrity_rules.txt") + "\n"
 
 
 # Words that indicate write/destructive actions — used for backwards-compatible
@@ -370,27 +213,9 @@ class ChatExtension:
         if _lang_name:
             parts.append(f"\nKERNEL LANGUAGE RULE (NON-NEGOTIABLE): You MUST respond ONLY in {_lang_name}.")
         # Kernel Markdown Formatting
-        parts.append("""
-KERNEL FORMATTING RULE (NON-NEGOTIABLE): ALWAYS format responses using Markdown:
-- Use **bold** for labels, names, subjects, and key terms
-- Use bullet lists (- item) for listing items (emails, notes, results)
-- Use numbered lists (1. 2. 3.) for sequential steps or ordered items
-- Use `code` for IDs, email addresses, technical values
-- Use --- for section separators when showing multiple categories
-- Use > blockquotes for important notices or warnings
-- Structure data with clear visual hierarchy. NEVER dump plain text walls.
-- For email lists: **Subject** — from Sender, date | status
-- For notes: **Title** — word count | tags
-- Keep it clean and scannable. Every response must be visually structured.""")
+        parts.append("\n" + _load_sdk_prompt("kernel_formatting_rule.txt"))
         # Kernel Proactivity
-        parts.append("""
-KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
-- NEVER say "I can't", "I don't have access", or "I need you to provide". If you need data, CALL THE FUNCTION to get it.
-- If user asks to "show", "read", "analyze" — DO IT by calling functions. Don't ask for IDs, don't ask which account. Use the active account, call inbox/list first if needed.
-- If user asks to analyze/summarize multiple items — call list function, then read each important one, then analyze. Chain your function calls across multiple rounds.
-- Be PROACTIVE: suggest next actions after completing a task. "Want me to reply?" "Should I archive these?"
-- If a function returns an error, try an alternative approach. Don't give up after one failure.
-- When user gives a short confirmation ("да", "давай", "покажи") — execute the last suggested action immediately.""")
+        parts.append("\n" + _load_sdk_prompt("kernel_proactivity_rule.txt"))
         return "\n".join(parts)
 
     def _build_messages(self, history: list, message: str,
@@ -557,8 +382,8 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                 tool_uses = [b for b in resp.content if b.type == "tool_use"]
                 if not tool_uses:
                     text = next((b.text for b in resp.content if hasattr(b, "text")), "Done.")
-                    text = _enforce_os_identity(text)
-                    text = _enforce_response_style(text)
+                    text = enforce_os_identity(text)
+                    text = enforce_response_style(text)
                     return self._make_chat_result(response=text, handled=bool(self._functions_called))
                 messages.append({"role": "assistant", "content": resp.content})
                 tool_results = []
@@ -688,7 +513,7 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                                 content = json.dumps(result, default=str, ensure_ascii=False)
                                 if _func_def.event:
                                     log.warning(f"ChatExtension {self.tool_name}: function '{tu.name}' has event='{_func_def.event}' but returned dict, not ActionResult")
-                            content = _trim_tool_result(content, _max_result_tokens, _list_truncate_items, _string_truncate_chars)
+                            content = trim_tool_result(content, _max_result_tokens, _list_truncate_items, _string_truncate_chars)
                             # Determine success: ActionResult.status or legacy dict heuristics
                             if _is_action_result:
                                 success = result.status == "success"
@@ -713,7 +538,7 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                         except Exception as e:
                             log.error(f"ChatExtension function error {tu.name}: {e}")
                             content = json.dumps({"RESULT": "ERROR", "error": str(e)})
-                            content = _trim_tool_result(content, _max_result_tokens, _list_truncate_items, _string_truncate_chars)
+                            content = trim_tool_result(content, _max_result_tokens, _list_truncate_items, _string_truncate_chars)
                             self._functions_called.append({
                                 "name": tu.name,
                                 "params": tu.input,
@@ -724,7 +549,7 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                             })
                     else:
                         content = json.dumps({"RESULT": "ERROR", "error": f"Unknown function '{tu.name}'. Available: {list(self._functions.keys())}"})
-                        content = _trim_tool_result(content, _max_result_tokens, _list_truncate_items, _string_truncate_chars)
+                        content = trim_tool_result(content, _max_result_tokens, _list_truncate_items, _string_truncate_chars)
                         self._functions_called.append({
                             "name": tu.name,
                             "params": tu.input,
@@ -804,8 +629,8 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                             text = next((b.text for b in final_resp.content if hasattr(b, "text")), _factual_summary)
                         except Exception:
                             text = _factual_summary
-                        text = _enforce_os_identity(text)
-                        text = _enforce_response_style(text)
+                        text = enforce_os_identity(text)
+                        text = enforce_response_style(text)
                         return self._make_chat_result(response=text, handled=True)
             return self._make_chat_result(response="Request required too many steps. Please simplify.", handled=bool(self._functions_called))
         except TaskCancelled:
