@@ -56,17 +56,26 @@ def List(items: list[UINode], searchable: bool = False, grouped_by: str = "", pa
     return UINode(type="List", props=props)
 
 
-def DataColumn(key: str, label: str, sortable: bool = True, width: str = "") -> dict:
-    """Column definition for DataTable. Returns plain dict (not UINode)."""
+def DataColumn(key: str, label: str, sortable: bool = True, width: str = "",
+               editable: bool = False, edit_type: str = "text") -> dict:
+    """Column definition for DataTable. Returns plain dict (not UINode).
+
+    editable: enable inline cell editing for this column.
+    edit_type: "text" for text input, "toggle" for boolean toggle.
+    """
     col: dict = {"key": key, "label": label, "sortable": sortable}
     if width: col["width"] = width
+    if editable: col["editable"] = editable; col["edit_type"] = edit_type
     return col
 
 
-def DataTable(columns: list[dict], rows: list[dict], on_row_click: UIAction | None = None) -> UINode:
-    """Sortable data table."""
+def DataTable(columns: list[dict], rows: list[dict],
+              on_row_click: UIAction | None = None,
+              on_cell_edit: UIAction | None = None) -> UINode:
+    """Sortable data table with optional inline cell editing."""
     props: dict[str, Any] = {"columns": columns, "rows": rows}
     if on_row_click: props["on_row_click"] = on_row_click
+    if on_cell_edit: props["on_cell_edit"] = on_cell_edit
     return UINode(type="DataTable", props=props)
 
 
