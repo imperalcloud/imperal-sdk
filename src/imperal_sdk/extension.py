@@ -147,10 +147,27 @@ class Extension:
         return func
 
     def webhook(self, path: str, method: str = "POST", secret_header: str = ""):
-        """Register webhook endpoint. Kernel routes to /ext/{app_id}/webhook/{path}."""
+        """Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.
+
+        Also registers __webhook__{path} as a ToolDef so DirectCallWorkflow
+        can dispatch it without LLM routing. The handler receives:
+            ctx       — minimal context (user_id="__webhook__")
+            headers   — dict of request headers (hop-by-hop stripped)
+            body      — raw request body as string
+            query_params — dict of URL query parameters
+
+        Secret verification must be done inside the handler using secret_header.
+        """
         def decorator(func: Callable) -> Callable:
             self._webhooks[path] = WebhookDef(
                 path=path, func=func, method=method, secret_header=secret_header,
+            )
+            # Register as a ToolDef so DirectCallWorkflow can dispatch via /call
+            tool_name = f"__webhook__{path}"
+            self._tools[tool_name] = ToolDef(
+                name=tool_name,
+                func=func,
+                description=f"Webhook handler for path: {path}",
             )
             return func
         return decorator
