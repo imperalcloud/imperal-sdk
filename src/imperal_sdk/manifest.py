@@ -3,6 +3,7 @@
 """Auto-generate extension manifest from registered tools/signals/schedules."""
 from __future__ import annotations
 import json
+import os
 import inspect
 from imperal_sdk.extension import Extension
 
@@ -55,11 +56,32 @@ def generate_manifest(ext: Extension) -> dict:
     return manifest
 
 
+def _merge_disk_manifest(manifest: dict, path: str) -> dict:
+    """Merge marketplace-only fields from on-disk imperal.json if it exists."""
+    disk_path = os.path.join(path, "imperal.json")
+    if not os.path.exists(disk_path):
+        return manifest
+    with open(disk_path) as f:
+        disk = json.load(f)
+    for field in ("name", "description", "author", "license", "homepage",
+                  "icon", "category", "tags", "marketplace", "pricing"):
+        if field in disk:
+            manifest[field] = disk[field]
+    return manifest
+
+
 def save_manifest(ext: Extension, path: str = "manifest.json") -> str:
-    """Generate and save manifest to file."""
+    """Generate and save manifest to file.
+
+    If path is a directory, merges marketplace fields from existing imperal.json
+    and writes to imperal.json in that directory.
+    """
     manifest = generate_manifest(ext)
+    if os.path.isdir(path):
+        manifest = _merge_disk_manifest(manifest, path)
+        path = os.path.join(path, "imperal.json")
     with open(path, "w") as f:
-        json.dump(manifest, f, indent=2)
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
     return path
 
 

@@ -147,6 +147,63 @@ def dev():
 
 @cli.command()
 @click.argument("path", default=".")
+def build(path: str):
+    """Generate imperal.json manifest for the extension at PATH.
+
+    Loads the extension from main.py, generates the manifest from registered
+    tools/signals/schedules, merges any existing marketplace fields from
+    imperal.json, and writes the result to imperal.json.
+    """
+    abs_path = os.path.abspath(path)
+    if not os.path.isdir(abs_path):
+        click.echo(f"Error: Path '{path}' is not a directory.", err=True)
+        raise SystemExit(1)
+
+    original_dir = os.getcwd()
+    try:
+        os.chdir(abs_path)
+        sys.path.insert(0, abs_path)
+        try:
+            # Re-import fresh so multiple builds in one session don't cache stale
+            import importlib
+            if "main" in sys.modules:
+                del sys.modules["main"]
+            import main as ext_module
+        except ImportError as e:
+            click.echo(f"Error: Could not load main.py from '{path}': {e}", err=True)
+            raise SystemExit(1)
+
+        # Find Extension instance
+        from imperal_sdk.extension import Extension
+        ext_obj = None
+        for attr_name in dir(ext_module):
+            obj = getattr(ext_module, attr_name)
+            if isinstance(obj, Extension):
+                ext_obj = obj
+                break
+
+        if ext_obj is None:
+            click.echo(f"Error: No Extension instance found in '{path}/main.py'.", err=True)
+            raise SystemExit(1)
+
+        from imperal_sdk.manifest import save_manifest
+        out_path = save_manifest(ext_obj, abs_path)
+
+        tool_count = len(ext_obj.tools)
+        signal_count = len(ext_obj.signals)
+        schedule_count = len(ext_obj.schedules)
+
+        click.echo(f"Built: {ext_obj.app_id} v{ext_obj.version}")
+        click.echo(f"  Tools: {tool_count}, Signals: {signal_count}, Schedules: {schedule_count}")
+        click.echo(f"  Manifest: {out_path}")
+    finally:
+        os.chdir(original_dir)
+        if abs_path in sys.path:
+            sys.path.remove(abs_path)
+
+
+@cli.command()
+@click.argument("path", default=".")
 def validate(path: str):
     """Validate extension against SDK v1.0.0 rules."""
     original_dir = os.getcwd()
