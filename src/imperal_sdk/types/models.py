@@ -94,3 +94,16 @@ class HTTPResponse:
     @property
     def ok(self) -> bool:
         return 200 <= self.status_code < 300
+
+    def raise_for_status(self) -> None:
+        """Raise an exception if status_code indicates an error (4xx/5xx)."""
+        if self.status_code >= 400:
+            raise HTTPStatusError(self.status_code, self.body)
+
+
+class HTTPStatusError(Exception):
+    """Raised by HTTPResponse.raise_for_status() on 4xx/5xx."""
+    def __init__(self, status_code: int, body=None):
+        self.status_code = status_code
+        self.body = body or ""
+        super().__init__(f"HTTP {status_code}: {str(body)[:200]}")

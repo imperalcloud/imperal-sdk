@@ -53,7 +53,7 @@ def init_runtime(gateway_url: str, service_token: str, extensions_dir: str = "/o
 
 async def publish_event_catalog() -> None:
     """Scan loaded extensions and publish available events to Redis.
-    Called at worker startup. Key: imperal:automation:event_catalog (TTL 1h).
+    Called at worker startup. Key: imperal:automation:event_catalog (no TTL — refreshed on restart).
     """
     if _loader is None:
         return
@@ -86,11 +86,11 @@ async def publish_event_catalog() -> None:
                 log.warning(f"Event catalog: failed to scan {app_id}: {e}")
 
         events.extend([
-            {"event_type": "email.received", "app_id": "gmail", "function": "_kernel_poller", "action_type": "event", "description": "New email received (from kernel event poller)"},
+            {"event_type": "email.received", "app_id": "mail", "function": "_kernel_poller", "action_type": "event", "description": "New email received (from kernel event poller)"},
             {"event_type": "system.scheduled", "app_id": "_system", "function": "_kernel_scheduler", "action_type": "event", "description": "Cron schedule triggered"},
         ])
 
-        await r.setex("imperal:automation:event_catalog", 3600, _json.dumps(events))
+        await r.set("imperal:automation:event_catalog", _json.dumps(events))
         log.info(f"Event catalog published to Redis: {len(events)} events from {len(set(e['app_id'] for e in events))} extensions")
     except Exception as e:
         log.error(f"Failed to publish event catalog: {e}")
