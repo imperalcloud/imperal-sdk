@@ -20,7 +20,7 @@ except ImportError:
         return {"allowed": False, "cross_user": True, "error": "target_scope_unavailable"}
 from imperal_sdk.chat.action_result import ActionResult
 from imperal_sdk.chat.filters import enforce_os_identity, enforce_response_style, trim_tool_result
-from imperal_sdk.prompts import load_prompt as _load_sdk_prompt
+from imperal_sdk.chat.prompt import build_system_prompt, build_messages, inject_language, ICNLI_INTEGRITY_RULES
 
 log = logging.getLogger(__name__)
 
@@ -28,9 +28,6 @@ log = logging.getLogger(__name__)
 class TaskCancelled(Exception):
     """Raised by ctx.progress() when user cancels a task."""
     pass
-
-
-ICNLI_INTEGRITY_RULES = "\n" + _load_sdk_prompt("icnli_integrity_rules.txt") + "\n"
 
 
 # Words that indicate write/destructive actions — used for backwards-compatible
@@ -195,57 +192,10 @@ class ChatExtension:
         return tools
 
     def _build_system_prompt(self, ctx) -> str:
-        parts = [self.system_prompt, ICNLI_INTEGRITY_RULES]
-        if hasattr(ctx, "skeleton_data") and ctx.skeleton_data:
-            _ctx = ctx.skeleton_data.get("_context", {})
-            cap = _ctx.get("_capability_boundary", {})
-            if cap:
-                others = [e["app_id"] for e in cap.get("other_extensions", [])]
-                parts.append(f"\nCAPABILITY BOUNDARY: You are '{cap.get('you_are', '')}'. "
-                    "You can ONLY use your available functions. If you cannot handle a request, say so briefly without mentioning other apps or services.")
-            integrity = _ctx.get("_icnli_integrity", {})
-            if integrity and integrity.get("rules"):
-                parts.append("\nKERNEL INTEGRITY:\n" + "\n".join(f"- {r}" for r in integrity["rules"]))
-        if hasattr(ctx, "user") and ctx.user:
-            parts.append(f"\nCURRENT USER: {getattr(ctx.user, 'email', 'unknown')}")
-        # Kernel Language Enforcement
-        _lang_name = getattr(ctx, '_user_language_name', None)
-        if _lang_name:
-            parts.append(f"\nKERNEL LANGUAGE RULE (NON-NEGOTIABLE): You MUST respond ONLY in {_lang_name}.")
-        # Kernel Markdown Formatting
-        parts.append("\n" + _load_sdk_prompt("kernel_formatting_rule.txt"))
-        # Kernel Proactivity
-        parts.append("\n" + _load_sdk_prompt("kernel_proactivity_rule.txt"))
-        return "\n".join(parts)
+        return build_system_prompt(self.system_prompt, ctx, self.tool_name)
 
-    def _build_messages(self, history: list, message: str,
-                        context_window: int = 20, keep_recent: int = 6) -> list[dict]:
-        messages = []
-        windowed = (history or [])[-context_window:]
-        n = len(windowed)
-
-        for i, h in enumerate(windowed):
-            role = h.get("role", "user")
-            raw = h.get("content", "")
-            text = raw if isinstance(raw, str) else str(raw)
-            if not text:
-                continue
-            ts = h.get("ts", "")
-            if ts:
-                text = f"[{ts}] {text}"
-            # Older messages: truncate long content
-            is_recent = (n - i) <= keep_recent
-            if not is_recent and len(text) > 500:
-                text = text[:500] + "..."
-            if messages and messages[-1]["role"] == role:
-                messages[-1]["content"] += "\n" + text
-            else:
-                messages.append({"role": role, "content": text})
-
-        messages.append({"role": "user", "content": message})
-        if messages and messages[0]["role"] != "user":
-            messages = messages[1:]
-        return messages
+    def _build_messages(self, history, message, context_window=20, keep_recent=6):
+        return build_messages(history, message, context_window, keep_recent)
 
     async def _handle(self, ctx: _Context, message: str = "", **kwargs) -> dict:
         self._functions_called = []
@@ -314,14 +264,7 @@ class ChatExtension:
         # KERNEL LANGUAGE ENFORCEMENT (model-agnostic, works with Sonnet/Opus/GPT/any)
         # Inject language rule into the LAST user message — models follow recent instructions best.
         # System prompt rule alone is insufficient for some models (Sonnet ignores it).
-        _lang = getattr(ctx, '_user_language', None)
-        _lang_name = getattr(ctx, '_user_language_name', None)
-        if _lang and _lang != 'en' and _lang_name and messages:
-            _lang_suffix = "\n[RESPOND IN " + _lang_name.upper() + " ONLY]"
-            for _m in reversed(messages):
-                if _m["role"] == "user":
-                    _m["content"] += _lang_suffix
-                    break
+        inject_language(messages, getattr(ctx, '_user_language', None), getattr(ctx, '_user_language_name', None))
 
         # KAV injection: kernel can inject a retry message telling LLM to actually call the function
         kav_injection = getattr(ctx, "_kav_injection", None) or kwargs.get("_kav_injection")
