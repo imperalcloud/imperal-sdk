@@ -283,6 +283,48 @@ async def handle_stripe(ctx, request):
     return WebhookResponse.ok({"received": True})
 ```
 
+
+---
+
+## Declarative UI (v1.1.0)
+
+Build Panel sidebar UI from Python — zero React, zero rebuilds:
+
+```python
+from imperal_sdk import ui
+
+@chat.function("get_panel_data", action_type="read")
+async def fn_panel(ctx) -> ActionResult:
+    items = await ctx.store.list("inventory")
+    return ActionResult.success(data={
+        "left": ui.Stack([
+            ui.Button("+ New Item", variant="primary",
+                      on_click=ui.Call("create_item")),
+            ui.List(
+                items=[
+                    ui.ListItem(
+                        id=i["id"], title=i["name"],
+                        subtitle=f"Qty: {i['qty']}",
+                        icon="Package",
+                        draggable=True,
+                        on_click=ui.Navigate(f"/ext/inventory/{i['id']}"),
+                        actions=[{"icon": "Trash2",
+                                  "on_click": ui.Call("delete", item_id=i["id"]),
+                                  "confirm": f"Delete {i['name']}?"}],
+                    )
+                    for i in items
+                ],
+                searchable=True,
+                page_size=20,
+            ),
+        ]).to_dict(),
+    })
+```
+
+**16 components:** Stack, Grid, Tabs, List, Stat, Card, Badge, Button, Input, Text, Avatar, Icon, Alert, Progress, Chart, DataTable
+
+**System features:** Pagination (pinned bottom), drag-drop, hover actions, search — all kernel-enforced
+
 ---
 
 ## Project Structure
