@@ -124,3 +124,23 @@ def TextArea(
     props: dict[str, Any] = {"placeholder": placeholder, "value": value, "rows": rows, "param_name": param_name}
     if on_submit: props["on_submit"] = on_submit
     return UINode(type="TextArea", props=props)
+
+
+def TagInput(
+    values: list[str] | None = None,
+    suggestions: list[str] | None = None,
+    placeholder: str = "Add...",
+    param_name: str = "tags",
+    on_change: UIAction | None = None,
+    grouped_by: str = "",
+) -> UINode:
+    """Tag/chip input with autocomplete. grouped_by: group suggestions by prefix (e.g. 'extensions:read')."""
+    props: dict[str, Any] = {
+        "values": values or [],
+        "suggestions": suggestions or [],
+        "placeholder": placeholder,
+        "param_name": param_name,
+        "grouped_by": grouped_by,
+    }
+    if on_change: props["on_change"] = on_change
+    return UINode(type="TagInput", props=props)
