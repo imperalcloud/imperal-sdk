@@ -203,6 +203,8 @@ class FunctionDef:
     action_type: str = "read"  # "read", "write", or "destructive"
     event: str = ""  # event name for ActionResult publishing (e.g. "mail.sent")
     event_schema: type | None = None  # Pydantic BaseModel for typed event data
+    _pydantic_model: type | None = None  # auto-detected Pydantic BaseModel class
+    _pydantic_param: str = ""  # parameter name that receives the model instance
 
 class ChatExtension:
     def __init__(self, ext, tool_name: str, description: str, system_prompt: str = "",
@@ -238,6 +240,8 @@ class ChatExtension:
         def decorator(func: Callable) -> Callable:
             # Auto-detect Pydantic BaseModel params
             resolved_params = params
+            _detected_model = None
+            _detected_param = ""
             if resolved_params is None:
                 import inspect
                 sig = inspect.signature(func)
@@ -246,6 +250,12 @@ class ChatExtension:
                         continue
                     ann = param.annotation
                     if ann != inspect.Parameter.empty:
+                        # PEP 563: from __future__ import annotations → strings
+                        if isinstance(ann, str):
+                            try:
+                                ann = eval(ann, func.__globals__)
+                            except Exception:
+                                continue
                         try:
                             from pydantic import BaseModel
                             if isinstance(ann, type) and issubclass(ann, BaseModel):
@@ -258,6 +268,8 @@ class ChatExtension:
                                     }
                                     if field_name not in schema.get("required", []):
                                         resolved_params[field_name]["default"] = field_info.get("default")
+                                _detected_model = ann
+                                _detected_param = pname
                                 break
                         except (TypeError, ImportError):
                             pass
@@ -268,6 +280,7 @@ class ChatExtension:
                 name=name, func=func, description=description,
                 params=resolved_params, action_type=action_type, event=event,
                 event_schema=event_schema,
+                _pydantic_model=_detected_model, _pydantic_param=_detected_param,
             )
             return func
         return decorator
@@ -663,7 +676,11 @@ KERNEL PROACTIVITY RULE (NON-NEGOTIABLE):
                     if tu.name in self._functions:
                         _func_def = self._functions[tu.name]
                         try:
-                            result = await _func_def.func(ctx, **tu.input)
+                            if _func_def._pydantic_model and _func_def._pydantic_param:
+                                _model_instance = _func_def._pydantic_model(**(tu.input or {}))
+                                result = await _func_def.func(ctx, **{_func_def._pydantic_param: _model_instance})
+                            else:
+                                result = await _func_def.func(ctx, **tu.input)
                             _is_action_result = isinstance(result, ActionResult)
                             if _is_action_result:
                                 content = json.dumps(result.to_dict(), default=str, ensure_ascii=False)
