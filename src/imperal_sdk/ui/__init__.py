@@ -24,7 +24,7 @@ from .interactive import Button, Card, Menu, Dialog, Tooltip, Link
 from .feedback import Alert, Progress, Chart, Loading, Error
 from .input_components import (
     Input, Form, Select, MultiSelect, Toggle,
-    Slider, DatePicker, FileUpload, TextArea, TagInput,
+    Slider, DatePicker, FileUpload, TextArea, RichEditor, TagInput,
 )
 from .actions import Call, Navigate, Send
 
@@ -42,7 +42,7 @@ __all__ = [
     "Alert", "Progress", "Chart", "Loading", "Error",
     # Input
     "Input", "Form", "Select", "MultiSelect", "Toggle",
-    "Slider", "DatePicker", "FileUpload", "TextArea", "TagInput",
+    "Slider", "DatePicker", "FileUpload", "TextArea", "RichEditor", "TagInput",
     # Actions
     "Call", "Navigate", "Send",
 ]

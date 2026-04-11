@@ -126,6 +126,17 @@ def TextArea(
     return UINode(type="TextArea", props=props)
 
 
+def RichEditor(content: str = "", placeholder: str = "Start writing...",
+               on_save: UIAction | None = None, on_change: UIAction | None = None,
+               param_name: str = "content", toolbar: bool = True) -> UINode:
+    """Rich text editor (TipTap). content: HTML string. on_save fires on Ctrl+S."""
+    props: dict[str, Any] = {"content": content, "placeholder": placeholder,
+             "param_name": param_name, "toolbar": toolbar}
+    if on_save: props["on_save"] = on_save
+    if on_change: props["on_change"] = on_change
+    return UINode(type="RichEditor", props=props)
+
+
 def TagInput(
     values: list[str] | None = None,
     suggestions: list[str] | None = None,
