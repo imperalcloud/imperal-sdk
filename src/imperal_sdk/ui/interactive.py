@@ -12,13 +12,15 @@ def Button(
     disabled: bool = False,
     size: str = "md",
     full_width: bool = False,
+    icon: str = "",
 ) -> UINode:
-    """Clickable button. size: sm/md/lg."""
+    """Clickable button. size: sm/md/lg. icon: Lucide icon name."""
     props: dict[str, Any] = {
         "label": label, "variant": variant, "disabled": disabled, "size": size,
     }
     if full_width: props["full_width"] = True
     if on_click: props["on_click"] = on_click
+    if icon: props["icon"] = icon
     return UINode(type="Button", props=props)
 
 

@@ -19,14 +19,14 @@ from .data import (
     ListItem, List, DataColumn, DataTable, Stat, Stats,
     Badge, Avatar, Timeline, Tree, KeyValue,
 )
-from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider
+from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider, Html
 from .interactive import Button, Card, Menu, Dialog, Tooltip, Link, SlideOver
 from .feedback import Alert, Progress, Chart, Loading, Error
 from .input_components import (
     Input, Form, Select, MultiSelect, Toggle,
     Slider, DatePicker, FileUpload, TextArea, RichEditor, TagInput,
 )
-from .actions import Call, Navigate, Send
+from .actions import Call, Navigate, Send, Open
 
 __all__ = [
     # Layout
@@ -35,7 +35,7 @@ __all__ = [
     "ListItem", "List", "DataColumn", "DataTable", "Stat", "Stats",
     "Badge", "Avatar", "Timeline", "Tree", "KeyValue",
     # Display
-    "Text", "Icon", "Header", "Image", "Code", "Markdown", "Empty", "Divider",
+    "Text", "Icon", "Header", "Image", "Code", "Markdown", "Empty", "Divider", "Html",
     # Interactive
     "Button", "Card", "Menu", "Dialog", "Tooltip", "Link", "SlideOver",
     # Feedback
@@ -44,5 +44,5 @@ __all__ = [
     "Input", "Form", "Select", "MultiSelect", "Toggle",
     "Slider", "DatePicker", "FileUpload", "TextArea", "RichEditor", "TagInput",
     # Actions
-    "Call", "Navigate", "Send",
+    "Call", "Navigate", "Send", "Open",
 ]

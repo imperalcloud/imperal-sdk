@@ -17,3 +17,8 @@ def Navigate(path: str) -> UIAction:
 def Send(message: str) -> UIAction:
     """Send a message to chat."""
     return UIAction(action="send", params={"message": message})
+
+
+def Open(url: str) -> UIAction:
+    """Open URL in new browser tab."""
+    return UIAction(action="open", params={"url": url})

@@ -286,7 +286,7 @@ async def handle_stripe(ctx, request):
 
 ---
 
-## Declarative UI (v1.4.0)
+## Declarative UI (v1.5.0)
 
 Build full Panel UI from Python — zero React, zero rebuilds. **53 components** across 7 modules.
 
@@ -337,7 +337,14 @@ async def panel_sidebar(ctx, **kwargs):
 
 **Zero-rebuild panel discovery:** `@ext.panel()` auto-publishes to the config store. New extensions show panels instantly — no frontend changes.
 
-**System features:** Pagination, drag-drop, hover actions, search, expandable cards, inline editing, collapsible sections — all kernel-enforced
+**v1.6.0 highlights:**
+- `ui.Html(theme="light")` — white-bg email rendering with auto-resize iframe
+- `ui.List(selectable=True, bulk_actions=[...])` — multi-select with checkbox hover, bulk action bar
+- `ui.List(on_end_reached=action)` — infinite scroll with IntersectionObserver sentinel
+- `ui.Stack(sticky=True)` — pin toolbars to top of scroll container
+- System padding: horizontal Stacks get `px-3 py-1` by default
+
+**System features:** Pagination, infinite scroll, multi-select, bulk actions, drag-drop, hover actions, search, expandable cards, inline editing, collapsible sections — all kernel-enforced
 
 ---
 

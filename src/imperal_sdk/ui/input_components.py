@@ -101,8 +101,16 @@ def FileUpload(
     multiple: bool = False,
     on_upload: UIAction | None = None,
     param_name: str = "files",
+    blocked_extensions: list[str] | None = None,
+    max_total_mb: int = 0,
+    max_files: int = 0,
 ) -> UINode:
-    """File upload dropzone."""
+    """File upload dropzone with validation.
+    blocked_extensions: reject these file types (e.g. ["exe", "bat"]).
+    max_total_mb: total size limit across all files (0 = no limit).
+    max_files: max number of files (0 = no limit).
+    Frontend sends base64 file data in on_upload action.
+    """
     props: dict[str, Any] = {
         "accept": accept,
         "max_size_mb": max_size_mb,
@@ -110,6 +118,9 @@ def FileUpload(
         "param_name": param_name,
     }
     if on_upload: props["on_upload"] = on_upload
+    if blocked_extensions: props["blocked_extensions"] = blocked_extensions
+    if max_total_mb: props["max_total_mb"] = max_total_mb
+    if max_files: props["max_files"] = max_files
     return UINode(type="FileUpload", props=props)
 
 

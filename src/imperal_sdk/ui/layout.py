@@ -12,12 +12,21 @@ def Stack(
     wrap: bool = False,
     align: str = "",
     justify: str = "",
+    sticky: bool = False,
+    className: str = "",
 ) -> UINode:
-    """Flex layout — vertical or horizontal. wrap: flex-wrap. align/justify: flex alignment."""
+    """Flex layout — vertical or horizontal.
+
+    wrap: flex-wrap. align/justify: flex alignment.
+    sticky: pin to top of scroll container (useful for toolbars).
+    className: custom CSS classes (overrides default system padding).
+    """
     props: dict[str, Any] = {"children": children, "direction": direction, "gap": gap}
     if wrap: props["wrap"] = True
     if align: props["align"] = align
     if justify: props["justify"] = justify
+    if sticky: props["sticky"] = True
+    if className: props["className"] = className
     return UINode(type="Stack", props=props)
 
 

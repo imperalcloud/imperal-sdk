@@ -60,13 +60,34 @@ def ListItem(
     return UINode(type="ListItem", props=props)
 
 
-def List(items: list[UINode], searchable: bool = False, grouped_by: str = "", page_size: int = 0) -> UINode:
+def List(
+    items: list[UINode],
+    searchable: bool = False,
+    grouped_by: str = "",
+    page_size: int = 0,
+    on_end_reached: UIAction | None = None,
+    selectable: bool = False,
+    bulk_actions: list[dict] | None = None,
+    total_items: int = 0,
+    extra_info: str = "",
+) -> UINode:
     """Scrollable list of ListItems. Searchable + auto-paginated.
 
     page_size: items per page. 0 = no pagination (show all).
+    on_end_reached: action fired when user scrolls to bottom (infinite scroll).
+    selectable: enable multi-select with checkboxes on hover.
+    bulk_actions: buttons for bulk operations. Each: {"label", "icon", "action": Call(...)}.
+        Selected item IDs are injected as 'message_ids' param.
+    total_items: total number of items across all pages (for Paginator display).
+    extra_info: extra text in Paginator footer (e.g. "3 unread").
     """
     props: dict[str, Any] = {"items": items, "searchable": searchable, "grouped_by": grouped_by}
     if page_size > 0: props["page_size"] = page_size
+    if on_end_reached: props["on_end_reached"] = on_end_reached
+    if selectable: props["selectable"] = selectable
+    if bulk_actions: props["bulk_actions"] = bulk_actions
+    if total_items > 0: props["total_items"] = total_items
+    if extra_info: props["extra_info"] = extra_info
     return UINode(type="List", props=props)
 
 

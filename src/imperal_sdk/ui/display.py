@@ -22,12 +22,17 @@ def Header(text: str, level: int = 2, subtitle: str = "") -> UINode:
     return UINode(type="Header", props=props)
 
 
-def Image(src: str, alt: str = "", width: str = "", height: str = "") -> UINode:
-    """Image element."""
+def Image(src: str, alt: str = "", width: str = "", height: str = "",
+          on_click: UIAction | None = None, object_fit: str = "",
+          caption: str = "") -> UINode:
+    """Image element with optional click action and styling."""
     props: dict[str, Any] = {"src": src}
     if alt: props["alt"] = alt
     if width: props["width"] = width
     if height: props["height"] = height
+    if on_click: props["on_click"] = on_click
+    if object_fit: props["object_fit"] = object_fit
+    if caption: props["caption"] = caption
     return UINode(type="Image", props=props)
 
 
@@ -56,3 +61,21 @@ def Divider(label: str = "") -> UINode:
     props: dict[str, Any] = {}
     if label: props["label"] = label
     return UINode(type="Divider", props=props)
+
+
+def Html(
+    content: str,
+    sandbox: bool = True,
+    max_height: int = 0,
+    theme: str = "dark",
+) -> UINode:
+    """Raw HTML block.
+
+    sandbox: True isolates in an iframe.
+    max_height: scroll container height (0 = auto-size).
+    theme: "dark" (default, transparent bg) or "light" (white bg, for email).
+    """
+    props: dict[str, Any] = {"content": content, "sandbox": sandbox}
+    if max_height: props["max_height"] = max_height
+    if theme != "dark": props["theme"] = theme
+    return UINode(type="Html", props=props)

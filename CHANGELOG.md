@@ -2,6 +2,43 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.0 (2026-04-13)
+
+### New UI Components & Enhancements
+- **`ui.Html`** — raw HTML block with DOMPurify sanitization. `sandbox=True` renders in isolated iframe with ResizeObserver auto-height. Props: `content`, `sandbox`, `max_height`, `theme` (`"dark"` or `"light"` for email rendering with white bg).
+- **`ui.Open`** — action type for opening URLs in new tab/popup. Used by Button `on_click` for downloads and OAuth.
+- **`ui.Image(on_click=)`** — click handler for image gallery / lightbox patterns.
+- **`ui.FileUpload`** — file upload with drag-and-drop, base64 encoding. Props: `accept`, `max_size_mb`, `max_total_mb`, `max_files`, `multiple`, `blocked_extensions`.
+- **`ui.Button(icon=)`** — Lucide icon rendering in buttons via `(LucideIcons as any)[name]` lookup.
+- **`ui.List()` multi-select** — `selectable=True` enables checkbox selection on hover. `bulk_actions=[{label, icon, action}]` renders sticky BulkActionBar. Selected IDs auto-injected as `message_ids` param.
+- **`ui.List(on_end_reached=)`** — infinite scroll support via IntersectionObserver sentinel. `total_items` and `extra_info` for footer Paginator.
+- **`ui.Stack(sticky=)`** — `sticky=True` pins element to top of scroll container. For toolbars and action bars.
+- **`ui.Stack(className=)`** — custom CSS classes, overrides default system padding.
+- **`ui.Stack` direction** — frontend accepts both `"h"` and `"horizontal"`.
+- **System padding** — horizontal Stacks get default `px-3 py-1` for consistent alignment.
+
+### Frontend DUI
+- **DHtml.tsx** — DOMPurify sanitization + iframe sandbox + `theme="light"` with white bg for email + `overflow: auto` (was hidden) + 600px initial height.
+- **DList.tsx** — BulkActionBar (sticky top), footer Paginator (sticky bottom), multi-select with checkboxes on hover, infinite scroll sentinel.
+- **DButton.tsx** — Lucide icon resolution with PascalCase fallback.
+- **DImage.tsx** — click action support, object-fit, caption.
+- **DFileUpload.tsx** — drag-and-drop zone, base64 encoding, file type/size validation.
+- **Stack.tsx** — direction "horizontal" + sticky prop + system padding.
+- **usePanelDiscovery** — `get_oauth_url` excluded from chat echo. Compose as centerOverlay. `mergeListItems` for any container.
+- **ExtensionPage** — ChatClient persists via CSS show/hide (reduces reload on email open/close).
+
+### Mail DUI — Full Panel Migration
+- 5 DUI panels: inbox (selectable, bulk actions, infinite scroll), email_viewer (sticky toolbar, Reply All, Gmail-style header), accounts, compose (BCC, Back button, Reply All CC pre-fill), add_account (3-step OAuth/IMAP wizard).
+- 6 panel action handlers: mail_action, folder_counts, get_oauth_url, add_imap, compose_send, switch_account.
+- Center overlay: email viewer and compose open in CENTER (chat moves right).
+- **`_decode_body_with_type()`** — preserves raw HTML for panel viewer. Old `_decode_body()` kept for chat/LLM.
+- **Full email body** — removed `body[:4000]` truncation in Google/Microsoft `read_email()`.
+- **Image proxy** — `_proxy_images()` base64url-encodes URLs correctly.
+- God file split: imap.py (839 to 4 files), helpers.py (500 to 4 files).
+
+### Kernel Fix
+- **`_serialize_result`** in `direct_call.py` — UINode returns in `ui` field (was `data`). Affects ALL extensions.
+
 ## 1.4.0 (2026-04-13)
 
 ### Panel Discovery — Zero-Rebuild Registration
