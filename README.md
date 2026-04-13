@@ -8,7 +8,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/imperal-sdk?color=blue&label=PyPI)](https://pypi.org/project/imperal-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/imperal-sdk)](https://pypi.org/project/imperal-sdk/)
-[![Tests](https://img.shields.io/badge/tests-249%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-309%20passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
@@ -286,44 +286,58 @@ async def handle_stripe(ctx, request):
 
 ---
 
-## Declarative UI (v1.1.0)
+## Declarative UI (v1.4.0)
 
-Build Panel sidebar UI from Python — zero React, zero rebuilds:
+Build full Panel UI from Python — zero React, zero rebuilds. **53 components** across 7 modules.
 
 ```python
-from imperal_sdk import ui
+from imperal_sdk import Extension, ui
 
-@chat.function("get_panel_data", action_type="read")
-async def fn_panel(ctx) -> ActionResult:
-    items = await ctx.store.list("inventory")
-    return ActionResult.success(data={
-        "left": ui.Stack([
-            ui.Button("+ New Item", variant="primary",
-                      on_click=ui.Call("create_item")),
-            ui.List(
-                items=[
-                    ui.ListItem(
-                        id=i["id"], title=i["name"],
-                        subtitle=f"Qty: {i['qty']}",
-                        icon="Package",
-                        draggable=True,
-                        on_click=ui.Navigate(f"/ext/inventory/{i['id']}"),
-                        actions=[{"icon": "Trash2",
-                                  "on_click": ui.Call("delete", item_id=i["id"]),
-                                  "confirm": f"Delete {i['name']}?"}],
-                    )
-                    for i in items
-                ],
-                searchable=True,
-                page_size=20,
-            ),
-        ]).to_dict(),
-    })
+ext = Extension("inventory", version="1.0.0")
+
+@ext.panel("sidebar", slot="left", title="Inventory", icon="Package",
+           default_width=300, refresh="on_event:item.created,item.deleted")
+async def panel_sidebar(ctx, **kwargs):
+    """Panel handler — returns UINode tree. Auto-discovered by the platform."""
+    items = await ctx.store.query("items", limit=50)
+    return ui.Stack([
+        ui.Header("Inventory", level=3, subtitle=f"{len(items)} items"),
+        ui.Button("+ New Item", variant="primary", on_click=ui.Call("create_item")),
+        ui.List(
+            items=[
+                ui.ListItem(
+                    id=i["id"], title=i["name"],
+                    subtitle=f"Qty: {i['qty']}",
+                    badge=ui.Badge("Low", color="red") if i["qty"] < 5 else None,
+                    expandable=True,
+                    expanded_content=[
+                        ui.KeyValue(items=[
+                            {"key": "SKU", "value": i["sku"]},
+                            {"key": "Price", "value": f"${i['price']}"},
+                        ], columns=2),
+                        ui.Button("Delete", variant="danger",
+                                  on_click=ui.Call("delete_item", item_id=i["id"])),
+                    ],
+                )
+                for i in items
+            ],
+            searchable=True,
+        ),
+    ])
 ```
 
-**16 components:** Stack, Grid, Tabs, List, Stat, Card, Badge, Button, Input, Text, Avatar, Icon, Alert, Progress, Chart, DataTable
+**53 components:**
+- **Layout (8):** Stack, Grid, Tabs, Page, Section, Row, Column, Accordion
+- **Display (8):** Text, Header, Icon, Image, Code, Markdown, Divider, Empty
+- **Interactive (7):** Button, Card, Menu, Dialog, Tooltip, Link, SlideOver
+- **Input (11):** Input, TextArea, Toggle, Select, MultiSelect, Form, Slider, DatePicker, FileUpload, RichEditor, TagInput
+- **Data (11):** List, ListItem, DataTable, DataColumn, Stat, Stats, Badge, Avatar, KeyValue, Timeline, Tree
+- **Feedback (5):** Alert, Progress, Chart, Loading, Error
+- **Actions (3):** Call, Navigate, Send
 
-**System features:** Pagination (pinned bottom), drag-drop, hover actions, search — all kernel-enforced
+**Zero-rebuild panel discovery:** `@ext.panel()` auto-publishes to the config store. New extensions show panels instantly — no frontend changes.
+
+**System features:** Pagination, drag-drop, hover actions, search, expandable cards, inline editing, collapsible sections — all kernel-enforced
 
 ---
 

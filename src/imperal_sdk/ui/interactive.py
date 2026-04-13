@@ -10,9 +10,14 @@ def Button(
     variant: str = "primary",
     on_click: UIAction | None = None,
     disabled: bool = False,
+    size: str = "md",
+    full_width: bool = False,
 ) -> UINode:
-    """Clickable button."""
-    props: dict[str, Any] = {"label": label, "variant": variant, "disabled": disabled}
+    """Clickable button. size: sm/md/lg."""
+    props: dict[str, Any] = {
+        "label": label, "variant": variant, "disabled": disabled, "size": size,
+    }
+    if full_width: props["full_width"] = True
     if on_click: props["on_click"] = on_click
     return UINode(type="Button", props=props)
 

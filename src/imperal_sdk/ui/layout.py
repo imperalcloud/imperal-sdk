@@ -5,9 +5,20 @@ from typing import Any
 from .base import UINode
 
 
-def Stack(children: list[UINode], direction: str = "v", gap: int = 3) -> UINode:
-    """Flex layout — vertical or horizontal."""
-    return UINode(type="Stack", props={"children": children, "direction": direction, "gap": gap})
+def Stack(
+    children: list[UINode],
+    direction: str = "v",
+    gap: int = 3,
+    wrap: bool = False,
+    align: str = "",
+    justify: str = "",
+) -> UINode:
+    """Flex layout — vertical or horizontal. wrap: flex-wrap. align/justify: flex alignment."""
+    props: dict[str, Any] = {"children": children, "direction": direction, "gap": gap}
+    if wrap: props["wrap"] = True
+    if align: props["align"] = align
+    if justify: props["justify"] = justify
+    return UINode(type="Stack", props=props)
 
 
 def Grid(children: list[UINode], columns: int = 2, gap: int = 3) -> UINode:
