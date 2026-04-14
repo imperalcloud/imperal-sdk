@@ -20,12 +20,29 @@ class AIClient:
 
     def __init__(self, gateway_url: str, auth_token: str = "", extension_id: str = "", service_token: str = ""):
         self._gateway_url = gateway_url.rstrip("/")
-        self._auth_token = auth_token or service_token
+        self._service_token = service_token
+        self._auth_token = auth_token
         self._extension_id = extension_id
 
-    async def complete(self, prompt: str, model: str = "claude-sonnet", **kwargs) -> CompletionResult:
+    async def complete(self, prompt: str, model: str = "claude-sonnet-4-6", **kwargs) -> CompletionResult:
+        headers = {}
+        if self._service_token:
+            headers["X-Service-Token"] = self._service_token
+        elif self._auth_token:
+            headers["Authorization"] = f"Bearer {self._auth_token}"
+
         async with httpx.AsyncClient() as client:
-            resp = await client.post(f"{self._gateway_url}/v1/internal/ai/complete", json={"prompt": prompt, "model": model, "extension_id": self._extension_id, **kwargs}, headers={"Authorization": f"Bearer {self._auth_token}"}, timeout=120)
+            resp = await client.post(
+                f"{self._gateway_url}/v1/internal/ai/complete",
+                json={
+                    "prompt": prompt,
+                    "model": model,
+                    "extension_id": self._extension_id,
+                    **kwargs,
+                },
+                headers=headers,
+                timeout=120,
+            )
             resp.raise_for_status()
             data = resp.json()
             usage = data.get("usage", {})
