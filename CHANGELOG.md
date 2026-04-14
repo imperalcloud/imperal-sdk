@@ -15,7 +15,7 @@ All notable changes to `imperal-sdk` are documented here.
 - **`ui.Stack(sticky=)`** — `sticky=True` pins element to top of scroll container. For toolbars and action bars.
 - **`ui.Stack(className=)`** — custom CSS classes, overrides default system padding.
 - **`ui.Stack` direction** — frontend accepts both `"h"` and `"horizontal"`.
-- **System padding** — horizontal Stacks get default `px-3 py-1` for consistent alignment.
+- **System padding** — horizontal Stacks get default `px-3 py-2.5` (sticky) / `py-1.5` (non-sticky) for consistent alignment.
 
 ### Frontend DUI
 - **DHtml.tsx** — DOMPurify sanitization + iframe sandbox + `theme="light"` with white bg for email + `overflow: auto` (was hidden) + 600px initial height.
@@ -39,6 +39,25 @@ All notable changes to `imperal-sdk` are documented here.
 ### Kernel Fix
 - **`_serialize_result`** in `direct_call.py` — UINode returns in `ui` field (was `data`). Affects ALL extensions.
 
+### Notes DUI — Full Panel Migration (v2.4.0)
+- 2 DUI panels: sidebar (left — folders with counts, searchable note list, drag-drop, trash), editor (center overlay — TipTap RichEditor with auto-save).
+- 1 panel handler: `note_save` (title/content/pin with targeted `refresh_panels`).
+- Auto-open: sidebar returns `auto_action` on first load — frontend auto-opens most recent note.
+- Markdown support: `_prepare_content()` detects plain text vs HTML, converts markdown via Python `markdown` library (extra, nl2br, sane_lists).
+- Drag & drop: notes `draggable=True`, folders `droppable=True` with `on_drop=move_note`.
+- Metadata: KeyValue display with Words, Created, Modified, Tags, ID.
+
+### Generic Platform Improvements
+- **`isCenterOverlay()` / `shouldClearOverlay()`** — extracted as generic functions in usePanelDiscovery (supports mail + notes + future extensions).
+- **`auto_action`** — left panel root UINode can include `auto_action` prop; frontend auto-executes on first load via useEffect.
+- **`overlayKey`** — counter in usePanelDiscovery, forces React remount of stateful components (TipTap) on overlay change.
+- **`refresh_panels` from `ActionResult.data`** — usePanelDiscovery checks `result.data.refresh_panels` (was only checking top-level). Empty array = skip refresh.
+- **Active item highlight** — usePanelDiscovery refreshes left panel with `active_note_id`/`active_message_id` context after opening centerOverlay.
+- **ExtensionShell right panel** — shows when `rightSlot` provided even without `rightPanelCfg` (sensible defaults: 22% width).
+- **DList paginator** — `mt-auto` ensures paginator always sticks to bottom even with few items.
+- **Component count** — corrected from 53 to **55** (Html + Open were added in v1.5.0 but count wasn't updated).
+
+
 ## 1.4.0 (2026-04-13)
 
 ### Panel Discovery — Zero-Rebuild Registration
@@ -48,7 +67,7 @@ All notable changes to `imperal-sdk` are documented here.
 - **`@ext.panel()` kwargs** — `default_width`, `min_width`, `max_width` stored in `ext._panels` and published to `config.ui.panels.{slot}`.
 
 ### UI Test Suite
-- **`test_ui.py`** — 50 tests covering all 53 UI components: serialization, props, defaults, actions, negative tests (TypeError on nonexistent props).
+- **`test_ui.py`** — 50 tests covering all 55 UI components: serialization, props, defaults, actions, negative tests (TypeError on nonexistent props).
 - **`test_panels.py`** — 10 tests for `@ext.panel()` decorator: tool registration, metadata storage, wrapper returns `{ui, panel_id}`, param passthrough, kwargs preservation.
 - **Total: 309 tests** (was 249).
 

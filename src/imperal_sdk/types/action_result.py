@@ -2,6 +2,10 @@
 
 Supports both plain dict (backward compat) and Pydantic BaseModel (typed path).
 Use factory methods .success() and .error() — do not construct directly.
+
+IMPORTANT: `summary` is ALWAYS shown to the user in chat when the function is
+called via DUI (ui.Call). Write clear, user-facing summaries.
+For functions without summary, write/custom actions get generic "✓ done" feedback.
 """
 from __future__ import annotations
 
@@ -20,9 +24,18 @@ class ActionResult(Generic[T]):
     Generic over T (Pydantic BaseModel). When T is not specified,
     data is treated as plain dict for backward compatibility.
 
+    Fields:
+        status: "success" or "error"
+        data: Response payload (dict or Pydantic model)
+        summary: User-facing message shown in chat. ALWAYS displayed for DUI calls.
+        error: Error message (only for status="error")
+        retryable: If True, user can retry the action
+        ui: Inline UINode tree for chat rendering (optional)
+        refresh_panels: List of panel IDs to refresh after action (e.g. ["sidebar"]).
+            If not set, ALL panels refresh. Set to specific IDs for targeted refresh.
+
     NOTE: Always use factory methods .success() / .error(), or pass all kwargs
-    explicitly when constructing directly. The @staticmethod 'error' shadows
-    the field default — omitting error= in the constructor returns the method.
+    explicitly when constructing directly.
     """
 
     status: str
@@ -30,17 +43,40 @@ class ActionResult(Generic[T]):
     summary: str = ""
     error: str | None = None
     retryable: bool = False
-    ui: Any | None = None  # Inline UI component tree for chat rendering
+    ui: Any | None = None
+    refresh_panels: list[str] | None = None
 
     @staticmethod
-    def success(data: T | dict, summary: str) -> ActionResult[T]:
-        """Create a success result."""
-        return ActionResult(status="success", data=data, summary=summary, error=None, retryable=False)
+    def success(
+        data: T | dict,
+        summary: str,
+        *,
+        ui: Any | None = None,
+        refresh_panels: list[str] | None = None,
+    ) -> ActionResult[T]:
+        """Create a success result.
+
+        Args:
+            data: Response payload.
+            summary: User-facing message. ALWAYS shown in chat for DUI calls.
+                Write clear, actionable summaries.
+            ui: Optional inline UINode for rich chat rendering.
+            refresh_panels: Optional list of panel IDs to refresh (e.g. ["sidebar"]).
+                If None, all panels refresh. If empty list [], no panels refresh.
+        """
+        return ActionResult(
+            status="success", data=data, summary=summary,
+            error=None, retryable=False, ui=ui,
+            refresh_panels=refresh_panels,
+        )
 
     @staticmethod
     def error(error: str, retryable: bool = False) -> ActionResult:
         """Create an error result."""
-        return ActionResult(status="error", data={}, summary="", error=error, retryable=retryable)
+        return ActionResult(
+            status="error", data={}, summary="", error=error,
+            retryable=retryable,
+        )
 
     def to_dict(self) -> dict:
         """Serialize to dict. Pydantic models are converted via model_dump()."""
@@ -57,6 +93,8 @@ class ActionResult(Generic[T]):
             d["retryable"] = self.retryable
         if self.ui is not None:
             d["ui"] = self.ui.to_dict() if hasattr(self.ui, 'to_dict') else self.ui
+        if self.refresh_panels is not None:
+            d["refresh_panels"] = self.refresh_panels
         return d
 
     @staticmethod
@@ -68,4 +106,5 @@ class ActionResult(Generic[T]):
             summary=d.get("summary", ""),
             error=d.get("error", None),
             retryable=d.get("retryable", False),
+            refresh_panels=d.get("refresh_panels", None),
         )

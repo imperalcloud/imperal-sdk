@@ -667,6 +667,8 @@ class LLMProvider:
             if oai_tc is not None:
                 kwargs["tool_choice"] = oai_tc
 
+        if cfg.provider == "openai_compatible":
+            kwargs["extra_body"] = {"think": False}
         resp = await client.chat.completions.create(**kwargs)
         return MessageAdapter.from_openai_response(resp, cfg.model)
 

@@ -288,7 +288,7 @@ async def handle_stripe(ctx, request):
 
 ## Declarative UI (v1.5.0)
 
-Build full Panel UI from Python — zero React, zero rebuilds. **53 components** across 7 modules.
+Build full Panel UI from Python — zero React, zero rebuilds. **55 components** across 7 modules.
 
 ```python
 from imperal_sdk import Extension, ui
@@ -326,18 +326,18 @@ async def panel_sidebar(ctx, **kwargs):
     ])
 ```
 
-**53 components:**
+**55 components:**
 - **Layout (8):** Stack, Grid, Tabs, Page, Section, Row, Column, Accordion
-- **Display (8):** Text, Header, Icon, Image, Code, Markdown, Divider, Empty
+- **Display (9):** Text, Header, Icon, Image, Code, Markdown, Divider, Empty, Html
 - **Interactive (7):** Button, Card, Menu, Dialog, Tooltip, Link, SlideOver
 - **Input (11):** Input, TextArea, Toggle, Select, MultiSelect, Form, Slider, DatePicker, FileUpload, RichEditor, TagInput
 - **Data (11):** List, ListItem, DataTable, DataColumn, Stat, Stats, Badge, Avatar, KeyValue, Timeline, Tree
 - **Feedback (5):** Alert, Progress, Chart, Loading, Error
-- **Actions (3):** Call, Navigate, Send
+- **Actions (4):** Call, Navigate, Send, Open
 
 **Zero-rebuild panel discovery:** `@ext.panel()` auto-publishes to the config store. New extensions show panels instantly — no frontend changes.
 
-**v1.6.0 highlights:**
+**v1.5.0 highlights:**
 - `ui.Html(theme="light")` — white-bg email rendering with auto-resize iframe
 - `ui.List(selectable=True, bulk_actions=[...])` — multi-select with checkbox hover, bulk action bar
 - `ui.List(on_end_reached=action)` — infinite scroll with IntersectionObserver sentinel
