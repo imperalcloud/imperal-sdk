@@ -19,7 +19,7 @@ from .data import (
     ListItem, List, DataColumn, DataTable, Stat, Stats,
     Badge, Avatar, Timeline, Tree, KeyValue,
 )
-from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider, Html
+from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider, Html, Video, Audio
 from .interactive import Button, Card, Menu, Dialog, Tooltip, Link, SlideOver
 from .feedback import Alert, Progress, Chart, Loading, Error
 from .input_components import (
@@ -35,7 +35,7 @@ __all__ = [
     "ListItem", "List", "DataColumn", "DataTable", "Stat", "Stats",
     "Badge", "Avatar", "Timeline", "Tree", "KeyValue",
     # Display
-    "Text", "Icon", "Header", "Image", "Code", "Markdown", "Empty", "Divider", "Html",
+    "Text", "Icon", "Header", "Image", "Code", "Markdown", "Empty", "Divider", "Html", "Video", "Audio",
     # Interactive
     "Button", "Card", "Menu", "Dialog", "Tooltip", "Link", "SlideOver",
     # Feedback

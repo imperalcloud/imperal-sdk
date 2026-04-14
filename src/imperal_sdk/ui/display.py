@@ -79,3 +79,50 @@ def Html(
     if max_height: props["max_height"] = max_height
     if theme != "dark": props["theme"] = theme
     return UINode(type="Html", props=props)
+
+
+def Video(
+    src: str,
+    poster: str = "",
+    title: str = "",
+    autoplay: bool = False,
+    controls: bool = True,
+    loop: bool = False,
+    muted: bool = False,
+    width: str = "",
+    height: str = "",
+) -> UINode:
+    """HTML5 video player.
+
+    src: video URL (mp4, webm, ogg, or HLS m3u8).
+    poster: thumbnail image shown before playback.
+    controls: show play/pause/seek/volume (default True).
+    """
+    props: dict[str, Any] = {"src": src, "controls": controls}
+    if poster: props["poster"] = poster
+    if title: props["title"] = title
+    if autoplay: props["autoplay"] = autoplay
+    if loop: props["loop"] = loop
+    if muted: props["muted"] = muted
+    if width: props["width"] = width
+    if height: props["height"] = height
+    return UINode(type="Video", props=props)
+
+
+def Audio(
+    src: str,
+    title: str = "",
+    controls: bool = True,
+    autoplay: bool = False,
+    loop: bool = False,
+) -> UINode:
+    """HTML5 audio player.
+
+    src: audio URL (mp3, wav, ogg).
+    controls: show play/pause/seek/volume (default True).
+    """
+    props: dict[str, Any] = {"src": src, "controls": controls}
+    if title: props["title"] = title
+    if autoplay: props["autoplay"] = autoplay
+    if loop: props["loop"] = loop
+    return UINode(type="Audio", props=props)
