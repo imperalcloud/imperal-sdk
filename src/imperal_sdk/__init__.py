@@ -1,7 +1,7 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from imperal_sdk.extension import (
     Extension, ToolDef, SignalDef, ScheduleDef,
-    LifecycleHook, HealthCheckDef, WebhookDef, EventHandlerDef, ExposedMethod,
+    LifecycleHook, HealthCheckDef, WebhookDef, EventHandlerDef, ExposedMethod, TrayDef,
 )
 from imperal_sdk.context import Context
 from imperal_sdk.auth import ImperalAuth, AuthError, User
@@ -27,12 +27,12 @@ from imperal_sdk.types import (
 from imperal_sdk.protocols import ExtensionProtocol
 from imperal_sdk.validator import validate_extension, ValidationReport, ValidationIssue
 
-__version__ = "1.5.3"
+__version__ = "1.5.4"
 
 __all__ = [
     # Core
     "Extension", "ToolDef", "SignalDef", "ScheduleDef",
-    "LifecycleHook", "HealthCheckDef", "WebhookDef", "EventHandlerDef", "ExposedMethod",
+    "LifecycleHook", "HealthCheckDef", "WebhookDef", "EventHandlerDef", "ExposedMethod", "TrayDef",
     "Context", "ImperalAuth", "AuthError", "User",
     "ChatExtension", "ActionResult",
     "generate_manifest", "save_manifest",

@@ -5,7 +5,6 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-
 @dataclass
 class ToolDef:
     name: str
@@ -13,12 +12,10 @@ class ToolDef:
     scopes: list[str] = field(default_factory=list)
     description: str = ""
 
-
 @dataclass
 class SignalDef:
     name: str
     func: Callable
-
 
 @dataclass
 class ScheduleDef:
@@ -26,18 +23,15 @@ class ScheduleDef:
     func: Callable
     cron: str
 
-
 @dataclass
 class LifecycleHook:
     name: str
     func: Callable
     version: str = ""  # only for on_upgrade
 
-
 @dataclass
 class HealthCheckDef:
     func: Callable
-
 
 @dataclass
 class WebhookDef:
@@ -46,12 +40,10 @@ class WebhookDef:
     method: str = "POST"
     secret_header: str = ""
 
-
 @dataclass
 class EventHandlerDef:
     event_type: str
     func: Callable
-
 
 @dataclass
 class ExposedMethod:
@@ -59,6 +51,13 @@ class ExposedMethod:
     func: Callable
     action_type: str = "read"
 
+@dataclass
+class TrayDef:
+    """System tray item — icon + badge + optional dropdown panel in the OS top bar."""
+    tray_id: str
+    func: Callable
+    icon: str = "Circle"
+    tooltip: str = ""
 
 class Extension:
     """Imperal Cloud Extension."""
@@ -85,6 +84,7 @@ class Extension:
         self._event_handlers: list[EventHandlerDef] = []
         self._exposed: dict[str, ExposedMethod] = {}
         self._panels: dict[str, dict] = {}
+        self._tray: dict[str, "TrayDef"] = {}
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""
@@ -186,6 +186,37 @@ class Extension:
             return func
         return decorator
 
+    def tray(self, tray_id: str, icon: str = "Circle", tooltip: str = ""):
+        """Declare a system tray item in the OS top bar.
+
+        The handler returns a UINode tree with badge and optional dropdown panel.
+        Called via /call endpoint as __tray__{tray_id}.
+
+        Example::
+
+            @ext.tray("unread", icon="Mail", tooltip="Unread messages")
+            async def tray_unread(ctx, **kwargs):
+                count = await ctx.store.count("messages", where={"read": False})
+                return ui.Stack([
+                    ui.Badge(str(count), color="red" if count > 0 else "gray"),
+                ])
+        """
+        def decorator(func: Callable) -> Callable:
+            async def wrapper(ctx, **params):
+                result = await func(ctx, **params)
+                if hasattr(result, 'to_dict'):
+                    return {"ui": result.to_dict(), "tray_id": tray_id, "icon": icon}
+                return result
+            self._tools[f"__tray__{tray_id}"] = ToolDef(
+                name=f"__tray__{tray_id}", func=wrapper,
+                description=f"Tray: {tooltip or tray_id}",
+            )
+            self._tray[tray_id] = TrayDef(
+                tray_id=tray_id, func=wrapper, icon=icon, tooltip=tooltip,
+            )
+            return func
+        return decorator
+
     def panel(self, panel_id: str, slot: str = "main", title: str = "",
               icon: str = "", refresh: str = "manual", **kwargs):
         """Declare a UI panel. Handler returns UINode tree.
@@ -247,6 +278,10 @@ class Extension:
     @property
     def exposed(self) -> dict[str, ExposedMethod]:
         return self._exposed
+
+    @property
+    def tray_items(self) -> dict[str, "TrayDef"]:
+        return self._tray
 
     @property
     def panels(self) -> dict[str, dict]:

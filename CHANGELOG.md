@@ -2,6 +2,51 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.4 (2026-04-16)
+
+### System Tray SDK
+- **`@ext.tray()`** — new decorator for System Tray items in the OS top bar. Extensions can publish icon + badge + dropdown panel directly into the system tray (next to clock). Props: `tray_id`, `icon` (Lucide name), `tooltip`. Handler returns UINode (badge/panel). Registers `__tray__{id}` ToolDef for /call dispatch.
+- **`TrayDef`** — new dataclass exported from SDK. Stored in `ext.tray_items` dict.
+
+### OS Identity Enforcement
+- **SDK Identity Guard** — `ChatExtension.__init__` now warns if `system_prompt` contains "You are [a/an/the]". Developers see `[SDK] ChatExtension 'tool': system_prompt contains 'You are ...'` warning in logs. Extensions must describe MODULE capabilities, not AI identity — the kernel injects `{assistant_name}` identity automatically.
+- **`enforce_os_identity()` expanded** — `filters.py` now catches ~50 self-identification patterns (EN + RU) in addition to redirect patterns. Strips sentences like "I'm the Notes assistant" from LLM output.
+
+### Deploy Pipeline
+- **Registry auto-sync** — `deploy_app` now calls `_sync_tools_to_registry()` after successful validation. Loads extension, reads tools + skeleton, calls `PUT /v1/apps/{app_id}/tools`. Auto-creates app in Registry if missing (`_ensure_app_in_registry()`, 409=OK). Extensions appear in AI catalog immediately after deploy.
+- **R10: `check_system_prompt_identity`** — new validation check. Scans `system_prompt.txt` AND inline `system_prompt=` keyword args in `main.py` via AST analysis. Catches "You are [a/an/the]" patterns. Critical severity — deploy fails.
+- **R11: `check_registry_sync`** — new post-deploy verification. Confirms tools registered in Registry catalog. Falls back to direct API check if sync returned 0. Critical severity.
+- **`validate_checks_deploy.py`** — new validation script (R10 + R11). Separate from R4-R9 to stay under 300L per file.
+
+### Prompt System
+- **`kernel_capability_boundary.txt`** — rewritten to use `{assistant_name}` placeholder. "You are {assistant_name} — the AI of Imperal Cloud AI OS."
+- **`prompt.py` IDENTITY section** — replaces old CAPABILITY BOUNDARY. Injects assistant_name + full catalog capabilities into every LLM call.
+- **`_build_all_capabilities()`** — new function in `system_handlers.py`. Builds compact summary of ALL extensions from catalog, injected into every extension LLM call.
+- **`state.assistant_name`** — new field cached from Redis `imperal:platform:assistant`. Resolved by `navigator.py:_resolve_assistant_name()`.
+- **All 13 extension system prompts fixed** — removed "You are X" identity from 8 `.txt` files + 5 inline `main.py`/`app.py` prompts (notes, mail, admin, developer, web-tools, automations, microsoft-ads, sql-db, video-creator, ocr-tool, hello-world, sharelock-v2, billing).
+### UI Component Fixes (Panel)
+- **`renderChildren()` normalized** — now accepts `UINode | UINode[] | undefined | null`, always normalizes to array. Fixes `e.map is not a function` crash when children is a single node. Affects **DSection**, **DSlideOver**, and any component using `renderChildren`.
+- **DTagInput** — `values`, `suggestions` from Form context normalized to array before `.map()`. Single string values wrapped in `[string]`.
+- **DMultiSelect** — `options`, `values` normalized to array. Same Form context fix.
+- **DTimeline** — `items` normalized to array. `undefined` → `[]`.
+- **Root cause:** SDK serializes props as JSON. Form context and skeleton can return single values instead of arrays (especially with one element). All array-consuming components now defensively normalize inputs.
+
+### Scheduler Patterns (Documentation)
+- **Static cron** — `@ext.schedule("name", cron="0 9 * * *")` runs at fixed intervals. Set at deploy time. Best for: daily reports, hourly syncs, periodic cleanup.
+- **Dynamic scheduling pattern** — for user-created schedules (e.g. monitors with custom intervals), use a single hourly cron + `last_run_at` check:
+  ```python
+  @ext.schedule("scan_runner", cron="0 * * * *")
+  async def scan_runner(ctx):
+      monitors = await ctx.store.query("monitors", where={"active": True})
+      now = time.time()
+      for m in monitors:
+          if now - m.get("last_run_at", 0) >= m["interval_hours"] * 3600:
+              await run_scan(ctx, m["id"])
+              await ctx.store.update("monitors", m["id"], {"last_run_at": now})
+  ```
+- **No `ctx.scheduler` needed** — the cron + last_run_at pattern is the standard production approach. Avoids kernel complexity while supporting arbitrary per-user intervals.
+
+
 ## 1.5.0 (2026-04-13)
 
 ### New UI Components & Enhancements

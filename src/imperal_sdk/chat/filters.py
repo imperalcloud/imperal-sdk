@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 # ── OS Identity ───────────────────────────────────────────────────────────
 
+# Redirect patterns — LLM tells user to "go to another extension"
 _REDIRECT_PATTERNS = (
     "gmail extension", "notes extension", "admin extension",
     "sharelock extension", "mail extension", "case extension",
@@ -22,29 +23,58 @@ _REDIRECT_PATTERNS = (
     "другое расширение", "другом расширении",
 )
 
+# Self-identification patterns — LLM says "I am the X assistant"
+_SELF_ID_PATTERNS = (
+    "i'm the notes", "i am the notes", "i'm a notes",
+    "i'm the mail", "i am the mail", "i'm a mail",
+    "i'm the admin", "i am the admin", "i'm an admin",
+    "i'm the sql", "i am the sql", "i'm a sql", "i am a sql",
+    "i'm the database", "i am the database", "i'm a database",
+    "i'm the developer", "i am the developer",
+    "i'm the web", "i am the web",
+    "i'm the microsoft", "i am the microsoft",
+    "i'm the automation", "i am the automation", "i'm an automation",
+    "i'm the billing", "i am the billing",
+    "as the notes assistant", "as a notes assistant",
+    "as the mail client", "as a mail client",
+    "as the admin assistant", "as an admin assistant",
+    "as the sql assistant", "as a sql assistant",
+    "as the database assistant", "as a database assistant",
+    "as the developer assistant", "as a developer assistant",
+    "as your notes", "as your mail", "as your admin",
+    "as your sql", "as your database", "as your developer",
+    "я — ассистент", "я ассистент заметок", "я почтовый",
+    "я админ-ассистент", "я помощник по заметкам",
+    "я помощник по почте", "я помощник базы данных",
+)
+
+_ALL_IDENTITY_PATTERNS = _REDIRECT_PATTERNS + _SELF_ID_PATTERNS
+
 
 def enforce_os_identity(text: str) -> str:
     """Kernel-level OS identity enforcement.
 
-    Removes any sentences that redirect user to other extensions.
-    Extensions are internal implementation — user sees only Imperal Cloud.
+    Removes any sentences where the LLM:
+    1. Redirects user to other extensions
+    2. Identifies itself as a specific extension/app/assistant
+    Extensions are internal implementation — user sees only Imperal Cloud / Webbee.
     """
     if not text:
         return text
 
     text_lower = text.lower()
-    has_redirect = any(p in text_lower for p in _REDIRECT_PATTERNS)
-    if not has_redirect:
+    has_identity_leak = any(p in text_lower for p in _ALL_IDENTITY_PATTERNS)
+    if not has_identity_leak:
         return text
 
-    # Remove redirect sentences
+    # Remove offending sentences
     import re
     sentences = re.split(r'(?<=[.!?])\s+', text)
     cleaned = []
     for s in sentences:
         s_lower = s.lower()
-        if any(p in s_lower for p in _REDIRECT_PATTERNS):
-            log.info(f"OS Identity: stripped redirect sentence: {s[:80]}")
+        if any(p in s_lower for p in _ALL_IDENTITY_PATTERNS):
+            log.info(f"OS Identity: stripped sentence: {s[:80]}")
             continue
         cleaned.append(s)
 

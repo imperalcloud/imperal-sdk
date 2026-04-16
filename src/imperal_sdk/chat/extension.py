@@ -3,6 +3,7 @@
 """ChatExtension — single entry point with LLM routing for extensions."""
 from __future__ import annotations
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -18,6 +19,10 @@ log = logging.getLogger(__name__)
 
 # Words that indicate write/destructive actions — used for backwards-compatible
 # action_type detection when no explicit action_type is set on a function.
+# Identity pattern — system_prompt must NOT contain self-identification.
+# The kernel injects OS identity (assistant_name) automatically.
+_IDENTITY_PATTERN = re.compile(r"\byou are (?:a |an |the )", re.IGNORECASE)
+
 _ACTION_WORDS = ("send", "create", "delete", "update", "archive", "reply", "forward", "remove", "move", "trash")
 
 @dataclass
@@ -43,6 +48,15 @@ class ChatExtension:
         self.max_rounds = max_rounds
         self._functions: dict[str, FunctionDef] = {}
         _self = self
+
+        # SDK IDENTITY GUARD: warn developers about self-identification in prompts.
+        if system_prompt and _IDENTITY_PATTERN.search(system_prompt):
+            log.warning(
+                f"[SDK] ChatExtension '{tool_name}': system_prompt contains 'You are ...' — "
+                "this will be overridden by kernel OS identity. "
+                "Use a neutral capability description instead. "
+                "Example: 'Notes module — manage user notes and folders.'"
+            )
         ext._chat_extensions = getattr(ext, "_chat_extensions", {})
         ext._chat_extensions[tool_name] = self
         @ext.tool(tool_name, scopes=["*"], description=description)

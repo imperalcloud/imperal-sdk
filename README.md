@@ -8,7 +8,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/imperal-sdk?color=blue&label=PyPI)](https://pypi.org/project/imperal-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/imperal-sdk)](https://pypi.org/project/imperal-sdk/)
-[![Tests](https://img.shields.io/badge/tests-309%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-343%20passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
@@ -193,6 +193,159 @@ resp = await provider.create_message(
 
 ---
 
+## System Features
+
+Extensions have access to platform-level capabilities through the SDK. No kernel SDK needed.
+
+### Scheduled Tasks (Cron)
+
+```python
+@ext.schedule("daily_report", cron="0 9 * * *")
+async def daily_report(ctx):
+    """Runs every day at 9 AM UTC."""
+    stats = await ctx.store.query("metrics", where={"date": "today"})
+    await ctx.notify.push(title="Daily Report", body=f"{len(stats)} events today")
+    return ActionResult.success(summary="Report sent")
+
+@ext.schedule("hourly_sync", cron="0 * * * *")
+async def hourly_sync(ctx):
+    """Sync data every hour."""
+    data = await ctx.http.get("https://api.example.com/data")
+    await ctx.store.create("synced_data", data.json())
+```
+
+### Dynamic Scheduling (User-Created Intervals)
+
+For user-driven schedules (e.g., monitors with custom intervals), use a **single cron + last_run_at check**:
+
+```python
+import time
+
+@ext.schedule("monitor_runner", cron="0 * * * *")  # check every hour
+async def monitor_runner(ctx):
+    """Run monitors that are due based on user-configured intervals."""
+    monitors = await ctx.store.query("monitors", where={"active": True})
+    now = time.time()
+    for m in monitors:
+        interval_sec = m["interval_hours"] * 3600  # 1h, 6h, 12h, 24h
+        if now - m.get("last_run_at", 0) >= interval_sec:
+            await run_scan(ctx, m["id"])
+            await ctx.store.update("monitors", m["id"], {"last_run_at": now})
+```
+
+This is the standard production pattern. No `ctx.scheduler` API needed — the cron trigger + per-record interval check handles any user-configured frequency.
+
+**When to use which:**
+| Pattern | Use Case |
+|---------|----------|
+| `@ext.schedule(cron=...)` | Fixed intervals: daily reports, hourly syncs, cleanup |
+| Cron + `last_run_at` | Dynamic: user-created monitors, per-item schedules |
+| `@ext.on_event(...)` | Reactive: trigger on events from other extensions |
+
+### Push Notifications
+
+```python
+@chat.function("send_alert", description="Send push notification", action_type="write")
+async def send_alert(ctx, params: AlertParams) -> ActionResult:
+    await ctx.notify.push(
+        title=params.title,
+        body=params.message,
+    )
+    return ActionResult.success(summary=f"Alert sent: {params.title}")
+```
+
+### Event System (Cross-Extension)
+
+```python
+# Subscribe to events from other extensions
+@ext.on_event("mail.received")
+async def on_new_email(ctx, event):
+    """Triggered when any email arrives."""
+    subject = event.data.get("subject", "")
+    if "urgent" in subject.lower():
+        await ctx.notify.push(title="Urgent email!", body=subject)
+
+# Publish events from your functions
+@chat.function("create_deal", action_type="write", event="crm.deal_created")
+async def create_deal(ctx, params: DealParams) -> ActionResult:
+    deal = await ctx.store.create("deals", params.dict())
+    return ActionResult.success(data=deal, summary="Deal created")
+    # Platform auto-publishes crm.deal_created event — other extensions can subscribe
+```
+
+### System Tray (v1.5.4)
+
+Inject icons, badges, and dropdown panels into the OS top bar:
+
+```python
+from imperal_sdk import ui
+
+@ext.tray("unread", icon="Mail", tooltip="Unread messages")
+async def tray_unread(ctx, **kwargs):
+    count = await ctx.store.count("messages", where={"read": False})
+    return ui.Stack([
+        ui.Badge(str(count), color="red" if count > 0 else "gray"),
+    ])
+
+@ext.tray("alerts", icon="Bell", tooltip="Active alerts")
+async def tray_alerts(ctx, **kwargs):
+    alerts = await ctx.store.query("alerts", where={"active": True}, limit=5)
+    return ui.Stack([
+        ui.Badge(str(len(alerts)), color="red"),
+        # Dropdown panel — shown when user clicks the tray icon
+        ui.List(items=[
+            ui.ListItem(id=a["id"], title=a["title"], subtitle=a["severity"])
+            for a in alerts
+        ]),
+    ])
+```
+
+### Webhooks (External HTTP)
+
+```python
+@ext.webhook("/stripe", method="POST", secret_header="Stripe-Signature")
+async def handle_stripe(ctx, headers, body, query_params):
+    """Receive Stripe webhook at POST /v1/ext/{app_id}/webhook/stripe"""
+    import json
+    data = json.loads(body)
+    if data["type"] == "payment_intent.succeeded":
+        await ctx.store.create("payments", {"amount": data["data"]["object"]["amount"]})
+    return {"received": True}
+```
+
+### Inter-Extension Calls (IPC)
+
+```python
+# Expose a method for other extensions to call
+@ext.expose("get_deal", action_type="read")
+async def api_get_deal(ctx, deal_id: str) -> ActionResult:
+    deal = await ctx.store.get("deals", deal_id)
+    return ActionResult.success(data=deal)
+
+# Call another extension's exposed method
+result = await ctx.extensions.call("crm", "get_deal", deal_id="d123")
+```
+
+---
+
+## System Prompt Guidelines
+
+**Important:** Extensions must NOT identify as a specific assistant. The platform injects OS identity automatically.
+
+```python
+# WRONG — deploy validation will fail (R10)
+chat = ChatExtension(ext, tool_name="my_tool", description="...",
+    system_prompt="You are a CRM assistant for Imperal Cloud.")
+
+# CORRECT — describe what the module DOES, not what the AI IS
+chat = ChatExtension(ext, tool_name="my_tool", description="...",
+    system_prompt="CRM module — manage deals, contacts, and pipelines.")
+```
+
+The kernel injects the AI identity (`{assistant_name}`) and full platform capabilities into every LLM call. Your `system_prompt` should only contain module-specific rules and capabilities.
+
+---
+
 ## Testing
 
 Every extension is testable without a server:
@@ -288,7 +441,7 @@ async def handle_stripe(ctx, request):
 
 ## Declarative UI (v1.5.0)
 
-Build full Panel UI from Python — zero React, zero rebuilds. **55 components** across 7 modules.
+Build full Panel UI from Python — zero React, zero rebuilds. **57 components** across 7 modules.
 
 ```python
 from imperal_sdk import Extension, ui

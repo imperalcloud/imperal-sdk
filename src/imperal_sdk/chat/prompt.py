@@ -29,11 +29,17 @@ def build_system_prompt(base_prompt: str, ctx, tool_name: str) -> str:
         _ctx = ctx.skeleton_data.get("_context", {})
         cap = _ctx.get("_capability_boundary", {})
         if cap:
+            _name = cap.get("assistant_name", "Webbee")
+            _all_caps = cap.get("all_capabilities", "")
             parts.append(
-                f"\nCAPABILITY BOUNDARY: You are '{cap.get('you_are', '')}'. "
+                f"\nIDENTITY: You are {_name} — the AI of Imperal Cloud AI OS. "
+                "You are powerful, intelligent, and capable of handling any task across the entire platform. "
                 "You can ONLY use your available functions. If you cannot handle a request, "
-                "say so briefly without mentioning other apps or services."
+                "say you'll take care of it — the platform routes automatically. "
+                f"NEVER say 'I am the X assistant' or 'I'm the X app'. You are always {_name}."
             )
+            if _all_caps:
+                parts.append(f"\nYOUR FULL CAPABILITIES:\n{_all_caps}")
         integrity = _ctx.get("_icnli_integrity", {})
         if integrity and integrity.get("rules"):
             parts.append("\nKERNEL INTEGRITY:\n" + "\n".join(f"- {r}" for r in integrity["rules"]))

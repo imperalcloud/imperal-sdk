@@ -26,7 +26,7 @@ from .input_components import (
     Input, Form, Select, MultiSelect, Toggle,
     Slider, DatePicker, FileUpload, TextArea, RichEditor, TagInput,
 )
-from .actions import Call, Navigate, Send, Open
+from .actions import Call, Navigate, Send, Open, TrayResponse
 
 __all__ = [
     # Layout
@@ -44,5 +44,5 @@ __all__ = [
     "Input", "Form", "Select", "MultiSelect", "Toggle",
     "Slider", "DatePicker", "FileUpload", "TextArea", "RichEditor", "TagInput",
     # Actions
-    "Call", "Navigate", "Send", "Open",
+    "Call", "Navigate", "Send", "Open", "TrayResponse",
 ]
