@@ -2,6 +2,16 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.6 (2026-04-17)
+
+### CRITICAL BUGFIX
+- **`@chat.function(event=...)` events now publish correctly**. Previously `ChatExtension._make_chat_result` constructed `FunctionCall` without passing the `result` field — so `FC.result` stayed `None`, `FC.to_dict()` omitted `result`, and the kernel's event-publishing check at `extension_runner.py` never fired. **Impact pre-fix**: sidebar `refresh="on_event:..."` never triggered (notes, sql-db, mail, billing, developer); automation rules filtering by `event_type` never stirred; extensions had no way to publish specific events (only generic `scope.action` fallbacks). **Fix**: one-line addition `result=fc_dict.get("result")` in the FC constructor. Companion fix in platform kernel (`extension_runner.py`): accept either `ActionResult` object (in-process) or dict (post-transport) via `ActionResult.from_dict()` hydration.
+
+## 1.5.5 (2026-04-16)
+
+### UI Components
+- **`ui.Graph`** — new Cytoscape-backed interactive graph component. Accepts Cases API `/graph` payload directly (unwraps Cytoscape `{data: {...}}` format server-side). Layouts: `cose-bilkent` (default), `circle`, `grid`, `breadthfirst`, `concentric`. Props: `nodes`, `edges`, `layout`, `height`, `min_node_size`, `max_node_size`, `edge_label_visible`, `color_by`, `on_node_click`. Rendered by new Panel `DGraph` component (registered as `graph`). Designed for forensic entity/relationship visualisation (Sharelock v3 Intelligence Graph); performance target ~5000 nodes.
+
 ## 1.5.4 (2026-04-16)
 
 ### System Tray SDK

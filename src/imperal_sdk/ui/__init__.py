@@ -11,6 +11,7 @@ Usage in extensions:
     ui.Stat(label="Unread", value=5, color="red")
     ui.Card(title="Summary", content=ui.Text("Hello world"))
     ui.Form(children=[ui.Input(placeholder="Name")], submit_label="Save")
+    ui.Graph(nodes=[...], edges=[...], layout="cose-bilkent")
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from .input_components import (
     Input, Form, Select, MultiSelect, Toggle,
     Slider, DatePicker, FileUpload, TextArea, RichEditor, TagInput,
 )
+from .graph import Graph
 from .actions import Call, Navigate, Send, Open, TrayResponse
 
 __all__ = [
@@ -43,6 +45,8 @@ __all__ = [
     # Input
     "Input", "Form", "Select", "MultiSelect", "Toggle",
     "Slider", "DatePicker", "FileUpload", "TextArea", "RichEditor", "TagInput",
+    # Graph (Cytoscape-backed)
+    "Graph",
     # Actions
     "Call", "Navigate", "Send", "Open", "TrayResponse",
 ]

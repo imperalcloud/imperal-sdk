@@ -142,6 +142,7 @@ class ChatExtension:
                 params=fc_dict.get("params", {}),
                 action_type=fc_dict.get("action_type", "read"),
                 success=fc_dict.get("success", False),
+                result=fc_dict.get("result"),
                 intercepted=fc_dict.get("intercepted", False),
                 event=fc_dict.get("event", ""),
             ))
