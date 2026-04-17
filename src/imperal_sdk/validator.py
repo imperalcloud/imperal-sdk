@@ -16,6 +16,66 @@ VALID_ACTION_TYPES = {"read", "write", "destructive"}
 _FN_PREFIX = "fn_"
 
 
+
+# === PEP 563 / forward-reference helper (task #73) =====================
+# Validator inspects function annotations. Under
+# ``from __future__ import annotations`` (the Python 3.10+ default style)
+# every annotation is a STRING, not a class. ``typing.get_type_hints``
+# resolves those strings via the function's ``__globals__`` back to real
+# classes; without it, ``isinstance(ann, type)`` is always False and every
+# type-based check misfires (false positive on V6, false negative on V5).
+
+def _resolve_hints(func) -> dict:
+    """Return ``typing.get_type_hints(func)`` or ``{}`` on failure.
+
+    Never raises. Failures are silent -- callers fall back to raw
+    ``__annotations__`` when the hint dict is missing the key they need.
+    """
+    try:
+        import typing
+        return typing.get_type_hints(func)
+    except Exception:
+        # Common failure modes: circular imports, forward refs to private
+        # classes, string annotations referencing modules not imported in
+        # this context. None of them are validator bugs -- we degrade to
+        # substring fallback and keep running.
+        return {}
+
+
+def _looks_like_action_result(value) -> bool:
+    """True iff ``value`` is the ActionResult class or a subclass of it.
+
+    Accepts class references (after PEP 563 resolution) AND string
+    annotations (pre-resolution fallback). Substring match on 'ActionResult'
+    is intentionally lenient -- subclasses, aliased re-exports, and
+    typing.Union / Optional wrappers are all acceptable.
+    """
+    if value is None:
+        return False
+    # Class-level identity check (preferred -- strict).
+    try:
+        from imperal_sdk.chat.action_result import ActionResult as _AR
+        if isinstance(value, type) and issubclass(value, _AR):
+            return True
+    except Exception:
+        pass
+    # String / str(value) fallback (substring -- lenient but correct).
+    if "ActionResult" in str(value):
+        return True
+    return False
+
+
+def _is_basemodel_subclass(value) -> bool:
+    """True iff ``value`` is a Pydantic BaseModel subclass (post-resolution)."""
+    if not isinstance(value, type):
+        return False
+    try:
+        from pydantic import BaseModel
+        return issubclass(value, BaseModel)
+    except (TypeError, ImportError):
+        return False
+
+
 @dataclass
 class ValidationIssue:
     """A single validation issue."""
@@ -120,11 +180,20 @@ def validate_extension(ext) -> ValidationReport:
                 fix=f"Add action_type='read' (or 'write'/'destructive') to @chat.function('{fname}')",
             ))
 
-        # V5: must return ActionResult
+        # V5: must return ActionResult -- PEP 563 safe.
+        # Resolve hints first (handles string annotations); if that
+        # fails or the hint dict lacks 'return', fall back to raw
+        # __annotations__ substring check so V5 still fires on missing
+        # annotations entirely.
         func = getattr(fdef, "func", None)
         if func:
-            ret_annotation = getattr(func, "__annotations__", {}).get("return", "")
-            if "ActionResult" not in str(ret_annotation):
+            _v5_hints = _resolve_hints(func)
+            _v5_ret = _v5_hints.get("return")
+            _v5_raw = getattr(func, "__annotations__", {}).get("return", "")
+            _v5_ok = _looks_like_action_result(_v5_ret) or (
+                _v5_ret is None and "ActionResult" in str(_v5_raw)
+            )
+            if not _v5_ok:
                 report.issues.append(ValidationIssue(
                     rule="V5", level="ERROR",
                     message=f"@chat.function '{fname}' must return ActionResult",
@@ -132,20 +201,28 @@ def validate_extension(ext) -> ValidationReport:
                 ))
 
         # V6: params should be Pydantic BaseModel (WARN for now, ERROR in v2)
+        # PEP 563 safe: resolve annotations via typing.get_type_hints so
+        # string annotations (Python 3.10+ default with
+        # `from __future__ import annotations`) are resolved to real
+        # classes before isinstance/issubclass checks.
         if func:
             import inspect
             sig = inspect.signature(func)
-            params_list = [p for p in sig.parameters.values() if p.name not in ("ctx", "self")]
+            params_list = [
+                p for p in sig.parameters.values()
+                if p.name not in ("ctx", "self")
+            ]
+            _v6_hints = _resolve_hints(func)
             has_pydantic_param = False
             for p in params_list:
-                ann = p.annotation
-                if ann != inspect.Parameter.empty:
-                    try:
-                        from pydantic import BaseModel
-                        if isinstance(ann, type) and issubclass(ann, BaseModel):
-                            has_pydantic_param = True
-                    except (TypeError, ImportError):
-                        pass
+                # Prefer resolved hint; fall back to raw annotation if
+                # get_type_hints failed for this param (uncommon).
+                resolved = _v6_hints.get(p.name, p.annotation)
+                if resolved is inspect.Parameter.empty:
+                    continue
+                if _is_basemodel_subclass(resolved):
+                    has_pydantic_param = True
+                    break
             if params_list and not has_pydantic_param:
                 report.issues.append(ValidationIssue(
                     rule="V6", level="WARN",

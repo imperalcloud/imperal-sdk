@@ -2,6 +2,11 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.7 (2026-04-17)
+
+### CRITICAL BUGFIX
+- **`imperal validate` V5/V6 false positives under `from __future__ import annotations` (PEP 563) are FIXED.** The validator previously read raw `__annotations__` / `inspect.signature` parameter annotations, which are STRINGS — not classes — when the source module opts into PEP 563. Every `@chat.function(ctx, params: MyPydanticModel)` in extensions that use the modern annotation style raised a V6 false positive (`params should be a Pydantic BaseModel subclass`), and V5 would similarly miss aliased `ActionResult` imports. **Fix:** validator now uses `typing.get_type_hints(func)` to resolve forward references via the function's `__globals__` before `isinstance` / `issubclass` checks, with graceful fallback to raw annotation substring match when resolution fails (e.g. circular imports). Shared helpers `_resolve_hints`, `_looks_like_action_result`, `_is_basemodel_subclass` ensure every future type-annotation check reuses the same resolution path. 9 regression tests cover `from __future__` + BaseModel + ActionResult + subclass + unresolvable hints.
+
 ## 1.5.6 (2026-04-17)
 
 ### CRITICAL BUGFIX

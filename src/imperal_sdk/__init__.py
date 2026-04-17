@@ -27,7 +27,7 @@ from imperal_sdk.types import (
 from imperal_sdk.protocols import ExtensionProtocol
 from imperal_sdk.validator import validate_extension, ValidationReport, ValidationIssue
 
-__version__ = "1.5.6"
+__version__ = "1.5.7"
 
 __all__ = [
     # Core
