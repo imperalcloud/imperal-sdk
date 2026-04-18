@@ -2,6 +2,62 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.14 (2026-04-19)
+
+### Contract tests — spec validation in CI + schemathesis for live verification
+
+Closes the contracts roadmap with tests that keep the 12 JSON Schemas and 3 OpenAPI specs honest on every commit, plus an env-gated integration layer for running contract tests against live Imperal services.
+
+### New: `tests/test_spec_validation.py` (always runs in CI)
+
+Offline, fast, no network. Fails the build the moment any committed contract drifts or malforms:
+
+- **Every `imperal_sdk/schemas/*.schema.json`** validates against Draft 2020-12 (`jsonschema.Draft202012Validator.check_schema`). Confirms `$id` is under `https://imperal.io/schemas/`, `title` is set.
+- **Every `docs/openapi/*.json`** validates against the full OpenAPI 3.x spec (`openapi_spec_validator.validate`). Confirms `openapi` is 3.0.x or 3.1.x, `info.title`/`version`/`paths` are present.
+- **`operationId` uniqueness** — duplicates break every code-generator that keys on them (openapi-generator, openapi-python-client, openapi-typescript, …).
+- **`$ref` resolution** — every internal reference (`#/components/schemas/X`) must point to an existing component. Catches orphan refs left behind by service refactors.
+- **Static-vs-runtime schema drift** — each committed `schemas/*.schema.json` file must equal the runtime `get_*_schema()` export from its Pydantic source-of-truth. Forgot to regenerate? CI fails.
+
+**Result on current repo:** 12 schemas ✓, 3 specs ✓, 287 unique operationIds across 229 paths, 0 broken refs, 0 drift.
+
+### New: `tests/test_contracts_live.py` (env-gated — skipped by default)
+
+Integration layer using [schemathesis](https://schemathesis.readthedocs.io/):
+
+- Reads the committed OpenAPI spec, generates property-based requests per endpoint, replays them against a live service, asserts every real response matches its declared schema.
+- **Skipped unless `[contract]` extra is installed and `IMPERAL_CONTRACT_{REGISTRY,AUTH,CASES}_{URL,API_KEY}` env vars are set.** No credentials in CI → tests skip. Developers point at localhost or staging before shipping a service change.
+
+Install and run locally:
+
+```bash
+pip install imperal-sdk[contract]
+export IMPERAL_CONTRACT_REGISTRY_URL="https://auth.imperal.io"
+export IMPERAL_CONTRACT_REGISTRY_API_KEY="imp_reg_key_xxxxxxxxxxxxxxxx"
+pytest tests/test_contracts_live.py -v
+```
+
+### New `[contract]` optional extra
+
+- `schemathesis>=3.30.0` — only pulled when installing `imperal-sdk[contract]`. Keeps the core + dev install light.
+
+### `[dev]` additions
+
+- `openapi-spec-validator>=0.7.1`, `jsonschema>=4.21.0` — both used by `test_spec_validation.py`, small, fast, well-maintained.
+
+### docs/openapi/README.md
+- New "Contract-test your extension" section walks through installing `[contract]`, exporting env vars, running `pytest tests/test_contracts_live.py`, and points back at the offline suite for what CI already checks.
+
+### Roadmap — contract coverage now 100%
+
+| Layer | Shipped in |
+|-------|------------|
+| Extension manifest (`imperal.json`) | v1.5.9 |
+| Cross-kernel payloads (ActionResult, Event, FunctionCall, ChatResult) | v1.5.10 + v1.5.13 |
+| HTTP client response types (Document, CompletionResult, LimitsResult, SubscriptionInfo, BalanceInfo, FileInfo, HTTPResponse) | v1.5.13 |
+| OpenAPI 3.x for Auth GW / Registry / Cases | v1.5.11 |
+| Offline spec validation in CI | **v1.5.14** |
+| schemathesis live contract testing | **v1.5.14** |
+
 ## 1.5.13 (2026-04-19)
 
 ### Contracts — full SDK type coverage

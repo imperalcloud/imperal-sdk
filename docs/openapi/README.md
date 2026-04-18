@@ -48,6 +48,18 @@ pip install schemathesis
 schemathesis run docs/openapi/registry.json --base-url https://api.imperal.io
 ```
 
+Or use the bundled pytest integration:
+
+```bash
+pip install imperal-sdk[contract]
+
+export IMPERAL_CONTRACT_REGISTRY_URL="https://auth.imperal.io"
+export IMPERAL_CONTRACT_REGISTRY_API_KEY="imp_reg_key_xxxxxxxxxxxxxxxx"
+pytest tests/test_contracts_live.py -v
+```
+
+The live tests are skipped automatically in CI (no credentials). Offline spec validation runs on every push via `tests/test_spec_validation.py` — that suite verifies each spec is valid OpenAPI 3.x, every `$ref` resolves, every `operationId` is unique, and every committed JSON Schema round-trips against its Pydantic source-of-truth.
+
 ## What's *not* here
 
 Internal platform services (DirectAdmin proxy, WHMCS bridge, ad-network controllers, diagnostics) ship on shared infrastructure but are not part of the SDK surface and are intentionally excluded. Extensions interact with them only indirectly through the Auth Gateway / Registry abstractions covered above.

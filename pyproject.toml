@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "1.5.13"
+version = "1.5.14"
 description = "SDK for building Imperal Cloud extensions"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -37,6 +37,8 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.25.0",
     "respx>=0.22.0",
+    "openapi-spec-validator>=0.7.1",
+    "jsonschema>=4.21.0",
 ]
 fastapi = [
     "fastapi>=0.115.0",
@@ -44,6 +46,9 @@ fastapi = [
 db = [
     "sqlalchemy[asyncio]>=2.0.30",
     "aiomysql>=0.2.0",
+]
+contract = [
+    "schemathesis>=3.30.0",
 ]
 
 [project.scripts]
