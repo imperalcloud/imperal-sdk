@@ -148,13 +148,23 @@ class MockSkeleton:
 
 
 class MockNotify:
-    """Mock notify client. Records sent notifications."""
+    """Mock notify client. Records sent notifications.
+
+    Both invocation styles — ``await ctx.notify(msg)`` and
+    ``await ctx.notify.send(msg)`` — populate ``self.sent`` identically so a
+    test asserting against the recorded list is agnostic to the call-style.
+    """
 
     def __init__(self):
         self.sent: list[dict] = []
 
-    async def send(self, message: str, channel: str = "in_app", **kwargs) -> None:
+    async def __call__(self, message: str, **kwargs) -> None:
+        channel = kwargs.pop("channel", "in_app")
         self.sent.append({"message": message, "channel": channel, **kwargs})
+
+    async def send(self, message: str, channel: str = "in_app", **kwargs) -> None:
+        # Alias — matches NotifyClient.send semantics.
+        await self(message, channel=channel, **kwargs)
 
 
 class MockStorage:

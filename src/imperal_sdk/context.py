@@ -51,6 +51,12 @@ class BillingProtocol(Protocol):
 
 @runtime_checkable
 class NotifyProtocol(Protocol):
+    # Preferred invocation: ``await ctx.notify("message", priority="high")``.
+    # Matches the concrete NotifyClient.__call__ signature. Every production
+    # extension uses this style.
+    async def __call__(self, message: str, **kwargs) -> None: ...
+    # Alias kept for historical test doc compatibility; NotifyClient forwards
+    # this to __call__. Prefer __call__ in new code.
     async def send(self, message: str, channel: str = "in_app", **kwargs) -> None: ...
 
 

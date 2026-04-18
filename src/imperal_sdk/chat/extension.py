@@ -59,7 +59,10 @@ class ChatExtension:
             )
         ext._chat_extensions = getattr(ext, "_chat_extensions", {})
         ext._chat_extensions[tool_name] = self
-        @ext.tool(tool_name, scopes=["*"], description=description)
+        # SCOPES MIGRATION (session 27): auto-registered chat entry tool no longer injects
+        # wildcard. Granted capability set = union(Extension.capabilities, per-tool scopes).
+        # If developer declares neither, loader falls back to ["*"] with WARN — migration signal.
+        @ext.tool(tool_name, scopes=[], description=description)
         async def _entry_point(ctx, message="", **kwargs):
             return await _self._handle(ctx, message, **kwargs)
 

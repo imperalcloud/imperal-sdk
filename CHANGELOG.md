@@ -2,6 +2,36 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.8 (2026-04-18)
+
+### DUI additions (SDK-side, backward compatible)
+- **`ui.Progress(color=...)`** — semantic colors for status bars. One of `blue` (default), `green`, `red`, `yellow`, `purple`. Empty string keeps the default. Use for budget bars, compliance progress, any state that benefits from at-a-glance semantics. Panel React component already supported `color` via `BAR_COLOR_CLASSES`; SDK now passes it through.
+- **`ui.Chart(colors=..., y2_keys=...)`**. `colors: dict[str,str]` maps series key → hex/CSS color; SDK emits `series=[{key,label,color}]` that the Recharts renderer honors. `y2_keys: list[str]` adds a secondary right-side Y-axis and routes the named series to it — use for mixed-scale metrics (spend $ on left, clicks count on right). Pie charts unaffected.
+- **`ui.TagInput(delimiters=..., validate=..., validate_message=...)`**. `delimiters: list[str]` — extra keys that create a tag in addition to Enter (e.g. `[" ", ",", ";"]`); paste is also split on these. `validate: str` — regex pattern; tags failing it are refused with a red caption for 1.8s. `validate_message: str` — human hint shown on rejection. Defaults preserve prior Enter-only behaviour.
+
+### `NotifyProtocol` drift fix — CRITICAL for test code
+- `NotifyClient` now implements BOTH `__call__(message, **kwargs)` (preferred — matches every production extension that uses `await ctx.notify("msg")`) AND `send(message, channel="in_app", **kwargs)` (alias forwarding to `__call__`). `NotifyProtocol` declares both. `MockNotify` supports both — each call path writes to `self.sent` with identical shape. Prior versions declared `send` only in the Protocol but implemented only `__call__` in the concrete client — `ctx.notify.send(...)` crashed at runtime in production despite being shown in the testing docs.
+
+### Form child-input initial-value registration (Panel-side, ships with SDK compatibility)
+- `DToggle` + `DSelect` Panel components now register their `initValue` with `FormContext` on mount if `form.values[param_name]` is still `undefined`. Before this, unchanged toggles / selects never appeared in the submit payload — the server saw "field missing" instead of their actual initial value. This fixes the long-standing "unticked toggles silently dropped" class of bugs. The SDK side (Python) is unchanged; the fix lives in the Panel DUI runtime. No extension code change needed.
+
+### Accumulated from v1.5.7 (not in the tagged release)
+- **`User.agency_id: str | None = None`** field (session 28, 2026-04-18) — added for agency multi-tenancy rollout. Extensions SHOULD forward `X-Imperal-Agency-ID: {ctx.user.agency_id or 'default'}` to downstream services (Cases API and similar).
+- **`ChatExtension` scope tightening** (session 27) — auto-registered chat entry tool now uses `scopes=[]` instead of `scopes=["*"]`. Granted capability set = union(`Extension.capabilities`, per-tool `scopes=`). Loader falls back to `["*"]` with a WARN log when an extension declares neither — that's the migration signal to add explicit capabilities.
+- **`enforce_os_identity()` fallback** (session 29) — when ALL sentences in the LLM output match an identity-leak pattern, the filter now returns a neutral acknowledgement (`"Чем могу помочь?"` for Cyrillic-containing input, `"How can I help?"` otherwise) instead of leaking the original text. Previously the all-stripped case fell through to the original string verbatim, defeating the filter.
+
+### Platform-side notes (consumers of this SDK benefit automatically)
+- **Kernel `@ext.schedule` dispatcher shipped** (platform session 30, 2026-04-18). The decorator has existed for a long time in this SDK, but the kernel silently ignored it until 2026-04-18. Extensions declaring `@ext.schedule("name", cron="...")` now actually fire on schedule — exactly once per (app, schedule, minute) across the 3-worker cluster via Redis-SETNX dedup. Runs under a synthetic `__system__` user (`scopes=["*"]`). Wall-clock cap `IMPERAL_EXT_SCHEDULE_TIMEOUT_S=600`. See platform docs `conventions.md` invariants SCHED-EXT-I1/I2.
+- **Panel `/call` transport moved to Redis Streams** on platform for `__panel__*` calls (Phase 2 of Fast-RPC rollout). End-to-end latency dropped 388ms → 3ms. Extension code is untouched — same `direct_call_extension` activity runs handlers. See platform `fast-rpc.md`.
+- **Webhook URL clarified** — `@ext.webhook(path)` registers at `POST /v1/ext/{app_id}/webhook/{path}` (not `/webhooks/{app_id}/{path}` as older guidelines said). Handler receives `(ctx, headers, body, query_params)`.
+
+### Docs
+- `docs/imperal-cloud/sdk/ui-components.md` — v1.5.8 changelog entry, Progress/Chart/TagInput prop tables updated with session 30 additions, examples rewritten for semantic colors + domain TagInput + dual Y-axis chart, Form section clarifies Context propagation through arbitrary nesting depth.
+- `docs/imperal-cloud/sdk/context-object.md` — `ctx.notify` Methods table declares both `__call__` (preferred) and `send` (alias) with the drift history.
+- `docs/imperal-cloud/sdk/testing.md` — MockNotify example shows both call-styles.
+- `docs/imperal-cloud/sdk/extension-guidelines.md` — webhook URL fixed, `on_event` / `expose` / `tray` / `schedule` handler signatures expanded.
+- `docs/imperal-cloud/sdk/concepts.md` — added availability note for `@ext.schedule` dispatcher.
+
 ## 1.5.7 (2026-04-17)
 
 ### CRITICAL BUGFIX

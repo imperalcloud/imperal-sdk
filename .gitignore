@@ -17,3 +17,7 @@ venv/
 htmlcov/
 .coverage
 .DS_Store
+
+# Session backups
+*.bak.*
+backup/

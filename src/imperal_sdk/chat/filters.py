@@ -71,15 +71,25 @@ def enforce_os_identity(text: str) -> str:
     import re
     sentences = re.split(r'(?<=[.!?])\s+', text)
     cleaned = []
+    any_stripped = False
     for s in sentences:
         s_lower = s.lower()
         if any(p in s_lower for p in _ALL_IDENTITY_PATTERNS):
             log.info(f"OS Identity: stripped sentence: {s[:80]}")
+            any_stripped = True
             continue
         cleaned.append(s)
 
     result = " ".join(cleaned).strip()
-    return result if result else text
+    if result:
+        return result
+    # All content was identity leaks (single-sentence or all-leak response).
+    # Never return the leak verbatim — fall back to neutral acknowledgement.
+    # Russian fallback when original text contained Cyrillic, else English.
+    if any_stripped:
+        has_cyrillic = any('\u0400' <= ch <= '\u04FF' for ch in text)
+        return "Чем могу помочь?" if has_cyrillic else "How can I help?"
+    return text
 
 
 # ── Response Style ────────────────────────────────────────────────────────

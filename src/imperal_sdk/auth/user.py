@@ -9,6 +9,11 @@ class User:
     id: str
     email: str = ""
     tenant_id: str = "default"
+    # Agency multi-tenancy (rollout 2026-04-18). None during rollout for legacy
+    # users; backfill + enforcement will follow. Extensions SHOULD forward this
+    # value to downstream services (Cases API, etc.) via
+    # `X-Imperal-Agency-ID: {ctx.user.agency_id or 'default'}`.
+    agency_id: str | None = None
     org_id: str | None = None
     role: str = "user"
     scopes: list[str] = field(default_factory=list)

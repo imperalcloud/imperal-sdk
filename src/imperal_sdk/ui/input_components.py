@@ -155,8 +155,23 @@ def TagInput(
     param_name: str = "tags",
     on_change: UIAction | None = None,
     grouped_by: str = "",
+    delimiters: list[str] | None = None,
+    validate: str = "",
+    validate_message: str = "",
 ) -> UINode:
-    """Tag/chip input with autocomplete. grouped_by: group suggestions by prefix (e.g. 'extensions:read')."""
+    """Tag/chip input with autocomplete.
+
+    grouped_by      : group suggestions by prefix (e.g. 'extensions:read').
+    delimiters      : extra keystrokes that create a tag in addition to Enter.
+                      Accepts individual characters (e.g. [' ', ',', ';']). Default
+                      is Enter-only to preserve prior behaviour.
+    validate        : optional regex pattern (string). Tags failing the pattern are
+                      refused; the input is highlighted red and ``validate_message``
+                      is shown as a tooltip. Anchor yourself — use '^...$' for
+                      full-string match.
+    validate_message: human-readable hint shown on rejected tags. Fallback generic
+                      message is used when empty.
+    """
     props: dict[str, Any] = {
         "values": values or [],
         "suggestions": suggestions or [],
@@ -165,4 +180,11 @@ def TagInput(
         "grouped_by": grouped_by,
     }
     if on_change: props["on_change"] = on_change
+    if delimiters:
+        # Keep the list homogenous — strings only, each one a single char or short key.
+        props["delimiters"] = [str(d) for d in delimiters if d]
+    if validate:
+        props["validate"] = validate
+    if validate_message:
+        props["validate_message"] = validate_message
     return UINode(type="TagInput", props=props)
