@@ -2,6 +2,31 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.11 (2026-04-19)
+
+### Contracts — OpenAPI specs for every Imperal service an extension talks to
+
+Third-party developers previously had no machine-readable reference for the HTTP surface their extensions interact with. The `ctx.*` clients in the SDK abstract it, but anyone building a non-Python integration (TypeScript panel, CI contract test, custom bridge) had to read Python source to figure out request/response shapes. This release ships the canonical OpenAPI 3.x specs for the three Imperal platform services alongside the markdown docs.
+
+- **New directory `docs/openapi/`** — OpenAPI 3.x specs captured from each service's `/openapi.json` endpoint.
+  - `auth-gateway.json` — **151 paths, 92 schemas**. JWT issuance, users, tenants, apps, billing, automations, agencies. Base URL: `https://auth.imperal.io`.
+  - `registry.json` — **15 paths, 9 schemas**. Extension catalog, tool discovery, per-app settings, hub dispatch.
+  - `sharelock-cases.json` — **63 paths, 38 schemas**. Forensic case store (Sharelock v3 backend — only relevant if building on top of it).
+  - `README.md` — how to browse/generate clients/validate against/contract-test the specs.
+
+**Total: 229 endpoints, 139 schemas, ~570 KB.**
+
+### Non-Imperal specs
+
+Internal platform services on shared infrastructure (DirectAdmin proxy, WHMCS bridge, ad-network controllers, diagnostics tooling — 11 specs / 446 endpoints / ~2.2 MB) are intentionally **not** included. They document internal attack surface and live only in the ops-side archive.
+
+### README
+- Links section now references `docs/openapi/` alongside `docs.imperal.io`.
+
+### Tooling examples
+
+The new README covers: interactive browse (Swagger Editor), typed-client generation (`openapi-python-client`, `openapi-typescript`), runtime validation (`jsonschema.validate`), and contract testing against a live service (`schemathesis run`).
+
 ## 1.5.10 (2026-04-19)
 
 ### Contracts — cross-boundary payloads now have machine-validated schemas

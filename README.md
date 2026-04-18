@@ -517,6 +517,7 @@ my-extension/
 ## Links
 
 - **Documentation:** [docs.imperal.io](https://docs.imperal.io) — source in [`docs/`](docs/)
+- **OpenAPI Specs:** [`docs/openapi/`](docs/openapi/) — Auth Gateway, Registry, Sharelock Cases (229 endpoints)
 - **Platform:** [imperal.io](https://imperal.io)
 - **Discord:** [discord.gg/imperal](https://discord.gg/imperal)
 - **PyPI:** [pypi.org/project/imperal-sdk](https://pypi.org/project/imperal-sdk/)
