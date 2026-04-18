@@ -11,7 +11,7 @@
 [![Tests](https://img.shields.io/badge/tests-343%20passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) ([source](docs/)) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
+[Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) ([source](docs/)) | [OpenAPI](docs/openapi/) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
 
 </div>
 
@@ -91,6 +91,7 @@ async def test_greet():
 | Feature | Description |
 |---------|-------------|
 | **Typed Everything** | Generic `ActionResult[T]`, `Page[T]`, typed Protocols, Pydantic params — full IDE autocomplete |
+| **Machine-Validated Contracts** | JSON Schema for `imperal.json` (v1.5.9), `ActionResult` + `Event` payloads (v1.5.10), OpenAPI 3.x for Auth Gateway / Registry / Sharelock Cases (v1.5.11). See [`docs/openapi/`](docs/openapi/). |
 | **10 SDK Clients** | `ctx.store`, `ctx.ai`, `ctx.billing`, `ctx.skeleton`, `ctx.notify`, `ctx.storage`, `ctx.http`, `ctx.config`, `ctx.extensions`, `ctx.time` |
 | **Error Hierarchy** | `ImperalError` > `APIError` > `NotFoundError`, `RateLimitError` — catch what you need |
 | **MockContext** | Drop-in test replacement with 10 mock clients. Test without a server. |
