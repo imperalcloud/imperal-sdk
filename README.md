@@ -8,7 +8,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/imperal-sdk?color=blue&label=PyPI)](https://pypi.org/project/imperal-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/imperal-sdk)](https://pypi.org/project/imperal-sdk/)
-[![Tests](https://img.shields.io/badge/tests-343%20passing-brightgreen)]()
+[![Tests](https://github.com/imperalcloud/imperal-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/imperalcloud/imperal-sdk/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) ([source](docs/)) | [OpenAPI](docs/openapi/) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
