@@ -2,6 +2,37 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.10 (2026-04-19)
+
+### Contracts — cross-boundary payloads now have machine-validated schemas
+
+Building on v1.5.9 (which closed the `imperal.json` manifest gap), this release contracts two more payloads that leave a single Python process — across Temporal activities, Redis pub/sub, SSE, and the Fast-RPC transport.
+
+Until now `ActionResult.to_dict()` and the Redis-streams `Event` envelope were dataclasses without a runtime-enforceable contract. Malformed dicts from non-SDK producers (legacy extensions, platform-side rewriters, and anything in the kernel executor pipeline) would silently propagate and be caught only by whoever downstream happened to rely on a specific field. The 10 textual `RPC-I1..I10` invariants documented on the platform side are now backed by a schema anyone can validate against.
+
+- **New module `imperal_sdk.types.contracts`** — Pydantic mirrors of the two canonical cross-boundary types:
+  - `ActionResultModel` — the strict contract for `ActionResult.to_dict()`. Enforces `status ∈ {success, error}`, cross-field rule (`status='error'` requires non-empty `error`, `status='success'` forbids `error`), refuses unknown top-level keys (catches typos like `retryble` → `retryable`), and whitelists the exact shape `data / summary / error / retryable / ui / refresh_panels`.
+  - `EventModel` — the Redis-streams event envelope. Enforces `event_type` shape (`namespace.action` or `namespace:action`, both dot- and colon-forms accepted for the session-27/28 migration), validates `user_id` against `imp_u_* | __system__ | ""` and `tenant_id` against `imp_t_* | default | ""`.
+- **Validators** — non-raising, return `list[ValidationIssue]` for unified CLI/report handling:
+  - `validate_action_result_dict(data)` — rule codes `AR1..AR5`
+  - `validate_event_dict(data)`         — rule codes `EV1..EV5`
+- **Static JSON Schema files** — Draft 2020-12, shipped with the wheel via `hatch force-include`:
+  - `imperal_sdk/schemas/action_result.schema.json`
+  - `imperal_sdk/schemas/event.schema.json`
+- **Re-exports from `imperal_sdk.types`** — `ActionResultModel`, `EventModel`, `validate_action_result_dict`, `validate_event_dict`, `get_action_result_schema`, `get_event_schema`, `ACTION_RESULT_SCHEMA`, `EVENT_SCHEMA`.
+
+### Cross-field invariants enforced (AR4)
+
+- `status='error'` **must** carry a non-empty `error` — kernel has no user-facing message otherwise, a bug that silently produced empty red toasts in production before.
+- `status='success'` **must not** carry an `error` — catches extensions that set both by mistake and produce contradictory logs.
+
+### Tests
+- `tests/test_contracts.py` — 30+ cases covering every rule code (AR1..AR5, EV1..EV5), accepted event-type / user-id / tenant-id forms, round-trip through the real `ActionResult.success()` / `.error()` factory methods and the `Event` dataclass, and drift detection against committed static schema files.
+
+### Not yet contracted (next)
+- `ChatResult` / `FunctionCall` (ChatExtension → kernel) — typed dataclasses, not yet schema'd.
+- `ctx.*` client response types (`Document`, `CompletionResult`, `LimitsResult`, `SubscriptionInfo`, `BalanceInfo`, `FileInfo`, `HTTPResponse`) — dataclasses, SDK-internal.
+
 ## 1.5.9 (2026-04-19)
 
 ### Contracts — `imperal.json` now has a machine-validated schema
