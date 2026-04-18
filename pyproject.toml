@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "1.5.8"
+version = "1.5.9"
 description = "SDK for building Imperal Cloud extensions"
 requires-python = ">=3.11"
 dependencies = [
@@ -33,6 +33,9 @@ imperal = "imperal_sdk.cli.main:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/imperal_sdk"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/imperal_sdk/schemas/imperal.schema.json" = "imperal_sdk/schemas/imperal.schema.json"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

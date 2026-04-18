@@ -2,6 +2,31 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.9 (2026-04-19)
+
+### Contracts — `imperal.json` now has a machine-validated schema
+
+Closes the long-standing V8 hole in `validator.py` ("Cannot verify imperal.json manifest"). Third-party extensions shipped with malformed manifests for months — typos like `schedule` (singular) silently disabled scheduled tasks, missing `description` broke embeddings, and no one caught invalid scope / cron values until runtime. The platform Registry now has a single source of truth for manifest shape, and `imperal validate` / `imperal deploy` enforce it.
+
+- **New module `imperal_sdk.manifest_schema`** — Pydantic models (`Manifest`, `Tool`, `ToolParam`, `Signal`, `Schedule`) that are the canonical contract for the shape `generate_manifest()` produces. Re-exported from `imperal_sdk.manifest` for convenience: `from imperal_sdk.manifest import validate_manifest_dict, MANIFEST_SCHEMA, Manifest`.
+- **`validate_manifest_dict(data: dict) -> list[ValidationIssue]`** — non-raising validator. Rule codes: `M1` (root not a dict), `M2` (missing required field), `M3` (unknown top-level field — typo detection), `M4` (invalid value — regex/type/enum mismatch), `M5` (nested-field error in tool/signal/schedule). Reuses `ValidationIssue` from `validator.py` so CLI output is uniform.
+- **`imperal_sdk/schemas/imperal.schema.json`** — committed static JSON Schema (Draft 2020-12) shipped with the wheel. External tooling, IDE plugins, CI, and non-Python services can validate manifests without importing the SDK.
+- **`imperal validate` closes V8** — if an `imperal.json` exists in the extension directory, it is loaded and validated against the schema. Structural issues (M0..M5) are merged into the existing report alongside V1-V12. The runtime-only V8 placeholder is dropped when the filesystem answer is available.
+- **`imperal deploy` uses the full validator** — replaces the 5-line ad-hoc check with `validate_manifest_dict`. Deploy now blocks on every M1..M5 violation in addition to the embeddings-critical "no description" check.
+- **Validated fields (M4/M5)**: `app_id` regex `[a-z0-9][a-z0-9-]*[a-z0-9]` (matches V1), semver version with pre-release/build suffix, scope forms (`*`, `ns:*`, `ns:action`, legacy `ns.action`), cron (5-field unix or `@keyword`), `ToolParam.type` whitelist (`string|integer|number|boolean|array|object`), tool name as Python identifier.
+
+### Accepted shapes (confirmed against production manifests)
+
+- Base manifest: `app_id`, `version`, `capabilities`, `tools`, `signals`, `schedules`, `required_scopes` — all 7 SDK-canonical fields.
+- SDK-optional: `migrations_dir`, `config_defaults`.
+- Marketplace merge (from disk overlay): `name`, `description`, `author`, `license`, `homepage`, `icon`, `category`, `tags`, `marketplace`, `pricing`.
+- Per-schedule / per-signal `description` — accepted (some production extensions add it; harmless).
+
+All 7 first-party extension manifests in the monorepo validate clean (`notes`, `sql-db`, `google-ads`, `mail`, `meta-ads`, `microsoft-ads`, `web-tools`).
+
+### Tests
+- `tests/test_manifest_schema.py` — 20+ cases covering every rule code, accepted cron/scope forms, generate→validate round-trip, schema export stability, and static-file drift detection (fails CI if the committed `imperal.schema.json` drifts from the runtime model).
+
 ## 1.5.8-1 (2026-04-19)
 
 ### Documentation

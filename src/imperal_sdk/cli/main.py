@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Imperal Cloud SDK CLI."""
+import json
 import os
 import re
 import sys
@@ -34,14 +35,24 @@ def _load_credentials() -> dict:
 
 
 def _validate_manifest(manifest: dict) -> list[str]:
-    """Validate manifest before deploy. Returns list of errors."""
-    errors = []
+    """Validate manifest before deploy. Returns list of errors.
+
+    Combines structural JSON-Schema validation (from `manifest_schema`) with
+    deploy-specific checks (missing tool descriptions break embeddings).
+    """
+    from imperal_sdk.manifest_schema import validate_manifest_dict
+
+    errors: list[str] = []
+
+    # Structural contract — app_id / version / scope / cron / shape
+    for issue in validate_manifest_dict(manifest):
+        errors.append(f"[{issue.rule}] {issue.message}")
+
+    # Deploy-only: embeddings depend on non-empty tool descriptions
     for tool in manifest.get("tools", []):
         if not tool.get("description"):
-            errors.append(f"Tool '{tool['name']}' has no description — embeddings will fail")
-        for scope in tool.get("scopes", []):
-            if not re.match(r'^[a-z_]+(\.[a-z_]+)*$', scope):
-                errors.append(f"Invalid scope format: '{scope}' — use dot.notation (e.g. 'cases.read')")
+            errors.append(f"Tool '{tool.get('name', '?')}' has no description — embeddings will fail")
+
     return errors
 
 
@@ -216,8 +227,30 @@ def validate(path: str):
             click.echo("Error: No main.py found with 'ext' Extension object.", err=True)
             raise SystemExit(1)
 
-        from imperal_sdk.validator import validate_extension
+        from imperal_sdk.validator import validate_extension, ValidationIssue
+        from imperal_sdk.manifest_schema import validate_manifest_dict
         report = validate_extension(ext)
+
+        # Close V8 — validate filesystem imperal.json if present. Replaces
+        # the "runtime-only" V8 warning with concrete M1..M5 structural
+        # issues from the JSON Schema contract.
+        manifest_path = os.path.join(os.getcwd(), "imperal.json")
+        if os.path.exists(manifest_path):
+            # Drop the V8 placeholder warning — we have the real answer now.
+            report.issues = [i for i in report.issues if i.rule != "V8"]
+            try:
+                with open(manifest_path) as f:
+                    disk_manifest = json.load(f)
+                for issue in validate_manifest_dict(disk_manifest):
+                    issue.file = "imperal.json"
+                    report.issues.append(issue)
+            except json.JSONDecodeError as e:
+                report.issues.append(ValidationIssue(
+                    rule="M0", level="ERROR",
+                    message=f"imperal.json is not valid JSON: {e}",
+                    file="imperal.json", line=e.lineno,
+                    fix="Fix the JSON syntax error at the reported line",
+                ))
 
         click.echo(f"\n── Imperal Extension Validator v1.0 {'─' * 40}")
         click.echo(f"\nExtension: {report.app_id} v{report.version}")

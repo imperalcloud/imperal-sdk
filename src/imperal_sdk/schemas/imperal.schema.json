@@ -1,0 +1,324 @@
+{
+  "$defs": {
+    "Schedule": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['schedules']`.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "cron": {
+          "title": "Cron",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "name",
+        "cron"
+      ],
+      "title": "Schedule",
+      "type": "object"
+    },
+    "Signal": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['signals']`.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Signal",
+      "type": "object"
+    },
+    "Tool": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['tools']`.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ToolParam"
+          },
+          "title": "Parameters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Tool",
+      "type": "object"
+    },
+    "ToolParam": {
+      "additionalProperties": true,
+      "description": "One `parameters[name]` entry of a tool definition.",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "required"
+      ],
+      "title": "ToolParam",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Shape of the `imperal.json` file produced by `imperal_sdk.manifest.generate_manifest()` and consumed by the Imperal Cloud Registry. Validated at deploy-time by `imperal_sdk.manifest_schema.validate_manifest_dict`.",
+  "properties": {
+    "app_id": {
+      "title": "App Id",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/Tool"
+      },
+      "title": "Tools",
+      "type": "array"
+    },
+    "signals": {
+      "items": {
+        "$ref": "#/$defs/Signal"
+      },
+      "title": "Signals",
+      "type": "array"
+    },
+    "schedules": {
+      "items": {
+        "$ref": "#/$defs/Schedule"
+      },
+      "title": "Schedules",
+      "type": "array"
+    },
+    "required_scopes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Scopes",
+      "type": "array"
+    },
+    "migrations_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Migrations Dir"
+    },
+    "config_defaults": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Config Defaults"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Name"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "author": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Author"
+    },
+    "license": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License"
+    },
+    "homepage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Homepage"
+    },
+    "icon": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Icon"
+    },
+    "category": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Category"
+    },
+    "tags": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tags"
+    },
+    "marketplace": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Marketplace"
+    },
+    "pricing": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pricing"
+    }
+  },
+  "required": [
+    "app_id",
+    "version"
+  ],
+  "title": "Imperal Extension Manifest",
+  "type": "object",
+  "$id": "https://imperal.io/schemas/imperal.schema.json"
+}

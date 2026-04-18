@@ -1,11 +1,34 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
-"""Auto-generate extension manifest from registered tools/signals/schedules."""
+"""Auto-generate and validate extension manifests (`imperal.json`)."""
 from __future__ import annotations
 import json
 import os
 import inspect
 from imperal_sdk.extension import Extension
+from imperal_sdk.manifest_schema import (
+    MANIFEST_SCHEMA,
+    Manifest,
+    Schedule,
+    Signal,
+    Tool,
+    ToolParam,
+    get_schema,
+    validate_manifest_dict,
+)
+
+__all__ = [
+    "generate_manifest",
+    "save_manifest",
+    "validate_manifest_dict",
+    "get_schema",
+    "MANIFEST_SCHEMA",
+    "Manifest",
+    "Tool",
+    "ToolParam",
+    "Signal",
+    "Schedule",
+]
 
 
 def generate_manifest(ext: Extension) -> dict:
