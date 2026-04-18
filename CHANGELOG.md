@@ -2,6 +2,16 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.8-1 (2026-04-19)
+
+### Documentation
+- **`docs/` folder added to the repo** — full SDK documentation (14 files, 8.6K lines) now lives in-tree: `quickstart`, `concepts`, `api-reference`, `clients`, `context-object`, `tools`, `skeleton`, `auth`, `cli`, `extension-ui`, `ui-components`, `extension-guidelines`, `context-router`, `testing`. Previously the canonical source lived only in an internal infrastructure repo; third-party developers reading the repo on GitHub now have it in-tree. `docs.imperal.io` can be built from this source.
+- **All example API keys and IPs sanitized** to explicit placeholders: `imp_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`, `imp_reg_key_xxxxxxxxxxxxxxxx`, `sl_cases_api_xxxxxxxxxxxxxxxx`, `auth.imperal.io:8085`, `203.0.113.42` (RFC 5737 docs range). Random-looking example strings that could have been mistaken for live credentials are gone.
+- `README.md` — Links section and top nav reference in-repo `docs/` alongside `docs.imperal.io`.
+
+### Package version unchanged (`1.5.8`)
+- No code changes — documentation/metadata-only follow-up. Same convention as `v1.5.6-1`.
+
 ## 1.5.8 (2026-04-18)
 
 ### DUI additions (SDK-side, backward compatible)

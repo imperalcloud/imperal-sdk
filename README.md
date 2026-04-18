@@ -11,7 +11,7 @@
 [![Tests](https://img.shields.io/badge/tests-343%20passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
+[Getting Started](#-quickstart) | [Features](#-what-you-get) | [Docs](https://docs.imperal.io) ([source](docs/)) | [Discord](https://discord.gg/imperal) | [Marketplace](https://imperal.io/marketplace)
 
 </div>
 
@@ -516,7 +516,7 @@ my-extension/
 
 ## Links
 
-- **Documentation:** [docs.imperal.io](https://docs.imperal.io)
+- **Documentation:** [docs.imperal.io](https://docs.imperal.io) — source in [`docs/`](docs/)
 - **Platform:** [imperal.io](https://imperal.io)
 - **Discord:** [discord.gg/imperal](https://discord.gg/imperal)
 - **PyPI:** [pypi.org/project/imperal-sdk](https://pypi.org/project/imperal-sdk/)
