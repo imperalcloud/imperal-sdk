@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "1.5.12"
+version = "1.5.13"
 description = "SDK for building Imperal Cloud extensions"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -56,6 +56,15 @@ packages = ["src/imperal_sdk"]
 "src/imperal_sdk/schemas/imperal.schema.json" = "imperal_sdk/schemas/imperal.schema.json"
 "src/imperal_sdk/schemas/action_result.schema.json" = "imperal_sdk/schemas/action_result.schema.json"
 "src/imperal_sdk/schemas/event.schema.json" = "imperal_sdk/schemas/event.schema.json"
+"src/imperal_sdk/schemas/function_call.schema.json" = "imperal_sdk/schemas/function_call.schema.json"
+"src/imperal_sdk/schemas/chat_result.schema.json" = "imperal_sdk/schemas/chat_result.schema.json"
+"src/imperal_sdk/schemas/document.schema.json" = "imperal_sdk/schemas/document.schema.json"
+"src/imperal_sdk/schemas/completion_result.schema.json" = "imperal_sdk/schemas/completion_result.schema.json"
+"src/imperal_sdk/schemas/limits_result.schema.json" = "imperal_sdk/schemas/limits_result.schema.json"
+"src/imperal_sdk/schemas/subscription_info.schema.json" = "imperal_sdk/schemas/subscription_info.schema.json"
+"src/imperal_sdk/schemas/balance_info.schema.json" = "imperal_sdk/schemas/balance_info.schema.json"
+"src/imperal_sdk/schemas/file_info.schema.json" = "imperal_sdk/schemas/file_info.schema.json"
+"src/imperal_sdk/schemas/http_response.schema.json" = "imperal_sdk/schemas/http_response.schema.json"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

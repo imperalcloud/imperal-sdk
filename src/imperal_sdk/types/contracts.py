@@ -151,6 +151,58 @@ class EventModel(BaseModel):
         return v
 
 
+# === FunctionCall mirror =============================================
+
+class FunctionCallModel(BaseModel):
+    """Pydantic contract for `FunctionCall.to_dict()` output.
+
+    Records a single `@chat.function` invocation inside `ChatResult`.
+    Crosses Temporal activity boundaries — every field travels the wire.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1)
+    params: Dict[str, Any] = Field(default_factory=dict)
+    action_type: Literal["read", "write", "destructive"]
+    success: bool
+    # `result` is a nested ActionResult.to_dict() output — validated via the
+    # broader ActionResultModel when the kernel hydrates the call record.
+    result: Optional[Dict[str, Any]] = None
+    intercepted: bool = False
+    event: str = ""
+
+
+# === ChatResult mirror ===============================================
+
+class ChatResultModel(BaseModel):
+    """Pydantic contract for `ChatResult.to_dict()` output.
+
+    Serialized return from `ChatExtension._handle()`; crosses Temporal
+    activity history on every chat turn. The on-wire keys are
+    underscore-prefixed (`_handled`, `_functions_called`, ...) — the
+    kernel's hub dispatcher depends on that prefix to distinguish its
+    transport metadata from raw tool output. Pydantic aliases map them
+    to readable Python attribute names.
+    """
+
+    # No `populate_by_name` — the wire format is the contract; only the
+    # underscore-prefixed keys are accepted. Use the `ChatResult` dataclass
+    # in `types/chat_result.py` for in-Python construction.
+    model_config = ConfigDict(extra="forbid")
+
+    response: str = ""
+    handled: bool = Field(default=False, alias="_handled")
+    functions_called: List[FunctionCallModel] = Field(
+        default_factory=list, alias="_functions_called"
+    )
+    had_successful_action: bool = Field(default=False, alias="_had_successful_action")
+    message_type: str = Field(default="text", alias="_message_type")
+    action_meta: Dict[str, Any] = Field(default_factory=dict, alias="_action_meta")
+    intercepted: bool = Field(default=False, alias="_intercepted")
+    task_cancelled: bool = Field(default=False, alias="_task_cancelled")
+
+
 # === Shared validator plumbing =======================================
 
 def _validate_against_model(
@@ -232,6 +284,23 @@ def validate_event_dict(data: Any) -> List["ValidationIssue"]:
     return _validate_against_model(data, EventModel, "EV")
 
 
+def validate_function_call_dict(data: Any) -> List["ValidationIssue"]:
+    """Validate a dict against the `FunctionCall.to_dict()` contract.
+
+    Non-raising. Rule codes `FC1..FC5`.
+    """
+    return _validate_against_model(data, FunctionCallModel, "FC")
+
+
+def validate_chat_result_dict(data: Any) -> List["ValidationIssue"]:
+    """Validate a dict against the `ChatResult.to_dict()` contract.
+
+    Non-raising. Rule codes `CR1..CR5`. Accepts the underscore-prefixed
+    wire format (`_handled`, `_functions_called`, ...).
+    """
+    return _validate_against_model(data, ChatResultModel, "CR")
+
+
 # === JSON Schema exports =============================================
 
 def _shape_schema(schema: Dict[str, Any], *, id_slug: str, title: str, description: str) -> Dict[str, Any]:
@@ -271,18 +340,62 @@ def get_event_schema() -> Dict[str, Any]:
     )
 
 
+def get_function_call_schema() -> Dict[str, Any]:
+    """JSON Schema (Draft 2020-12) for `FunctionCall.to_dict()`."""
+    return _shape_schema(
+        FunctionCallModel.model_json_schema(),
+        id_slug="function_call",
+        title="Imperal FunctionCall Record",
+        description=(
+            "Record of a single @chat.function invocation inside a "
+            "ChatResult. Used by the kernel executor to replay, audit, "
+            "and bill the chain of calls made during one chat turn."
+        ),
+    )
+
+
+def get_chat_result_schema() -> Dict[str, Any]:
+    """JSON Schema (Draft 2020-12) for `ChatResult.to_dict()`."""
+    return _shape_schema(
+        ChatResultModel.model_json_schema(),
+        id_slug="chat_result",
+        title="Imperal ChatResult Payload",
+        description=(
+            "Serialized return from ChatExtension._handle() — the "
+            "kernel-transport form of a chat turn's output. Underscore-"
+            "prefixed keys distinguish transport metadata from raw "
+            "tool response. Crosses Temporal activity history."
+        ),
+    )
+
+
 ACTION_RESULT_SCHEMA: Dict[str, Any] = get_action_result_schema()
 EVENT_SCHEMA: Dict[str, Any] = get_event_schema()
+FUNCTION_CALL_SCHEMA: Dict[str, Any] = get_function_call_schema()
+CHAT_RESULT_SCHEMA: Dict[str, Any] = get_chat_result_schema()
 
 
 __all__ = [
+    # Models
     "ActionResultModel",
     "EventModel",
+    "FunctionCallModel",
+    "ChatResultModel",
+    # Validators
     "validate_action_result_dict",
     "validate_event_dict",
+    "validate_function_call_dict",
+    "validate_chat_result_dict",
+    # Schema getters
     "get_action_result_schema",
     "get_event_schema",
+    "get_function_call_schema",
+    "get_chat_result_schema",
+    # Schema constants
     "ACTION_RESULT_SCHEMA",
     "EVENT_SCHEMA",
+    "FUNCTION_CALL_SCHEMA",
+    "CHAT_RESULT_SCHEMA",
+    # Patterns
     "EVENT_TYPE_PATTERN",
 ]

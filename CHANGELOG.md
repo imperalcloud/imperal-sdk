@@ -2,6 +2,58 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.13 (2026-04-19)
+
+### Contracts — full SDK type coverage
+
+Completes the contract wave started in v1.5.9. Every typed return/payload an extension touches — cross-kernel and HTTP-client alike — now has a Pydantic mirror, a non-raising validator, and a static JSON Schema shipped with the wheel.
+
+### New in `imperal_sdk.types.contracts` (cross-boundary platform payloads)
+
+- **`FunctionCallModel`** + `validate_function_call_dict` (rule codes `FC1..FC5`) — record of a single `@chat.function` invocation. Crosses Temporal activity history on every chat turn.
+- **`ChatResultModel`** + `validate_chat_result_dict` (rule codes `CR1..CR5`) — serialized return from `ChatExtension._handle()`. Enforces the underscore-prefixed wire format (`_handled`, `_functions_called`, ...) — the kernel's hub dispatcher depends on that prefix to distinguish transport metadata from raw tool response, and a validator catches attribute-name-instead-of-alias typos that would silently lose data.
+
+### New module `imperal_sdk.types.client_contracts` (HTTP client response types)
+
+Seven Pydantic mirrors of the `ctx.*` client dataclasses in `types/models.py` — the runtime-enforceable contracts for what comes back from Auth Gateway and Imperal-platform HTTP services:
+
+- **`DocumentModel`** (`DOC1..5`)         — `ctx.store.get/query/create/update()` row
+- **`CompletionResultModel`** (`CPL1..5`) — `ctx.ai.complete()` response
+- **`LimitsResultModel`** (`LIM1..5`)     — `ctx.billing.check_limits()` response
+- **`SubscriptionInfoModel`** (`SUB1..5`) — `ctx.billing.get_subscription()`
+- **`BalanceInfoModel`** (`BAL1..5`)      — `ctx.billing.get_balance()`
+- **`FileInfoModel`** (`FIL1..5`)         — `ctx.storage.upload/list()` entry
+- **`HTTPResponseModel`** (`HRS1..5`)     — `ctx.http.*` wrapped response (status 100-599, body dict/str/list; bytes bodies are local-only and intentionally out-of-contract)
+
+### Static JSON Schemas (Draft 2020-12)
+
+Nine new files under `imperal_sdk/schemas/`, all wheel-shipped via `hatch force-include`:
+
+`function_call.schema.json`, `chat_result.schema.json`, `document.schema.json`, `completion_result.schema.json`, `limits_result.schema.json`, `subscription_info.schema.json`, `balance_info.schema.json`, `file_info.schema.json`, `http_response.schema.json`.
+
+### Complete contract surface now
+
+| Contract | Schema file | Rule codes | Module |
+|----------|-------------|------------|--------|
+| `imperal.json` manifest | `imperal.schema.json` | M1..M5 | `manifest_schema` (v1.5.9) |
+| `ActionResult` payload | `action_result.schema.json` | AR1..AR5 | `types.contracts` (v1.5.10) |
+| `Event` envelope | `event.schema.json` | EV1..EV5 | `types.contracts` (v1.5.10) |
+| `FunctionCall` record | `function_call.schema.json` | FC1..FC5 | `types.contracts` (**v1.5.13**) |
+| `ChatResult` payload | `chat_result.schema.json` | CR1..CR5 | `types.contracts` (**v1.5.13**) |
+| `Document` row | `document.schema.json` | DOC1..5 | `types.client_contracts` (**v1.5.13**) |
+| `CompletionResult` | `completion_result.schema.json` | CPL1..5 | `types.client_contracts` (**v1.5.13**) |
+| `LimitsResult` | `limits_result.schema.json` | LIM1..5 | `types.client_contracts` (**v1.5.13**) |
+| `SubscriptionInfo` | `subscription_info.schema.json` | SUB1..5 | `types.client_contracts` (**v1.5.13**) |
+| `BalanceInfo` | `balance_info.schema.json` | BAL1..5 | `types.client_contracts` (**v1.5.13**) |
+| `FileInfo` | `file_info.schema.json` | FIL1..5 | `types.client_contracts` (**v1.5.13**) |
+| `HTTPResponse` | `http_response.schema.json` | HRS1..5 | `types.client_contracts` (**v1.5.13**) |
+
+Plus OpenAPI 3.x for Auth Gateway, Registry, Sharelock Cases under `docs/openapi/` (v1.5.11).
+
+### Tests
+- `tests/test_contracts.py` — expanded with FC / ChatResult cases (~12 new tests).
+- `tests/test_client_contracts.py` — 40+ new tests covering validation, round-trip via real dataclasses (`Document`, `CompletionResult`, …), and committed-file drift detection for every new schema.
+
 ## 1.5.12 (2026-04-19)
 
 ### Package metadata — PyPI badges now work correctly

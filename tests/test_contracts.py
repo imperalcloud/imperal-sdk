@@ -13,16 +13,24 @@ from pathlib import Path
 
 import pytest
 
-from imperal_sdk.types import ActionResult, Event
+from imperal_sdk.types import ActionResult, ChatResult, Event, FunctionCall
 from imperal_sdk.types.contracts import (
     ACTION_RESULT_SCHEMA,
+    CHAT_RESULT_SCHEMA,
     EVENT_SCHEMA,
+    FUNCTION_CALL_SCHEMA,
     ActionResultModel,
+    ChatResultModel,
     EventModel,
+    FunctionCallModel,
     get_action_result_schema,
+    get_chat_result_schema,
     get_event_schema,
+    get_function_call_schema,
     validate_action_result_dict,
+    validate_chat_result_dict,
     validate_event_dict,
+    validate_function_call_dict,
 )
 
 
@@ -249,3 +257,118 @@ def test_pydantic_models_validate_baselines():
         {"status": "success", "summary": "x", "data": {}}
     )
     EventModel.model_validate({"event_type": "ns.action"})
+
+
+# === FunctionCall contract =========================================
+
+def test_FC_valid_minimal():
+    assert validate_function_call_dict({
+        "name": "fn_send", "params": {}, "action_type": "write", "success": True,
+    }) == []
+
+
+def test_FC_valid_with_result_nested():
+    assert validate_function_call_dict({
+        "name": "fn_send", "params": {"to": "x"}, "action_type": "write",
+        "success": True,
+        "result": {"status": "success", "summary": "sent", "data": {}},
+        "intercepted": False, "event": "mail.sent",
+    }) == []
+
+
+def test_FC2_missing_name():
+    issues = validate_function_call_dict({
+        "params": {}, "action_type": "read", "success": True,
+    })
+    assert any(i.rule == "FC2" for i in issues)
+
+
+def test_FC4_bad_action_type():
+    issues = validate_function_call_dict({
+        "name": "x", "params": {}, "action_type": "update", "success": True,
+    })
+    assert any(i.rule == "FC4" for i in issues)
+
+
+def test_FC3_extra_forbidden():
+    issues = validate_function_call_dict({
+        "name": "x", "params": {}, "action_type": "read", "success": True,
+        "foo": "bar",
+    })
+    assert any(i.rule == "FC3" for i in issues)
+
+
+def test_FC_roundtrip():
+    """Real FunctionCall.to_dict() output validates clean."""
+    ar = ActionResult.success(data={"id": "m1"}, summary="sent")
+    fc = FunctionCall(
+        name="fn_send", params={"to": "x@y"}, action_type="write",
+        success=True, result=ar, event="mail.sent",
+    )
+    assert validate_function_call_dict(fc.to_dict()) == []
+
+
+# === ChatResult contract ===========================================
+
+def test_CR_valid_minimal_underscore_aliases():
+    assert validate_chat_result_dict({"response": "ok"}) == []
+
+
+def test_CR_valid_full_wire_format():
+    assert validate_chat_result_dict({
+        "response": "done",
+        "_handled": True,
+        "_functions_called": [{
+            "name": "fn_send", "params": {}, "action_type": "write", "success": True,
+        }],
+        "_had_successful_action": True,
+        "_message_type": "text",
+        "_action_meta": {},
+        "_intercepted": False,
+        "_task_cancelled": False,
+    }) == []
+
+
+def test_CR3_rejects_non_underscore_attribute_names():
+    """The wire format uses `_handled` etc. — attribute names without
+    the underscore prefix are NOT valid wire keys and must be rejected.
+    """
+    issues = validate_chat_result_dict({"response": "x", "handled": True})
+    assert any(i.rule == "CR3" for i in issues)
+
+
+def test_CR3_typo_in_underscore_key():
+    issues = validate_chat_result_dict({"response": "x", "_hnadled": True})
+    assert any(i.rule == "CR3" for i in issues)
+
+
+def test_CR_roundtrip():
+    """Real ChatResult.to_dict() output validates clean."""
+    ar = ActionResult.success(data={}, summary="done")
+    fc = FunctionCall(name="fn_x", params={}, action_type="read",
+                      success=True, result=ar)
+    cr = ChatResult(response="hi", handled=True, functions_called=[fc],
+                    had_successful_action=True)
+    assert validate_chat_result_dict(cr.to_dict()) == []
+
+
+# === Static-schema drift for new types =============================
+
+@pytest.mark.parametrize("name,fn", [
+    ("function_call", get_function_call_schema),
+    ("chat_result", get_chat_result_schema),
+])
+def test_cross_boundary_static_schema_in_sync(name, fn):
+    schema_path = (
+        Path(__file__).resolve().parent.parent
+        / "src" / "imperal_sdk" / "schemas" / f"{name}.schema.json"
+    )
+    assert schema_path.exists(), f"Missing {schema_path}"
+    assert json.loads(schema_path.read_text()) == fn(), (
+        f"src/imperal_sdk/schemas/{name}.schema.json is out of sync"
+    )
+
+
+def test_FC_CR_constants_equal_fresh_exports():
+    assert FUNCTION_CALL_SCHEMA == get_function_call_schema()
+    assert CHAT_RESULT_SCHEMA == get_chat_result_schema()
