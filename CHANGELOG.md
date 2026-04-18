@@ -2,6 +2,17 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.12 (2026-04-19)
+
+### Package metadata — PyPI badges now work correctly
+
+Follow-up release addressing stale/missing metadata on the PyPI project page and in the README badge row. No functional changes to the SDK surface.
+
+- **PyPI `classifiers` block added** — Development Status, Intended Audience, Operating System, Python versions (3.11, 3.12), Topic, Framework, Typing. Enables `shields.io/pypi/pyversions/imperal-sdk` badge (was showing "missing") to render correctly.
+- **SPDX `license = "AGPL-3.0-or-later"`** + explicit `authors` + explicit `readme = "README.md"` in `[project]`. Matches PEP 621 + PEP 639.
+- **`.github/workflows/test.yml`** — pytest matrix on Python 3.11 + 3.12 runs on every push/PR to `main`. Powers the README `Tests` badge (was hardcoded `343 passing` — stale). First run verified: both matrix jobs green in ~18-19s.
+- **Rolls up** v1.5.10 payload-contract schemas and v1.5.11 OpenAPI specs into PyPI (which had stayed at v1.5.9 — the `publish.yml` workflow triggers on GitHub Release events, not raw tag pushes). Cutting this as an explicit Release pushes the accumulated work to PyPI.
+
 ## 1.5.11 (2026-04-19)
 
 ### Contracts — OpenAPI specs for every Imperal service an extension talks to

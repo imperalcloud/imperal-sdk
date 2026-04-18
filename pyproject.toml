@@ -4,9 +4,27 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "1.5.11"
+version = "1.5.12"
 description = "SDK for building Imperal Cloud extensions"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+authors = [
+    { name = "Valentin Scerbacov" },
+    { name = "Imperal, Inc." },
+]
 requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: FastAPI",
+    "Typing :: Typed",
+]
 dependencies = [
     "httpx>=0.28.0",
     "pyjwt[crypto]>=2.10.0",
