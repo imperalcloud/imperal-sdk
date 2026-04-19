@@ -29,6 +29,7 @@ from .input_components import (
 )
 from .graph import Graph
 from .actions import Call, Navigate, Send, Open, TrayResponse
+from .theme import theme, AgencyTheme, ColorPair
 
 __all__ = [
     # Layout
@@ -49,4 +50,6 @@ __all__ = [
     "Graph",
     # Actions
     "Call", "Navigate", "Send", "Open", "TrayResponse",
+    # Theme
+    "theme", "AgencyTheme", "ColorPair",
 ]

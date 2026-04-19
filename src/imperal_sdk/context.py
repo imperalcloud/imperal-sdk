@@ -125,6 +125,12 @@ class Context:
     config: ConfigProtocol | None = None
     extensions: ExtensionsProtocol | None = None
     time: TimeContext = field(default_factory=TimeContext)
+    # Agency tenancy + white-label theming (2026-04-19). agency_id is the
+    # data-isolation boundary; agency_theme is the raw dict form of the
+    # AgencyTheme payload populated by the kernel on workflow start. Parse
+    # via ``imperal_sdk.ui.theme(ctx)`` for a typed accessor.
+    agency_id: str | None = None
+    agency_theme: dict | None = None
     _extension_id: str = ""
     _metadata: dict = field(default_factory=dict)
 

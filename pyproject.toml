@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "1.5.14"
+version = "1.5.15"
 description = "SDK for building Imperal Cloud extensions"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
