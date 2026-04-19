@@ -2,6 +2,37 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.15 (2026-04-19)
+
+### New: `ui.theme(ctx)` — typed accessor for agency white-label theme
+
+```python
+from imperal_sdk import ui
+
+async def my_tool(ctx):
+    theme = ui.theme(ctx)
+    primary_hex = theme.colors["primary"].light if "primary" in theme.colors else "#2563eb"
+    return ui.Card(...)
+```
+
+Returns a frozen, slotted `AgencyTheme` dataclass mirroring the Auth GW Pydantic schema — `colors: dict[str, ColorPair]`, `density: Literal["compact", "default", "spacious"]`, `radius: Literal["sharp", "default", "rounded"]`. `ctx=None` returns the empty default for unit tests.
+
+The SDK performs no validation — payload is already validated upstream at the Auth GW boundary (`AgencyTheme` Pydantic model with WCAG AA contrast, 26-key whitelist, `extra="forbid"`). Malformed colour pairs from a schema-drifted DB row are silently dropped rather than raising.
+
+### `Context` gains `agency_id` + `agency_theme`
+
+Kernel populates both on workflow start. `agency_id: str | None` is the data-isolation boundary (matches the session-28 agency multi-tenancy rollout); `agency_theme: dict | None` carries the raw JSON from `agencies.theme`.
+
+### Exports
+
+`imperal_sdk.ui.theme`, `imperal_sdk.ui.AgencyTheme`, `imperal_sdk.ui.ColorPair`.
+
+### Test coverage
+
+13 cases: default fallback for missing ctx / attribute / None / non-dict, full payload parse, malformed colour-pair drop, unknown enum fallback, frozen-instance, slots (no `__dict__`), `_from_dict` helper, public-export surface.
+
+See also: `docs/superpowers/specs/2026-04-19-dui-design-tokens-design.md` and the Panel `src/styles/tokens.css` for the authoritative CSS var definitions.
+
 ## 1.5.14 (2026-04-19)
 
 ### Contract tests — spec validation in CI + schemathesis for live verification
