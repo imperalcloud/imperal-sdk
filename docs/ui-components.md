@@ -1,10 +1,30 @@
 # Imperal SDK — Declarative UI Components Reference
 
-**Version:** v1.5.7 | **Components:** 57 across 8 modules
+**Version:** v1.5.16 | **Components:** 57 across 8 modules
 **Import:** `from imperal_sdk import ui`
 **Serialization:** All components return `UINode` objects. Call `.to_dict()` to get JSON for Panel rendering.
 
 > **Module breakdown:** `layout.py` (8), `display.py` (9), `interactive.py` (7), `input_components.py` (11), `data.py` (11), `feedback.py` (5), `graph.py` (1 — `ui.Graph`), actions (4 — `Call`, `Navigate`, `Send`, `Open`). All imported via `from imperal_sdk import ui` — module split is internal only.
+>
+> **v1.5.16 (2026-04-20) — Stack.wrap is now tri-state.** `ui.Stack(wrap=False)` on a horizontal Stack now correctly emits the prop so the Panel-side auto-wrap default can be opted out of. Default behaviour (no `wrap=` passed → Panel picks direction-specific default) is unchanged from the extension author's perspective. See CHANGELOG.md for the full rule. Test coverage: `tests/test_ui.py::TestStack::test_wrap_default_not_emitted` + `::test_wrap_false_explicit_emitted`.
+>
+> **⚡ Session 33 (2026-04-19 → 2026-04-20) — Panel automatic styling shipped.** Extension code is UNCHANGED, but the Panel now handles every visual concern automatically:
+> - **Tailwind `@theme` colour remap** in `tokens.css` — every hardcoded `bg-gray-*` / `bg-blue-*` / `text-*` class across Panel + D*-components now routes through `--imp-color-*` agency-overridable tokens. Theme toggle + `PUT /v1/agencies/{id}/theme` cascade to entire Panel + extensions in one stroke. Zero extension changes required.
+> - **Container-level padding philosophy.** `ExtensionShell` wraps pane content in `ext-pane` utility (token-driven padding + gap). Whether you emit `ui.Page(...)` or bare `ui.List(...)` / `ui.Text(...)`, you get Imperal-standard outer padding + vertical rhythm automatically — no flush-to-edges, no extension code.
+> - **DPage / DSection / DCard / DText / DList / DHeader / DDivider refactored** — leaf components are naked (no inner `px-3`). Container components own spacing. Eliminates the old double-padding bug where Card + inner Text both added their own inset.
+> - **Horizontal `ui.Stack(direction="h")` auto-wraps by default** — a toolbar with 6 buttons in a narrow pane now wraps to next row instead of overflowing. Opt out with `wrap=False` only when you know the layout stays narrow.
+> - **`min-width: 0 + max-width: 100%` containment** on every pane child — long text/urls/codes truncate or wrap gracefully, never bleed outside pane.
+> - **~40 element-level sizing tokens** in `tokens.css` (button/card/input/modal/pill/menu/tooltip/row/field/focus-ring) + matching `@utility` wrappers (`btn-pad-md`, `btn-shape`, `card-pad`, `modal-shape`, etc.). One file tunes every UI element across the whole platform.
+> - **ESLint wall** (`no-restricted-syntax`) blocks hardcoded Tailwind colour scales in new Panel code. Extension SDK code (Python) unaffected — extensions never write Tailwind.
+> - **Authority hierarchy enforced** — Level 4 Imperal team (full design system access) > Level 3 Agency owner (JSON theme, 26 whitelisted colour keys + density + radius) > Level 2 Extension developer (semantic variants only) > Level 1 End user (light/dark/auto toggle). See [`docs/imperal-cloud/design-system.md`](../../docs/imperal-cloud/design-system.md) for decision tree + Tailwind remap complete mapping + escape hatches.
+>
+> **v1.5.15 (2026-04-19, session 32/33) — per-agency theming + visual regression infrastructure:**
+> - `ui.theme(ctx)` accessor — returns `AgencyTheme` frozen dataclass. Most extensions do NOT need to read theme directly; emit `variant="primary"` and Panel renders with correct agency colour. Use `ui.theme(ctx)` only for dynamic colour work (chart series beyond defaults, SVG brand graphics).
+> - `Context.agency_id: str | None` + `Context.agency_theme: dict | None` fields.
+> - Auth Gateway `PUT /v1/agencies/{id}/theme` endpoint + Pydantic validation (26 whitelisted colour keys, WCAG AA contrast enforcement on primary × surface-0 in both modes).
+> - Panel SSR cascades agency theme via `<ThemeRoot>` — CSS custom properties on root element, Tailwind classes read them transparently.
+> - Playwright visual regression suite: 8 surfaces × 3 theme conditions (default-light, default-dark, test-federal) = 24 baselines. Hardcoded colour regressions produce visible diffs under `test-federal` theme (deep-forest primary, yellow accent, red danger — deliberately high-contrast).
+> - `IMPERAL_ALLOW_THEME_OVERRIDE` env flag + `imp_agency_override` cookie for controlled testing on non-prod environments.
 >
 > **v1.5.7 (2026-04-18, session 30) — DUI additions + live-update chain repaired:**
 > - `ui.Progress(color=...)` — blue/green/red/yellow/purple for semantic status bars.

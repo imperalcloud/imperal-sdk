@@ -23,6 +23,21 @@ class TestStack:
         assert d["props"]["direction"] == "h"
         assert d["props"]["wrap"] is True
 
+    def test_wrap_default_not_emitted(self):
+        # wrap=None (default) must not emit the prop, so Panel can apply its
+        # direction-specific default (horizontal auto-wraps since session 33).
+        node = ui.Stack([], direction="h")
+        d = node.to_dict()
+        assert "wrap" not in d["props"]
+
+    def test_wrap_false_explicit_emitted(self):
+        # wrap=False MUST be emitted so a horizontal Stack can opt out of the
+        # Panel-side auto-wrap default. Regression guard for SDK < 1.5.16 where
+        # False was silently dropped and the opt-out was unreachable.
+        node = ui.Stack([], direction="h", wrap=False)
+        d = node.to_dict()
+        assert d["props"]["wrap"] is False
+
     def test_align_justify(self):
         node = ui.Stack([], align="center", justify="between")
         d = node.to_dict()

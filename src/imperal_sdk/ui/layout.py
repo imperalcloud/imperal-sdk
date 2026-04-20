@@ -9,7 +9,7 @@ def Stack(
     children: list[UINode],
     direction: str = "v",
     gap: int = 3,
-    wrap: bool = False,
+    wrap: bool | None = None,
     align: str = "",
     justify: str = "",
     sticky: bool = False,
@@ -17,12 +17,16 @@ def Stack(
 ) -> UINode:
     """Flex layout — vertical or horizontal.
 
-    wrap: flex-wrap. align/justify: flex alignment.
+    wrap: tri-state flex-wrap. ``None`` (default) → emit no prop, Panel applies
+    direction-specific default (horizontal auto-wraps, vertical does not).
+    ``True`` / ``False`` → explicit override, Panel respects as-is. Pass
+    ``wrap=False`` on a horizontal Stack to opt out of auto-wrap.
+    align/justify: flex alignment.
     sticky: pin to top of scroll container (useful for toolbars).
     className: custom CSS classes (overrides default system padding).
     """
     props: dict[str, Any] = {"children": children, "direction": direction, "gap": gap}
-    if wrap: props["wrap"] = True
+    if wrap is not None: props["wrap"] = wrap
     if align: props["align"] = align
     if justify: props["justify"] = justify
     if sticky: props["sticky"] = True

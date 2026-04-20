@@ -1,7 +1,7 @@
 # Extension Development Guidelines
 
-**SDK version:** imperal-sdk 1.5.8
-**Last updated:** 2026-04-18 (v1.5.8 session 30: `NotifyProtocol` drift fix — `ctx.notify(...)` preferred, `ctx.notify.send(...)` alias, both work in Protocol + concrete `NotifyClient` + `MockNotify`. Webhook URL corrected to `/v1/ext/{app_id}/webhook/{path}` (was mis-documented as `/webhooks/{app_id}/{path}`). Kernel `@ext.schedule` dispatcher shipped this session — schedules declared before 2026-04-18 were silently ignored; now actually fire via Redis-dedup cron loop. SDK UI additions: `ui.Progress(color=)`, `ui.Chart(colors=, y2_keys=)`, `ui.TagInput(delimiters=, validate=, validate_message=)`. `DToggle`/`DSelect` register their `initValue` with `FormContext` on mount (GAP-2). Fast-RPC Redis-Streams transport for `/call` (388ms→3ms) — extension author code unchanged. Operational runbook: [`fast-rpc.md`](../fast-rpc.md). v1.5.7: PEP 563 validator V5/V6 fix + scope declaration tightening. v1.5.6: CRITICAL FC.result event-publishing fix. v1.5.5: `ui.Graph` Cytoscape. v1.5.4: `@ext.tray()` + OS identity. Session 20 baseline.)
+**SDK version:** imperal-sdk 1.5.16
+**Last updated:** 2026-04-20 (session 33 — Panel automatic visual styling: Tailwind `@theme` colour remap + container-level padding philosophy + ext-pane padding on ExtensionShell + horizontal Stack auto-wrap + element-level sizing tokens + ESLint wall blocking hardcoded Tailwind scales in Panel code. v1.5.16: `ui.Stack(wrap=...)` now tri-state — `wrap=False` on horizontal Stacks correctly opts out of Panel auto-wrap. Extension authors: see Rule 19 below. Emit semantic intent via `variant=`/`color=` — never hardcode colours or Tailwind classes. v1.5.15 ships `ui.theme(ctx)` accessor + `Context.agency_theme` + Auth GW `PUT /v1/agencies/{id}/theme` with Pydantic WCAG AA validation. Earlier: v1.5.8 session 30 `NotifyProtocol` + webhook URL + `@ext.schedule` dispatcher + fast-RPC Redis-Streams `/call` (388ms→3ms). v1.5.7 PEP 563 validator fix. v1.5.6 CRITICAL FC.result event-publishing fix. v1.5.5 `ui.Graph` Cytoscape. v1.5.4 `@ext.tray()` + OS identity. Session 20 baseline.)
 
 > **v1.5.6 — critical event-publishing fix.** `@chat.function(action_type="write"|"destructive", event="X")` now actually publishes the event through the kernel. Pre-v1.5.6 `ChatExtension._make_chat_result` built `FunctionCall` without the `result` field, so the kernel's event-publishing check at `extension_runner.py` Step 10b never fired. Any extension relying on sidebar `refresh="on_event:X"` or automation rules triggered by `event_type` was silently broken. Upgrading to v1.5.6 requires a companion kernel patch (`extension_runner.py` must hydrate dict-form `ActionResult` via `ActionResult.from_dict()` after Temporal transport). Both fixes are already deployed on platform workers; third-party extension developers should pin `imperal-sdk>=1.5.6`.
 
@@ -496,6 +496,59 @@ async def sync_to_notes(ctx, params: SyncToNotesParams):
 ```
 
 See [SDK Clients — ctx.extensions](clients.md#12-ctxextensions----extensionsclient) for full API.
+
+### 19. UI Styling — Emit Semantic Intent, NEVER Hardcode Visuals
+
+**Rule, enforced platform-wide as of session 33 (2026-04-20):**
+Your extension emits **semantic UI intent** via the `ui.*` API. The Panel handles every visual concern — colours, padding, spacing, borders, dark/light mode, agency-specific theming, responsive wrap. Your extension code should have **ZERO styling knowledge**.
+
+```python
+# ✅ Good — semantic intent
+ui.Button("Save", on_click=ui.Call("save"), variant="primary")
+ui.Pill(text="Active", color="success")
+ui.Card(title="Report", content=ui.Text("Run complete."))
+ui.Stack(direction="h", children=[btn1, btn2, btn3])   # auto-wraps on narrow panes
+
+# ❌ Bad — styling in extension code
+ui.Text("...", className="bg-blue-500 px-4 py-2 rounded-md")   # DON'T
+ui.Card("...", style={"backgroundColor": "#2563eb"})            # DON'T
+ui.Button("...", className="bg-red-600 text-white")             # DON'T — use variant="danger"
+```
+
+**What the Panel guarantees for every extension:**
+
+| Guarantee | Driven by |
+|-----------|-----------|
+| Consistent outer padding around pane content | `ExtensionShell` `ext-pane` utility (token-driven) |
+| Consistent vertical rhythm between siblings | `--imp-page-gap` cascade |
+| Agency colour theming across every surface | `agencies.theme` JSON → `--imp-color-*` tokens → Tailwind remap → every class |
+| Dark / light mode toggle | `data-theme="dark"` on `<html>` flips surface/text tokens |
+| Auto-wrap for horizontal stacks on narrow panes | `flex-wrap` default on `ui.Stack(direction="h")` |
+| No overflow bleeding outside pane | `min-width: 0 + max-width: 100%` on every pane child |
+
+**Supported semantic variants** (use these — they cascade to agency theme):
+
+- `ui.Button(variant=...)` → `primary`, `secondary`, `danger`, `ghost`
+- `ui.Pill(color=...)` / `ui.Badge(color=...)` → `primary`, `accent`, `success`, `warning`, `danger`, `info`, `neutral`
+- `ui.Progress(color=...)` → `blue`, `green`, `red`, `yellow`, `purple`
+- `ui.Text(variant=...)` → `heading`, `subheading`, `body`, `caption`, `code`, `label`
+- `ui.Surface(tier=...)` → `0` app / `1` panel / `2` card / `3` raised
+
+**If you truly need a dynamic colour** (chart series beyond the 8 preset colours, an SVG brand graphic, a deterministic avatar hash palette), use `ui.theme(ctx)` to read the current agency's tokens:
+
+```python
+from imperal_sdk import ui
+theme = ui.theme(ctx)
+primary_light = theme.colors.get("primary", {}).get("light") or "#2563eb"
+```
+
+But this is rare. 99 % of extension UI should just emit variants.
+
+**ESLint on the Panel side** blocks hardcoded Tailwind colour scales in new Panel code. If your extension also ships React components rendered directly in the Panel (e.g. via `ext_register_components.json` — not the DUI JSON path), those components must pass Panel's ESLint wall.
+
+**Agency-visible proof:** the Panel's Playwright visual regression suite captures 8 critical surfaces under a `test-federal` agency fixture (deep-forest primary, yellow accent, red-800 danger — deliberately distant from Imperal defaults). Any surface that hardcoded a colour produces a diff. Federal customers get a canary for every agency-theme change.
+
+See [`docs/imperal-cloud/design-system.md`](../../docs/imperal-cloud/design-system.md) for the full decision tree, element-level tokens reference, escape hatches, and Tailwind remap complete mapping.
 
 ---
 

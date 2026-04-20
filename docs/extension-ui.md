@@ -158,6 +158,57 @@ All AI responses render as Markdown via `MarkdownMessage` component (`react-mark
 
 The AI sees the context from both panels. When a user selects a case in the left sidebar, the chat and right panel update. When the AI produces analysis, the right panel shows it. The three columns are connected, not independent.
 
+### 6. Automatic spacing + agency theming — you never style colours or paddings
+
+**As of 2026-04-20 (session 33), the Panel handles every visual concern automatically.** Extension authors compose `ui.Page`, `ui.Card`, `ui.Stack`, `ui.Text`, `ui.List`, `ui.Button` — the Panel renders them with Imperal-standard spacing, agency-themed colours, and responsive layout. You should NEVER:
+
+- Pass `className` with Tailwind colour scales (`bg-gray-800`, `text-blue-400`, etc.)
+- Pass `style` with hex values or hardcoded pixel paddings
+- Worry about "will this fit in a narrow panel?" — the Panel auto-wraps horizontal stacks
+
+**What the Panel guarantees:**
+
+| Guarantee | How |
+|-----------|-----|
+| **Consistent outer padding** around every extension's content | `ExtensionShell` wraps left/right panes in `ext-pane` utility (padding + gap, token-driven) — applies regardless of whether you wrap your content in `ui.Page` |
+| **Consistent vertical rhythm** between siblings in a pane | `--imp-page-gap` (24px at default density) enforced by shell |
+| **Agency colours cascade** to every `bg-primary`, `text-on-primary`, `bg-danger`, etc. | CSS custom properties driven by `agencies.theme` JSON |
+| **Dark/light theme toggle** works panel-wide | `data-theme="dark"` attribute on `<html>` flips surface/text tokens |
+| **Horizontal content never overflows** narrow panes | `ui.Stack(direction="h")` auto-wraps by default (flex-wrap). Opt out with `wrap=False` only when you know the layout stays narrow. |
+| **Long text never bleeds out of cards/lists** | `min-w-0 max-w-100%` applied automatically on pane children |
+
+**Emit semantic intent, not styling:**
+
+```python
+# Good — Panel handles colour, padding, wrap
+ui.Page(
+  title="Dashboard",
+  children=[
+    ui.Stack(direction="h", children=[
+      ui.Button("Refresh", on_click=ui.Call("refresh"), variant="primary"),
+      ui.Button("Export",  on_click=ui.Call("export"),  variant="secondary"),
+    ]),
+    ui.Card(title="Metrics", content=ui.Text("3 active, 2 pending")),
+  ],
+)
+
+# Bad — don't pass Tailwind classes or hex values
+ui.Text("...", className="text-blue-400 px-3")    # ❌
+ui.Card("...", style={"background": "#1e3a8a"})   # ❌
+```
+
+**Supported semantic variants** (propagate to agency theme):
+
+| Component | Variants |
+|-----------|----------|
+| `ui.Button(variant=...)` | `primary`, `secondary`, `danger`, `ghost` |
+| `ui.Pill(color=...)` / `ui.Badge(color=...)` | `primary`, `accent`, `success`, `warning`, `danger`, `info`, `neutral` |
+| `ui.Progress(color=...)` | `blue`, `green`, `red`, `yellow`, `purple` |
+| `ui.Text(variant=...)` | `heading`, `subheading`, `body`, `caption`, `code`, `label` |
+| `ui.Surface(tier=...)` | `0` (app), `1` (panel), `2` (card), `3` (raised) |
+
+See [`design-system.md`](../../docs/imperal-cloud/design-system.md) for the full token reference and component decision tree.
+
 ---
 
 ## Shared Components

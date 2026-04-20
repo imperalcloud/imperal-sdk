@@ -2,6 +2,42 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.16 (2026-04-20)
+
+### Fix: `ui.Stack(wrap=...)` is now tri-state — opt-out of Panel auto-wrap is reachable
+
+The Panel-side DUI renderer started auto-wrapping horizontal `Stack` children in session 33 (2026-04-19) to prevent toolbar overflow on narrow extension panes. The rule on the Panel is `isHorizontal ? (wrap !== false) : (wrap === true)` — horizontal Stacks wrap **unless** `wrap` is explicitly `false`.
+
+In SDK ≤ 1.5.15, `Stack(wrap=False)` silently dropped the prop (only `True` was emitted), so a developer passing `wrap=False` on a horizontal Stack could not reach the opt-out — the rendered Stack still wrapped. v1.5.16 makes `wrap` tri-state:
+
+```python
+# default — Panel applies direction-specific default
+ui.Stack([...], direction="h")             # wraps (Panel default)
+ui.Stack([...], direction="v")             # does not wrap (Panel default)
+
+# explicit — Panel respects as-is
+ui.Stack([...], direction="h", wrap=False) # does NOT wrap (opt-out now reachable)
+ui.Stack([...], direction="v", wrap=True)  # wraps
+```
+
+**Signature change:** `wrap: bool = False` → `wrap: bool | None = None`. The default behaviour (no explicit wrap → Panel picks) is unchanged from the caller's perspective — only the opt-out path is newly reachable. No extension code needs to change unless it was passing `wrap=False` on horizontal Stacks expecting it to take effect.
+
+### Docs — session 33 DUI design-system alignment
+
+- `docs/extension-ui.md` — Principle 6 added: Automatic spacing + agency theming. Guarantee table, semantic variant reference, and examples showing when to rely on container-owned padding vs emitting custom spacing.
+- `docs/ui-components.md` — version bumped to v1.5.16, session-33 changelog block documenting the Tailwind `@theme inline` remap, container-level padding philosophy (DPage owns page padding, DSection inherits, DCard owns its own), the horizontal Stack auto-wrap default, element-level sizing tokens in `tokens.css`, the Panel ESLint wall forbidding hardcoded Tailwind scales, and the L1–L4 authority hierarchy (primitives > declarative > extensions > pages).
+- `docs/extension-guidelines.md` — Rule 19 added: **UI Styling — Emit Semantic Intent, NEVER Hardcode Visuals**. Extensions must use semantic variants (`variant="primary"`, `tone="danger"`) and the declarative layout primitives; hardcoded Tailwind colours and `style={}` are forbidden. Guarantee table explains what the renderer provides automatically (padding, gaps, agency theming, dark-mode, WCAG AA). `ui.theme(ctx)` remains the sole escape hatch for legitimate custom rendering.
+
+### Test coverage
+
+Two new regression guards in `tests/test_ui.py::TestStack`:
+- `test_wrap_default_not_emitted` — `wrap=None` default must not emit the prop (Panel picks direction-specific default).
+- `test_wrap_false_explicit_emitted` — `wrap=False` MUST be emitted so horizontal Stacks can opt out of auto-wrap.
+
+### See also
+
+Authoritative DUI design-system reference: [`docs/imperal-cloud/design-system.md`](https://github.com/imperalcloud/imperal-sdk) in the internal infra repo. Panel-side CSS vars: `/opt/imperal-panel/src/styles/tokens.css`. Session 33 rollout summary: `docs/imperal-cloud/dui-design-tokens.md`.
+
 ## 1.5.15 (2026-04-19)
 
 ### New: `ui.theme(ctx)` — typed accessor for agency white-label theme
