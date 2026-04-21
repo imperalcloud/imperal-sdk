@@ -190,9 +190,17 @@ When confirmation is triggered, the kernel intercepts the call and presents a co
 
 **Automation bypass:** Automations (`_is_automation=True`) ALWAYS skip confirmation — there is no user to confirm. The confirmation flow is user-only.
 
-**Write blocking (single dispatch only):** When the Hub classifies a message as `intent_type=read` in single dispatch mode, the kernel blocks functions with `action_type="write"` or `"destructive"`. The extension receives a KAV rejection. This prevents accidental destructive actions when the user is only browsing data.
+**Write blocking (single dispatch only):** When the kernel's Intent Classifier (session 41, ICNLI v7 P7) sets `intent.action_type="read"` in single dispatch mode, the kernel blocks functions with `action_type="write"` or `"destructive"`. The extension receives a KAV rejection. This prevents accidental destructive actions when the user is only browsing data.
 
-**Intent guard bypass:** Chain mode (`_intent_type="chain"`) and automation mode (`_intent_type="automation"`) bypass the intent guard entirely. In these modes, the function's `action_type` from the `@chat.function` decorator is the authoritative source of truth -- the kernel trusts it without LLM intent verification. Only single dispatch checks intent via Hub LLM routing.
+**Intent guard bypass:** Chain mode (`_intent_type="chain"` on `ctx`) and automation mode (`_intent_type="automation"` on `ctx`) bypass the intent guard entirely. In these modes, the function's `action_type` from the `@chat.function` decorator is the authoritative source of truth -- the kernel trusts it without per-call LLM intent verification. The SDK-facing attribute `ctx._intent_type` is populated by the kernel from its authoritative `IntentClassification` record:
+
+| Classifier signal | `ctx._intent_type` value | SDK guard behaviour |
+|---|---|---|
+| `is_system_actor=True` (automation / mcp / system) | `"automation"` | bypass, dispatch proceeds |
+| `chain_mode=True` (kernel-side chain loop) | `"chain"` | bypass, dispatch proceeds |
+| else -- user turn | `intent.action_type` in {`"read"`, `"write"`, `"destructive"`} | guard enforces contract match against `@chat.function(action_type=...)` |
+
+**For extension authors -- nothing changes in your code.** Keep declaring `action_type` on each `@chat.function`; keep reading `ctx._intent_type` if you need to branch on it (rare). The session 41 rework is entirely kernel-side: it replaces the pre-session-41 trio of conflicting intent sources (keyword_router substring matching, `kctx.intent_type` default, dict-passed bypass flags) with a single upfront structured-output LLM call. Your `action_type` decorator remains the contract you own; the kernel now has a reliable signal to compare it against. See `docs/imperal-cloud/intent-classifier.md` in the platform docs for the kernel-side spec.
 
 ### 5b. ActionResult Return Pattern
 

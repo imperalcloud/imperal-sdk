@@ -668,7 +668,11 @@ class LLMProvider:
                 kwargs["tool_choice"] = oai_tc
 
         if cfg.provider == "openai_compatible":
-            kwargs["extra_body"] = {"think": False}
+            # See kernel llm/provider.py — dual-param thinking disable for Ollama.
+            # think=False is Ollama native /api/chat; ignored on /v1/chat/completions.
+            # reasoning_effort="none" is OpenAI-standard, supported by Ollama >=0.6
+            # via /v1 (see ollama/ollama#14820). Safe across real-OpenAI o1/o3.
+            kwargs["extra_body"] = {"think": False, "reasoning_effort": "none"}
         resp = await client.chat.completions.create(**kwargs)
         return MessageAdapter.from_openai_response(resp, cfg.model)
 

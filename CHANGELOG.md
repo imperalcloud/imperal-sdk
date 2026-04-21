@@ -2,6 +2,29 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+> ## Platform ecosystem note — 2026-04-21 (session 41)
+>
+> The kernel-side Intent Classifier rework (ICNLI v7 P7) ships in the kernel, not the SDK.
+> SDK 1.5.18 remains fully compatible and requires **zero changes** for extension authors:
+>
+> - `ctx._intent_type` contract is unchanged. Kernel now populates it from an authoritative
+>   `IntentClassification` record produced by a single upfront structured-output LLM call per
+>   turn. Values: `"read"`, `"write"`, `"destructive"`, `"automation"` (system-actor bypass),
+>   `"chain"` (chain mode bypass).
+> - `imperal_sdk/chat/guards.py:44` reads `getattr(ctx, "_intent_type", None)` as before.
+> - `imperal_sdk/chat/refusal.py` (new in 1.5.18) `emit_refusal` tool is **complementary** to
+>   the kernel's `IntentClassification.refusal_context` field: SDK's `emit_refusal` is about
+>   **the assistant's output** ("I cannot do X because Y"); classifier's `refusal_context`
+>   is about **the user's own message phrasing** (whether their message reads as a refusal
+>   toward the assistant). The two coexist — both legitimate and independent.
+> - Kernel-side delete: `hub/keyword_router.py` + `responses/structural_guard.py` removed.
+>   No extension imports reach into those paths.
+>
+> Canonical kernel spec: `docs/imperal-cloud/intent-classifier.md` in the WebHostMost
+> platform docs (not shipped with the SDK repo).
+
+---
+
 ## 1.5.18 (2026-04-21)
 
 ### New: ICNLI v7 TASK-11 — SessionMemory slice reader + emit_refusal primitive
