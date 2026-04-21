@@ -1,11 +1,22 @@
 name: Publish to PyPI
 
 on:
+  # Preferred path: maintainer cuts a GitHub Release from the tag. Release
+  # notes go out with the artifact.
   release:
     types: [published]
 
+  # Automation path: pushing a vX.Y.Z tag also builds and publishes. Lets
+  # us release headless (e.g. from a deploy host without gh CLI). Trusted
+  # Publisher config on PyPI binds to this workflow filename, not the
+  # trigger event, so adding a second trigger is safe.
+  push:
+    tags:
+      - 'v*'
+
 permissions:
-  id-token: write
+  id-token: write   # required for PyPI Trusted Publisher OIDC
+  contents: write   # required if we end up creating a Release
 
 jobs:
   publish:
@@ -29,3 +40,46 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # When a tag push triggered us (and there is no Release yet), also
+  # create the GitHub Release so the version page is populated. No-op
+  # when the trigger was already release:published.
+  ensure-release:
+    name: Ensure GitHub Release exists
+    needs: publish
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract CHANGELOG section for this version
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          awk -v ver="$VER" '
+            BEGIN { out=0 }
+            /^## / {
+              if (out==1) exit
+              if ($0 ~ "^## "ver"\\b") { out=1; print; next }
+            }
+            out==1 { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "Release ${TAG}" > /tmp/release-notes.md
+          fi
+          echo "body_path=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: imperal-sdk ${{ github.ref_name }}
+          body_path: ${{ steps.notes.outputs.body_path }}
+          draft: false
+          prerelease: false
+          make_latest: "true"
