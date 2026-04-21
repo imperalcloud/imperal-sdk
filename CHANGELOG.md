@@ -2,26 +2,44 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-> ## Platform ecosystem note — 2026-04-21 (session 41)
+> ## Platform ecosystem note — 2026-04-21 (session 41 final)
 >
 > The kernel-side Intent Classifier rework (ICNLI v7 P7) ships in the kernel, not the SDK.
-> SDK 1.5.18 remains fully compatible and requires **zero changes** for extension authors:
+> SDK 1.5.18 remains fully compatible; session 41 PM post-deploy added THREE BYOLLM-operational
+> fixes to the SDK source that will ship with the next SDK release (candidate v1.5.19):
 >
-> - `ctx._intent_type` contract is unchanged. Kernel now populates it from an authoritative
->   `IntentClassification` record produced by a single upfront structured-output LLM call per
->   turn. Values: `"read"`, `"write"`, `"destructive"`, `"automation"` (system-actor bypass),
->   `"chain"` (chain mode bypass).
+> 1. **`runtime/llm_provider.py::_call_openai`** — added `reasoning_effort: "none"` to `extra_body`
+>    for `openai_compatible` providers (commit `80bfaeb`). Ollama `/v1/chat/completions` ignores
+>    native `think: false`; reasoning_effort is the OpenAI-standard key it honours
+>    (`ollama/ollama#14820`). Stops reasoning-enabled models (qwen3.*, Nemotron) from emitting
+>    `content=""` on classifier-shape prompts. Measured 2.9s → 0.7s on dorif's prod endpoint.
+>
+> 2. **`runtime/llm_provider.py::_create_client`** — explicit `httpx.Timeout(300.0, connect=10.0)` on
+>    `AsyncOpenAI` for `openai_compatible` providers (commit `244196c`). Default transport per-read
+>    idle ~30s was triggering false `Connection error` retries on multi-round tool-use loops
+>    against heavy local models (27B+ on DGX-class boxes). Scoped ONLY to openai_compatible —
+>    real OpenAI / Anthropic clients stay on library defaults.
+>
+> 3. **`chat/handler.py`** exception handler — preserves successfully-executed tool calls when the
+>    final narration round raises (commit `fe4df7c`, **I-BYOLLM-PARTIAL-RECOVERY**). Previously
+>    `handled=False` + `Error: ...` response → kernel emitted "No extension handled" discarding the
+>    data. Now: if `_functions_called` has successful non-intercepted entries, return
+>    `handled=True` with an honest partial-result message naming the tools that did run.
+>
+> SDK 1.5.18 callers (extension authors) see **zero contract changes**:
+>
+> - `ctx._intent_type` contract is unchanged. Kernel populates it from classifier output
+>   (I-INTENT-ONE-SIGNAL). Values: `"read"`, `"write"`, `"destructive"`, `"automation"`
+>   (system-actor bypass), `"chain"` (chain mode bypass).
 > - `imperal_sdk/chat/guards.py:44` reads `getattr(ctx, "_intent_type", None)` as before.
-> - `imperal_sdk/chat/refusal.py` (new in 1.5.18) `emit_refusal` tool is **complementary** to
->   the kernel's `IntentClassification.refusal_context` field: SDK's `emit_refusal` is about
->   **the assistant's output** ("I cannot do X because Y"); classifier's `refusal_context`
->   is about **the user's own message phrasing** (whether their message reads as a refusal
->   toward the assistant). The two coexist — both legitimate and independent.
-> - Kernel-side delete: `hub/keyword_router.py` + `responses/structural_guard.py` removed.
->   No extension imports reach into those paths.
+> - `imperal_sdk/chat/refusal.py` `emit_refusal` tool is **complementary** to the kernel's
+>   `IntentClassification.refusal_context` field: SDK's `emit_refusal` is about
+>   **the assistant's output** ("I cannot do X because Y"); classifier's `refusal_context` is
+>   about **the user's own message phrasing** (whether their message reads as a refusal).
 >
-> Canonical kernel spec: `docs/imperal-cloud/intent-classifier.md` in the WebHostMost
-> platform docs (not shipped with the SDK repo).
+> Canonical kernel spec: `docs/imperal-cloud/intent-classifier.md`. Operational guide for BYOLLM
+> deployments: `docs/imperal-cloud/byollm-operational-guide.md`. Both in the WebHostMost platform
+> docs (not shipped with the SDK repo).
 
 ---
 
