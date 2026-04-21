@@ -712,6 +712,16 @@ class LLMProvider:
         }
         if base_url:
             kwargs["base_url"] = base_url
+        # Explicit long timeout for openai_compatible (local BYOLLM like Ollama,
+        # vLLM, llama.cpp) — OpenAI SDK default httpx Timeout(600s, connect=5s)
+        # is theoretically enough, but intermediate per-read idle timeouts on
+        # the transport (seen at ~30s on AsyncOpenAI default transport with
+        # Ollama's partial-stream behaviour) caused false Connection error
+        # retries on multi-round tool-use loops against heavy 27B+ models.
+        # 300s read/write/connect covers DGX-class inference for large context.
+        if cfg.provider == "openai_compatible":
+            import httpx as _httpx_cli
+            kwargs["timeout"] = _httpx_cli.Timeout(300.0, connect=10.0)
         return AsyncOpenAI(**kwargs)
 
     # ------------------------------------------------------------------
