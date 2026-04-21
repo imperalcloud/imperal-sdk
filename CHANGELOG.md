@@ -2,6 +2,60 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.18 (2026-04-21)
+
+### New: ICNLI v7 TASK-11 — SessionMemory slice reader + emit_refusal primitive
+
+Two related v7 features that close the extension-consumer side of the TASK-11 design. Kernel-side injection was already in production (`imperal_kernel/pipeline/extension_runner.py:362` pushes `_session_memory_slice` into each extension's skeleton); v1.5.18 adds the SDK side that reads it + a new refusal primitive.
+
+**`chat/extension.py` — SM slice reader:**
+
+In `ChatExtension._handle`, before dispatching to `handle_message`, the SDK now propagates the kernel-injected `_session_memory_slice` from `ctx.skeleton` to `ctx.session_memory_slice` as a typed attribute. Extensions opting into cross-turn awareness can consume:
+
+```python
+async def my_tool(ctx, ...):
+    sm = getattr(ctx, "session_memory_slice", None) or {}
+    history = sm.get("history_for_this_app", "")
+    cross_ext = sm.get("cross_ext_summary", "")
+    # Feed either into the extension's internal LLM prompt if it runs one
+```
+
+Shape (populated by kernel):
+- `history_for_this_app`: str — last ≤5 turns' tool-call summaries for THIS extension (`fn_name (ok/failed) — data_summary[:100]`)
+- `cross_ext_summary`: str — last ≤3 turns' cross-extension summary
+
+Falls back silently (no `session_memory_slice` attribute) when kernel has not injected it — backward compatible with pre-v7 kernels.
+
+**`chat/refusal.py` — `emit_refusal` primitive (NEW module):**
+
+Structured tool an extension's internal LLM can emit when it decides it cannot complete the user's request. Kernel receives a typed `Refusal` (preferred over the historical free-text "в этом режиме ты не можешь..." pattern) and renders it via a dedicated Panel template. Exported surface:
+
+```python
+from imperal_sdk.chat.refusal import EMIT_REFUSAL_TOOL, RefusalEmission, parse_refusal_tool_use
+
+# EMIT_REFUSAL_TOOL — Anthropic tool_use spec dict. Register alongside your
+# extension's real tools when constructing the tool list for the LLM turn.
+# Required inputs: reason (enum: no_scope | missing_params | out_of_policy
+# | upstream_error | other), user_message (str). Optional: next_steps
+# (list[str]).
+
+# parse_refusal_tool_use(tool_input_dict) -> RefusalEmission
+# Frozen dataclass — safe to pass to kernel delivery layer.
+```
+
+Feature is opt-in at the extension level; kernel handles emitted refusals when the extension returns them in tool_use. No refactor required for extensions that don't surface refusals.
+
+### Minimal tests
+- `tests/test_v7_emit_refusal.py` — schema shape + parse round-trip (2 tests).
+- Integration coverage deferred — no extension consumes `emit_refusal` yet. See cross-ref below.
+
+### Cross-reference
+- Kernel side (already prod): `imperal_kernel/pipeline/extension_runner.py:362`
+- Design / rationale: `docs/imperal-cloud/icnli-v7-architecture.md`
+- WIP preservation history: branch `feat/icnli-v7-task11-sm-slice` (commit `dfebe07`, session 40 preservation)
+
+---
+
 ## 1.5.17 (2026-04-21)
 
 ### New: Markdown rendering hygiene (Layer 1 prompt + Layer 2 normalizer)
