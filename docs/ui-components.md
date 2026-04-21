@@ -1,6 +1,6 @@
 # Imperal SDK — Declarative UI Components Reference
 
-**Version:** v1.5.16 | **Components:** 57 across 8 modules
+**Version:** v1.5.17 | **Components:** 57 across 8 modules
 **Import:** `from imperal_sdk import ui`
 **Serialization:** All components return `UINode` objects. Call `.to_dict()` to get JSON for Panel rendering.
 
