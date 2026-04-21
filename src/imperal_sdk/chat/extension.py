@@ -202,4 +202,10 @@ class ChatExtension:
         return build_messages(history, message, context_window, keep_recent)
 
     async def _handle(self, ctx: _Context, message: str = "", **kwargs) -> dict:
+        # ICNLI v7 — propagate SM slice from kernel-supplied skeleton to ctx attr.
+        try:
+            if isinstance(getattr(ctx, "skeleton", None), dict) and "_session_memory_slice" in ctx.skeleton:
+                setattr(ctx, "session_memory_slice", ctx.skeleton["_session_memory_slice"])
+        except Exception:
+            pass
         return await handle_message(self, ctx, message, **kwargs)
