@@ -2,44 +2,85 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-> ## Platform ecosystem note — 2026-04-21 (session 41 final)
->
-> The kernel-side Intent Classifier rework (ICNLI v7 P7) ships in the kernel, not the SDK.
-> SDK 1.5.18 remains fully compatible; session 41 PM post-deploy added THREE BYOLLM-operational
-> fixes to the SDK source that will ship with the next SDK release (candidate v1.5.19):
->
-> 1. **`runtime/llm_provider.py::_call_openai`** — added `reasoning_effort: "none"` to `extra_body`
->    for `openai_compatible` providers (commit `80bfaeb`). Ollama `/v1/chat/completions` ignores
->    native `think: false`; reasoning_effort is the OpenAI-standard key it honours
->    (`ollama/ollama#14820`). Stops reasoning-enabled models (qwen3.*, Nemotron) from emitting
->    `content=""` on classifier-shape prompts. Measured 2.9s → 0.7s on dorif's prod endpoint.
->
-> 2. **`runtime/llm_provider.py::_create_client`** — explicit `httpx.Timeout(300.0, connect=10.0)` on
->    `AsyncOpenAI` for `openai_compatible` providers (commit `244196c`). Default transport per-read
->    idle ~30s was triggering false `Connection error` retries on multi-round tool-use loops
->    against heavy local models (27B+ on DGX-class boxes). Scoped ONLY to openai_compatible —
->    real OpenAI / Anthropic clients stay on library defaults.
->
-> 3. **`chat/handler.py`** exception handler — preserves successfully-executed tool calls when the
->    final narration round raises (commit `fe4df7c`, **I-BYOLLM-PARTIAL-RECOVERY**). Previously
->    `handled=False` + `Error: ...` response → kernel emitted "No extension handled" discarding the
->    data. Now: if `_functions_called` has successful non-intercepted entries, return
->    `handled=True` with an honest partial-result message naming the tools that did run.
->
-> SDK 1.5.18 callers (extension authors) see **zero contract changes**:
->
-> - `ctx._intent_type` contract is unchanged. Kernel populates it from classifier output
->   (I-INTENT-ONE-SIGNAL). Values: `"read"`, `"write"`, `"destructive"`, `"automation"`
->   (system-actor bypass), `"chain"` (chain mode bypass).
-> - `imperal_sdk/chat/guards.py:44` reads `getattr(ctx, "_intent_type", None)` as before.
-> - `imperal_sdk/chat/refusal.py` `emit_refusal` tool is **complementary** to the kernel's
->   `IntentClassification.refusal_context` field: SDK's `emit_refusal` is about
->   **the assistant's output** ("I cannot do X because Y"); classifier's `refusal_context` is
->   about **the user's own message phrasing** (whether their message reads as a refusal).
->
-> Canonical kernel spec: `docs/imperal-cloud/intent-classifier.md`. Operational guide for BYOLLM
-> deployments: `docs/imperal-cloud/byollm-operational-guide.md`. Both in the WebHostMost platform
-> docs (not shipped with the SDK repo).
+## 1.5.19 (2026-04-21)
+
+### Fix: Ollama / openai_compatible BYOLLM hardening (session 41 PM)
+
+Three SDK-side fixes landed after a live smoke against dorif's DGX Spark
+deployment (Ollama behind HAProxy-EU, `qwen3:14b-fast` and `qwen3.5:27b`).
+All three are **scoped to `cfg.provider == "openai_compatible"`** — real
+OpenAI / Anthropic client stacks are untouched.
+
+**`runtime/llm_provider.py::_call_openai` — add `reasoning_effort: "none"`
+to `extra_body` for openai_compatible** when `thinking_mode != "on"`:
+
+Ollama ignores the native `think: false` parameter on the OpenAI-compatible
+`/v1/chat/completions` endpoint (tracked as `ollama/ollama#14820`).
+`reasoning_effort` is the OpenAI-standard parameter Ollama ≥ 0.6 honours on
+that endpoint. Without it, reasoning-enabled models (qwen3.*, Nemotron,
+reasoning phi4, etc.) burn `max_tokens` on the reasoning trace and return
+`content=""` — breaking downstream structured_gen and ChatExtension
+tool-use loops. Measured 2.9s → 0.7s latency with `content` populated
+against a live qwen3:14b-fast deployment.
+
+```python
+if cfg.provider == "openai_compatible":
+    _extra_body = {"think": _think_val}
+    if not _think_val:
+        _extra_body["reasoning_effort"] = "none"
+    kwargs["extra_body"] = _extra_body
+```
+
+**`runtime/llm_provider.py::_create_client` — explicit
+`httpx.Timeout(300.0, connect=10.0)` on `AsyncOpenAI`** for openai_compatible:
+
+The default transport's per-read idle threshold (~30s) was causing false
+`Connection error` retries on multi-round tool-use loops against heavy local
+models (27B+ on DGX-class hardware) whose token cadence exceeds those
+thresholds. 300s aligns with the kernel's `_TOOL_TIMEOUT` and
+`haproxy timeout server 300s` — end-to-end timeout budget is now consistent
+across all layers. Real OpenAI / Anthropic clients keep library defaults.
+
+**`chat/handler.py` — preserve successfully-executed tool calls when the
+final narration round raises (I-BYOLLM-PARTIAL-RECOVERY)**:
+
+Previously, if round-1/2 tool calls succeeded (inbox / search / etc.) but
+the final narration round raised (Connection error, RemoteProtocolError —
+common with heavy local models dropping TCP on big contexts), the exception
+handler returned `ChatResult(..., handled=False)` and the kernel emitted
+`"No extension handled this request"` — **discarding the already-completed
+tool results**. That was a silent data-loss UX.
+
+New behaviour: the handler inspects `_functions_called` for successful
+non-intercepted entries. If present, returns `handled=True` with an honest
+partial-result message naming the tools that did run:
+
+> I ran inbox, search and collected your data, but the model hit a
+> Connection issue while formatting the final reply. Retry in a moment
+> if you want the full narrative.
+
+The kernel then records the turn as handled and the user sees what was
+actually done instead of a generic refusal. Pure-error path (no successful
+tool calls) preserves the old `handled=False` behaviour — we don't paper
+over genuine errors.
+
+### Zero contract change for extension authors
+
+`ctx._intent_type` read surface unchanged. `emit_refusal` tool unchanged.
+All three fixes are internal to the SDK runtime / chat handler layer;
+existing extensions get the hardening for free on upgrade.
+
+### Platform-side cross-references
+
+- Kernel-side spec: `docs/imperal-cloud/intent-classifier.md` (WebHostMost
+  platform docs, not shipped with this repo)
+- BYOLLM operational guide: `docs/imperal-cloud/byollm-operational-guide.md`
+- Kernel-side mirror commits: `d5d1fd8` (reasoning_effort), `e888ef4` (httpx
+  timeout) in `imperal_kernel/llm/provider.py`
+- Related invariants (enforced at review): I-REASONING-EFFORT-NONE,
+  I-HTTPX-TIMEOUT-300S-OPENAI-COMPAT, I-BYOLLM-PARTIAL-RECOVERY
+- Ollama docs: <https://docs.ollama.com/capabilities/thinking>
+- Ollama reasoning_effort tracker: <https://github.com/ollama/ollama/issues/14820>
 
 ---
 
