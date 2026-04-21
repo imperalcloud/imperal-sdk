@@ -282,4 +282,29 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
         return chat_ext._make_chat_result(response="Task cancelled.", task_cancelled=True, handled=bool(chat_ext._functions_called))
     except Exception as e:
         log.error(f"ChatExtension error: {e}")
+        # Preserve partial results: if earlier rounds invoked tools
+        # successfully (e.g. inbox, search) and only the final narration
+        # round died on Connection error / model crash, don't throw away
+        # the accumulated data — surface it to the user instead of a
+        # generic "No extension handled" refusal. Kernel will read
+        # handled=True + _functions_called and the user sees what we
+        # actually got.
+        if chat_ext._functions_called:
+            try:
+                _ok_calls = [fc for fc in chat_ext._functions_called
+                             if isinstance(fc, dict) and fc.get("success") and not fc.get("intercepted")]
+            except Exception:
+                _ok_calls = []
+            if _ok_calls:
+                _names = ", ".join(sorted({fc.get("name","?") for fc in _ok_calls}))
+                _partial = (
+                    f"I ran {_names} and collected your data, but the model hit "
+                    f"a Connection issue while formatting the final reply "
+                    f"(likely a local-LLM hiccup). Showing the raw action log; "
+                    f"retry in a moment if you want the full narrative."
+                )
+                return chat_ext._make_chat_result(
+                    response=_partial,
+                    handled=True,
+                )
         return chat_ext._make_chat_result(response=f"Error: {e}")
