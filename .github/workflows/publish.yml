@@ -40,6 +40,12 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Allow workflow to re-run safely (force-pushed tag, rerun from
+          # CI UI, etc.) — if the version is already on PyPI, skip
+          # instead of failing the job. Downstream ensure-release depends
+          # on publish success.
+          skip-existing: true
 
   # When a tag push triggered us (and there is no Release yet), also
   # create the GitHub Release so the version page is populated. No-op
