@@ -65,7 +65,8 @@ jobs:
             BEGIN { out=0 }
             /^## / {
               if (out==1) exit
-              if ($0 ~ "^## "ver"\\b") { out=1; print; next }
+              split($0, a, " ")
+              if (a[2] == ver) { out=1; print; next }
             }
             out==1 { print }
           ' CHANGELOG.md > /tmp/release-notes.md
