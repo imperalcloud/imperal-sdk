@@ -2,8 +2,9 @@
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Output filtering pipeline for ChatExtension responses.
 
-Enforces OS identity, response style, and tool result size limits.
-All public functions are called by ChatExtension._handle() after each LLM turn.
+Enforces OS identity, response style, Markdown hygiene, and tool result
+size limits. All public functions are called by ChatExtension._handle()
+after each LLM turn.
 """
 from __future__ import annotations
 import json
@@ -153,6 +154,51 @@ def enforce_response_style(text: str) -> str:
     # 3. Collapse excessive blank lines (max 1)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+
+# ── Markdown Normalizer (Layer 2 of MD rendering hygiene, 2026-04-21) ───
+
+_BOLD_WS_FIX = None  # lazily compiled on first call
+
+
+def normalize_markdown(text: str) -> str:
+    """Fix common LLM-emitted Markdown glitches that break the Panel renderer.
+
+    Current fixes (regex-only, idempotent, safe to call multiple times):
+      1. Whitespace inside bold markers — ``** text **`` / ``** text**`` /
+         ``**text **`` → ``**text**``. CommonMark requires the ``**``
+         emphasis run to have no leading/trailing whitespace inside;
+         otherwise markers render as literal characters.
+
+    Layer 1 (prompt ``kernel_formatting_rule.txt``) teaches the LLM to
+    emit correct markup up-front; this layer cleans up residual glitches
+    when the model slips. Every LLM output on the chat delivery path
+    passes through here.
+
+    Pure function, no state, idempotent. ``normalize_markdown(
+    normalize_markdown(x)) == normalize_markdown(x)``.
+
+    Edge cases:
+      - Empty bold (``** **``) collapses to empty string.
+      - Bolds with internal single-spaces between words (``**a b c**``)
+        are preserved verbatim — only leading/trailing whitespace trimmed.
+      - Nested markers and code spans inside bold are not unwrapped.
+    """
+    if not text or "**" not in text:
+        return text
+    import re
+    global _BOLD_WS_FIX
+    if _BOLD_WS_FIX is None:
+        # Lazy match content between ** markers, no embedded * or newline.
+        _BOLD_WS_FIX = re.compile(r"\*\*([^*\n]*?)\*\*")
+
+    def _trim(m):
+        inner = m.group(1).strip()
+        if not inner:
+            return ""
+        return "**" + inner + "**"
+
+    return _BOLD_WS_FIX.sub(_trim, text)
 
 
 # ── Tool Result Trimmer ───────────────────────────────────────────────────

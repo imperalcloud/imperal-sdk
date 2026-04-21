@@ -10,7 +10,7 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from imperal_sdk.chat.filters import enforce_os_identity, enforce_response_style, trim_tool_result
+from imperal_sdk.chat.filters import enforce_os_identity, enforce_response_style, normalize_markdown, trim_tool_result
 from imperal_sdk.chat.prompt import inject_language
 from imperal_sdk.chat.action_result import ActionResult
 from imperal_sdk.chat.guards import check_guards
@@ -239,6 +239,7 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
                 text = next((b.text for b in resp.content if hasattr(b, "text")), "Done.")
                 text = enforce_os_identity(text)
                 text = enforce_response_style(text)
+                text = normalize_markdown(text)
                 return chat_ext._make_chat_result(response=text, handled=bool(chat_ext._functions_called))
 
             messages.append({"role": "assistant", "content": resp.content})
@@ -267,6 +268,7 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
                     text = await _build_factual_response(chat_ext, ctx, client)
                     text = enforce_os_identity(text)
                     text = enforce_response_style(text)
+                    text = normalize_markdown(text)
                     return chat_ext._make_chat_result(response=text, handled=True)
 
         return chat_ext._make_chat_result(response="Request required too many steps. Please simplify.", handled=bool(chat_ext._functions_called))

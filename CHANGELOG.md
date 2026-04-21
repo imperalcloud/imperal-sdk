@@ -2,6 +2,47 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.17 (2026-04-21)
+
+### New: Markdown rendering hygiene (Layer 1 prompt + Layer 2 normalizer)
+
+Webbee responses occasionally rendered `** Рекомендации**` (literal asterisks) instead of bold. CommonMark requires emphasis runs to have no leading/trailing whitespace inside `**` delimiters; LLMs occasionally emit `** text **` which breaks the Panel renderer. Two-layer fix:
+
+**Layer 1 — `imperal_sdk/prompts/kernel_formatting_rule.txt` rewrite:**
+
+The kernel-injected formatting prompt is replaced with an explicit **DO** / **NEVER** example table. DO: bold label-value pairs, `|`-separated tables with `|---|` header rows, numbered lists with literal `.` after the number, `##` for major sections, inline `**text**` for sub-headers, `---` for major separators, backticks for IDs / emails / IPs / URLs. NEVER: `** text **` (whitespace inside markers), columns separated by spaces (not a table), `1 item` (missing dot), ALLCAPS without header, `*** text ***`. A `WHEN IN DOUBT` cheatsheet at the bottom maps content shapes to the correct construct. The prompt is injected into every extension's skeleton via the existing `_inject_capability_boundary` wire — no new plumbing.
+
+**Layer 2 — `imperal_sdk/chat/filters.py::normalize_markdown` (new function):**
+
+```python
+from imperal_sdk.chat.filters import normalize_markdown
+
+normalize_markdown("Hello ** world **!")  # → "Hello **world**!"
+normalize_markdown("** **")               # → ""
+normalize_markdown("**a b c**")           # → "**a b c**"  (internal spaces preserved)
+```
+
+- Regex `r"\*\*([^*\n]*?)\*\*"` finds each `**...**` run; inner whitespace trimmed via `.strip()`. Empty bolds (`** **`) collapse to empty string.
+- Pure function. No state. Idempotent: `normalize_markdown(normalize_markdown(x)) == normalize_markdown(x)`.
+- Lazy-compiled regex (`_BOLD_WS_FIX` module global; first call only).
+- Auto-applied at 2 sites in `imperal_sdk/chat/handler.py` (after `enforce_response_style`) — every LLM text output on the chat delivery path passes through. No extension code change required.
+
+Layer 1 teaches the model correct form up-front; Layer 2 cleans up residual slips. Both layers are required — the prompt is a hint, not a guarantee.
+
+### Invariants
+
+- **I-MD-1** — `kernel_formatting_rule.txt` MUST keep the DO / NEVER pair format and concrete examples. Rewrites that drop the rule risk a regression in markdown emission quality.
+- **I-MD-2** — `normalize_markdown` MUST stay pure, idempotent, and called at every chat-handler text return site. Adding a new return site without the call surfaces as broken bold rendering on user-visible output.
+
+### Note — ICNLI v7 SDK contract extension (cross-reference)
+
+In parallel, the kernel-side ICNLI v7 deploy introduced SDK-visible flag gates + `ctx.session_memory_slice` propagation for extensions, plus an `emit_refusal` tool schema consumed by `ChatExtension._handle`. Those additions are documented in [`docs/imperal-cloud/icnli-v7-architecture.md`](https://github.com/imperalcloud) and are live on the deployed `/opt/imperal-sdk` tree on `whm-ai-worker`. They are **not** packaged as part of 1.5.17 — this release is limited to the markdown hygiene change so the federal customer can opt in without taking the v7 kernel-integration surface.
+
+### See also
+
+- Authoritative architecture reference: `docs/imperal-cloud/icnli-v7-architecture.md` (§ "Markdown rendering hygiene").
+- Invariants registered in `docs/imperal-cloud/conventions.md` under `## Invariants` table (I-MD-1, I-MD-2).
+
 ## 1.5.16 (2026-04-20)
 
 ### Fix: `ui.Stack(wrap=...)` is now tri-state — opt-out of Panel auto-wrap is reachable
