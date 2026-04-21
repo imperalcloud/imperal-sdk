@@ -44,10 +44,24 @@ def check_guards(
     _ctx_intent = getattr(ctx, "_intent_type", None) or "read"
     if _ctx_intent in ("chain", "automation"):
         pass  # Bypass: function's own action_type is the source of truth
-    elif _ctx_intent == "read" and action_type in ("write", "destructive"):
+    elif _ctx_intent == "read" and action_type == "write":
+        # Escalate: when the extension LLM confidently picks a write tool
+        # under a read-classified turn, trust the tool choice (LLM is
+        # authoritative over classifier heuristics) and promote _intent_type
+        # to "write". The extension then proceeds to execute. Destructive
+        # actions do NOT escalate — they still require 2-step confirmation,
+        # so the old BLOCK path covers them below.
+        log.info(
+            f"ChatExtension {chat_ext.tool_name}: ESCALATE {tu.name} "
+            f"action=write; classifier said read but extension LLM chose write — trusting LLM"
+        )
+        ctx._intent_type = "write"
+        # Do not append to _functions_called; do not return a verdict — fall
+        # through to target_scope + confirmation guards below.
+    elif _ctx_intent == "read" and action_type == "destructive":
         log.warning(
             f"ChatExtension {chat_ext.tool_name}: BLOCKED {tu.name} "
-            f"(action={action_type}) — intent is read"
+            f"(action=destructive) — intent is read, destructive requires explicit user intent"
         )
         chat_ext._functions_called.append({
             "name": tu.name, "params": tu.input,
@@ -57,8 +71,10 @@ def check_guards(
         return json.dumps({
             "RESULT": "BLOCKED",
             "error": (
-                f"Cannot execute {action_type} action '{tu.name}' — the user's request "
-                "was classified as read-only. Call a read/list function instead."
+                f"Cannot execute destructive action '{tu.name}' — the user's "
+                "request was classified as read-only. Destructive actions require "
+                "explicit user intent. Ask the user to confirm if they want to "
+                "proceed, then re-run."
             ),
         })
 

@@ -2,6 +2,19 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.21 — 2026-04-21
+
+- **fix(chat/guards): escalate read→write, keep BLOCK for destructive.**
+  When the extension LLM confidently picks a write tool under a turn
+  classified as read, promote `ctx._intent_type` to "write" and proceed
+  rather than BLOCK. LLM tool choice is authoritative over the classifier's
+  heuristic. Destructive actions retain the BLOCK path — they require
+  explicit user intent. Closes session-42 bug #2 (Tier 7 in
+  `docs/superpowers/plans/2026-04-21-automation-path-federal-fixes.md`).
+
+  Invariant: **I-GUARDS-ESCALATE-WRITE-ONLY** — see
+  `docs/imperal-cloud/conventions.md`.
+
 ## 1.5.20 (2026-04-21)
 
 ### Chore: single-source-of-truth for version
