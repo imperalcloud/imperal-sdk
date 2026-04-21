@@ -2,6 +2,40 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.20 (2026-04-21)
+
+### Chore: single-source-of-truth for version
+
+Split-brain bug in 1.5.19: `pyproject.toml` was bumped to `1.5.19` but
+`src/imperal_sdk/__init__.py::__version__` was still `"1.5.18"`. The wheel
+metadata on PyPI was correct (1.5.19 tag, 1.5.19 filename) but
+`imperal_sdk.__version__` at runtime reported `"1.5.18"`, confusing any
+code that uses the attribute for logging / tagging / compat checks.
+
+Root cause: two independent version declarations. Fix: switch to
+**hatch dynamic version** — `pyproject.toml` declares
+`dynamic = ["version"]` and `[tool.hatch.version]` points at
+`src/imperal_sdk/__init__.py`. Now the `__version__` constant in
+`__init__.py` is the **single source of truth**; building the wheel
+derives metadata from it, and the runtime attribute always matches.
+
+Also bumps `__version__` to `1.5.20` for this release.
+
+No code / API changes from 1.5.19 otherwise — all the BYOLLM
+hardening from 1.5.19 (`reasoning_effort="none"`, 300s httpx timeout,
+I-BYOLLM-PARTIAL-RECOVERY) ships unchanged.
+
+### Recommended action
+
+Anyone on 1.5.19 should upgrade to 1.5.20 — the runtime version
+attribute is now accurate:
+
+```bash
+pip install --force-reinstall --no-deps imperal-sdk==1.5.20
+```
+
+---
+
 ## 1.5.19 (2026-04-21)
 
 ### Fix: Ollama / openai_compatible BYOLLM hardening (session 41 PM)

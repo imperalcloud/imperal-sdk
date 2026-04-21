@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "imperal-sdk"
-version = "1.5.19"
+dynamic = ["version"]
 description = "SDK for building Imperal Cloud extensions"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -53,6 +53,9 @@ contract = [
 
 [project.scripts]
 imperal = "imperal_sdk.cli.main:cli"
+
+[tool.hatch.version]
+path = "src/imperal_sdk/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/imperal_sdk"]
