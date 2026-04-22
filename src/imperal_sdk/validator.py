@@ -302,4 +302,46 @@ def validate_extension(ext) -> ValidationReport:
             fix="Consider adding @ext.on_install for first-time setup",
         ))
 
+    # V13: tool names starting with "refresh_" that are NOT prefixed
+    # "skeleton_refresh_" will not be picked up by the kernel's auto-derive
+    # skeleton_sections convention. They'll run only if the Registry has an
+    # explicit skeleton_sections row pointing at them — easy to forget.
+    # Recommend renaming via @ext.skeleton("<section>") sugar or @ext.tool
+    # with the skeleton_refresh_ prefix so the platform auto-wires them.
+    # See skeleton.md §"Skeleton Refresh Tools".
+    _tools = getattr(ext, "_tools", {})
+    for tool_name in _tools.keys():
+        if not isinstance(tool_name, str):
+            continue
+        if tool_name.startswith("refresh_") and not tool_name.startswith("skeleton_refresh_"):
+            suggested = tool_name[len("refresh_"):]
+            report.issues.append(ValidationIssue(
+                rule="V13", level="WARN",
+                message=(
+                    f"Tool {tool_name!r} looks like a skeleton refresh but lacks "
+                    f"the 'skeleton_refresh_' prefix required by the kernel's "
+                    f"auto-derive convention"
+                ),
+                fix=(
+                    f"Rename to 'skeleton_refresh_{suggested}' OR use "
+                    f"@ext.skeleton({suggested!r}) decorator which applies the "
+                    f"convention automatically"
+                ),
+            ))
+        # Likewise for alert counterparts — kernel expects skeleton_alert_<X>
+        # as the paired alert activity when a refresh section has alert_on_change.
+        if tool_name.startswith("alert_") and not tool_name.startswith("skeleton_alert_"):
+            suggested = tool_name[len("alert_"):]
+            report.issues.append(ValidationIssue(
+                rule="V13", level="INFO",
+                message=(
+                    f"Tool {tool_name!r} looks like a skeleton alert but lacks "
+                    f"the 'skeleton_alert_' prefix"
+                ),
+                fix=(
+                    f"Rename to 'skeleton_alert_{suggested}' so the kernel "
+                    f"auto-wires it when refresh section has alert_on_change=True"
+                ),
+            ))
+
     return report

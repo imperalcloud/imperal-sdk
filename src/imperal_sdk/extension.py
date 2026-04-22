@@ -112,6 +112,81 @@ class Extension:
             return func
         return decorator
 
+    def skeleton(
+        self,
+        section_name: str,
+        *,
+        alert: bool = False,
+        ttl: int = 300,
+        description: str = "",
+    ):
+        """Register a skeleton refresh tool by section name (recommended DX).
+
+        Sugar over :meth:`tool` that applies the platform's naming convention:
+
+        - The decorated function is registered as ``skeleton_refresh_<section_name>``.
+        - When ``alert=True``, a paired ``skeleton_alert_<section_name>`` tool is
+          also expected (register it separately with ``@ext.tool`` OR the kernel
+          will simply skip change alerts if absent).
+        - ``ttl`` is a hint to platform operators — the authoritative TTL lives
+          in the Registry row (or the kernel's auto-derive default of 300s).
+
+        The kernel's skeleton workflow discovers this section automatically via
+        the ``skeleton_refresh_<X>`` naming convention — no Registry migration
+        required. See `imperal_sdk/docs/skeleton.md` §"Skeleton Refresh Tools"
+        for the end-to-end contract and invariants
+        (I-SKEL-AUTO-DERIVE-1, I-SKEL-SUMMARY-VALUES-1, I-SKEL-LIVE-INVALIDATE,
+        I-PURGE-SKELETON-SCOPE).
+
+        Return contract: refresh function MUST return ``{"response": <dict>}``
+        where the dict surfaces scalar fields (counts, flags, short strings) at
+        the top level so the intent classifier can read them directly from the
+        user's envelope. Idempotent — safe to run on every tick.
+
+        Example::
+
+            @ext.skeleton("monitors", alert=True, ttl=300)
+            async def refresh_monitors(ctx) -> dict:
+                items = await ctx.store.query("wt_monitors", where={"owner_id": ctx.user.id})
+                critical = sum(1 for m in items.data if m.data.get("status") == "critical")
+                return {"response": {
+                    "total":    len(items.data),
+                    "critical": critical,
+                    "warning":  sum(1 for m in items.data if m.data.get("status") == "warning"),
+                    "ok":       sum(1 for m in items.data if m.data.get("status") == "ok"),
+                }}
+        """
+        if not section_name or not isinstance(section_name, str):
+            raise ValueError("skeleton: section_name must be a non-empty string")
+        # Keep section_name flat (no colons, wildcards, or separators) — the
+        # kernel's purge helper rejects these characters defence-in-depth, and
+        # they would break the Redis key path ``imperal:skeleton:{app}:{user}:{section}``.
+        if any(c in section_name for c in "*?[]:/"):
+            raise ValueError(
+                f"skeleton: section_name {section_name!r} must not contain "
+                "wildcard/separator characters (* ? [ ] : /)"
+            )
+        tool_name = f"skeleton_refresh_{section_name}"
+        desc = description or f"Skeleton refresh: {section_name}"
+
+        def decorator(func: Callable) -> Callable:
+            self._tools[tool_name] = ToolDef(
+                name=tool_name,
+                func=func,
+                scopes=[],  # skeleton refresh runs with system scopes ["*"]
+                description=desc,
+            )
+            # Stash convention metadata for the validator + tooling.
+            # Private attribute; extensions MUST NOT read this directly.
+            ttl_val = int(ttl) if ttl else 300
+            self._tools[tool_name]._skeleton = {  # type: ignore[attr-defined]
+                "section_name": section_name,
+                "alert_on_change": bool(alert),
+                "ttl": ttl_val,
+            }
+            return func
+        return decorator
+
     def on_install(self, func: Callable) -> Callable:
         """Register install hook. Called once when user installs extension."""
         self._lifecycle["on_install"] = LifecycleHook(name="on_install", func=func)

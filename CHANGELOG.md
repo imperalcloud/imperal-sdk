@@ -2,6 +2,63 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.22 — 2026-04-22
+
+### New: `@ext.skeleton` decorator + V13 validator rule
+
+Sugar over `@ext.tool` that applies the platform's skeleton-refresh naming
+convention automatically. Extensions shipping a `skeleton_refresh_<X>` tool
+(or using the new decorator) are auto-wired into the kernel's skeleton
+workflow — no Registry `skeleton_sections` row required. Pairs with the
+2026-04-22 kernel-side release (`I-SKEL-AUTO-DERIVE-1`,
+`I-SKEL-SUMMARY-VALUES-1`, `I-SKEL-LIVE-INVALIDATE`, `I-PURGE-SKELETON-SCOPE`).
+
+**`extension.py` — new `skeleton()` method:**
+
+```python
+@ext.skeleton("monitors", alert=True, ttl=60)
+async def refresh_monitors(ctx) -> dict:
+    items = await ctx.store.query("wt_monitors", where={"owner_id": ctx.user.id})
+    return {"response": {
+        "total":    len(items.data),
+        "critical": sum(1 for m in items.data if m.data.get("status") == "critical"),
+        "warning":  sum(1 for m in items.data if m.data.get("status") == "warning"),
+        "ok":       sum(1 for m in items.data if m.data.get("status") == "ok"),
+    }}
+```
+
+- Registers the function as `skeleton_refresh_<section_name>` under the hood.
+- `alert=True` hints that a sibling `skeleton_alert_<section_name>` tool
+  exists — declare it with `@ext.tool` if you want change alerts.
+- `ttl=300` is a hint; authoritative TTL lives in Registry (or the kernel's
+  auto-derive default of 300 s).
+- Rejects `*`, `?`, `[`, `]`, `:`, `/` in `section_name` — these would
+  break the Redis key path `imperal:skeleton:{app}:{user}:{section}` and
+  are rejected by the kernel-side purge helper defence-in-depth.
+- Metadata (`section_name`, `alert_on_change`, `ttl`) is stashed on the
+  registered `ToolDef` via `_skeleton` for platform tooling to read.
+
+**`validator.py` — new V13 rule:**
+
+Warns when a tool is named `refresh_<X>` without the `skeleton_refresh_`
+prefix (won't be auto-wired by kernel). Informational issue when a tool
+is named `alert_<X>` without `skeleton_alert_` prefix.
+
+**`docs/skeleton.md`** — rewritten "Skeleton Refresh Tools" section
+covering naming convention, `@ext.skeleton` vs bare `@ext.tool`, scalar-
+field envelope best practices, idempotency, live-invalidate contract
+on enable/disable (< 2 s propagation), federal-grade purge safety
+(chat history unreachable by construction).
+
+**Tests:** `tests/test_skeleton_decorator.py` — 11 cases covering
+registration, metadata exposure, TTL defaults, function-preservation,
+empty-section rejection, wildcard rejection, multi-section coexistence,
+V13 warnings fire correctly for bare `refresh_*`/`alert_*` names, V13
+silent when convention followed, version bump sanity.
+
+No breaking changes. Existing `@ext.tool("skeleton_refresh_*")` registrations
+continue to work; they now also satisfy V13 (no warnings).
+
 ## 1.5.21 — 2026-04-21
 
 - **fix(chat/guards): escalate read→write, keep BLOCK for destructive.**

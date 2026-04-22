@@ -148,22 +148,86 @@ async def on_new_case(ctx: Context, case: dict) -> None:
 
 ## Skeleton Refresh Tools
 
-When the platform calls a skeleton refresh (via the `refresh_activity` configured in the Registry), it invokes your tool through `execute_sdk_tool`. Skeleton refresh tools are an exception to the `_kernel_ctx` requirement — the SkeletonWorkflow calls execute_sdk_tool without `_kernel_ctx`, and the kernel builds a minimal fallback KernelContext from user_info. Skeleton refresh tools are registered with `@ext.tool()` (not `@ext.signal()`) and must return `{"response": data_dict}` instead of a plain string. This format allows the kernel to extract the data and store it in the skeleton.
+When the platform calls a skeleton refresh (via the `refresh_activity` configured in the Registry), it invokes your tool through `execute_sdk_tool`. Skeleton refresh tools are an exception to the `_kernel_ctx` requirement — the SkeletonWorkflow calls execute_sdk_tool without `_kernel_ctx`, and the kernel builds a minimal fallback KernelContext from user_info. Skeleton refresh tools must return `{"response": data_dict}` instead of a plain string. The `execute_sdk_tool` kernel reads the `"response"` key and writes the data to the skeleton section in Redis.
 
-> **V6 (Pydantic params) applies to `@chat.function` only.** The Pydantic `BaseModel` parameter convention (V6 in `imperal validate`) is for `@chat.function` handlers only. `@ext.tool`, `@ext.signal`, and `@ext.schedule` use plain `**kwargs` or named parameters as before — they are called by the platform with keyword arguments, not by an LLM tool-use schema.
+> **V6 (Pydantic params) applies to `@chat.function` only.** The Pydantic `BaseModel` parameter convention (V6 in `imperal validate`) is for `@chat.function` handlers only. `@ext.tool`, `@ext.signal`, `@ext.schedule`, and `@ext.skeleton` use plain `**kwargs` or named parameters as before — they are called by the platform with keyword arguments, not by an LLM tool-use schema.
+
+### Naming convention (kernel auto-derive, since SDK 1.5.22 / kernel 2026-04-22)
+
+The kernel discovers skeleton sections from tool names that follow the convention:
+
+- `skeleton_refresh_<X>` → refresh activity for section `<X>`
+- `skeleton_alert_<X>` → optional paired alert activity when `alert_on_change=True`
+
+Registry `skeleton_sections` rows still win when explicitly set (useful for custom TTL overrides), but are **no longer required**: any extension shipping a correctly-named refresh tool is picked up by the kernel's `_derive_skeleton_sections_from_tools` helper at load time. This means **zero Registry migration for new extensions** — ship the tool, the platform wires it.
+
+Invariants enforced kernel-side: `I-SKEL-AUTO-DERIVE-1`, `I-SKEL-SUMMARY-VALUES-1`, `I-SKEL-FRESHNESS-1`, `I-SKEL-PER-USER-1`, `I-SKEL-LIVE-INVALIDATE`, `I-PURGE-SKELETON-SCOPE`. See the platform docs at `docs/imperal-cloud/skeleton-architecture.md` for the full kernel-side contract.
+
+### Recommended — `@ext.skeleton` decorator (SDK 1.5.22+)
+
+The cleanest way to register a skeleton section. Applies the naming convention, threads `alert` / `ttl` hints, and rejects wildcards/separators that would break the Redis key path:
 
 ```python
-@ext.tool("refresh_case_status", description="Refresh case status for skeleton")
+@ext.skeleton("case_status", alert=True, ttl=60)
 async def refresh_case_status(ctx: Context) -> dict:
-    """Called by the skeleton engine on TTL expiry."""
+    """Called by the skeleton engine on TTL expiry + immediately on enable."""
     open_cases = await ctx.store.query("cases", filter={"status": "open"}, limit=10)
     return {"response": {
-        "count": len(open_cases),
-        "cases": [{"id": c["_id"], "title": c["title"]} for c in open_cases],
+        # Flat scalar fields surface directly in the classifier envelope as
+        # "cases.case_status: count=N, has_urgent=true, ..." — route-able
+        # signal for the intent classifier without any per-extension prompt rule.
+        "count":       len(open_cases),
+        "has_urgent":  any(c.get("priority") == "urgent" for c in open_cases),
+        # Nested structures collapse to shape hints in the envelope.
+        "cases":       [{"id": c["_id"], "title": c["title"]} for c in open_cases],
     }}
+
+# OPTIONAL — paired alert tool. Fires ONLY when alert=True on the refresh
+# decorator AND the section data changed since the last tick.
+@ext.tool("skeleton_alert_case_status", description="Alert on case-status change")
+async def alert_case_status(ctx: Context, section_name: str, old: dict, new: dict, **kwargs) -> dict:
+    if new["count"] > old.get("count", 0):
+        await ctx.notify(f"New cases opened: {new['count'] - old.get('count', 0)}")
+    return {"response": {"acknowledged": True}}
 ```
 
-> **Return format:** Skeleton refresh tools return `{"response": dict}`, not a string. The `execute_sdk_tool` kernel reads the `"response"` key and writes the data to the skeleton section in Redis.
+### Equivalent — plain `@ext.tool` with explicit naming
+
+`@ext.skeleton` is pure sugar; the kernel discovers sections via the tool name alone. You can always write the tool directly if you need full control:
+
+```python
+@ext.tool("skeleton_refresh_case_status", description="Refresh case status for skeleton")
+async def refresh_case_status(ctx: Context) -> dict:
+    ...
+```
+
+**`imperal validate` (V13) warns** on tools named `refresh_*` or `alert_*` WITHOUT the `skeleton_` prefix — those will not be picked up by kernel auto-derive.
+
+### Return shape best practices
+
+Surface **scalar fields at the top level** — numbers, bools, short strings, enum values. The intent classifier reads up to 6 scalar fields per section inline (`total=3, critical=0, warning=1, ok=2`) so it can route based on what the user actually has. Nested dicts and lists collapse to shape hints (`accounts=dict[3 keys]`). Internal metadata fields prefixed with `_` (e.g. `_freshness`, `_ttl_seconds`) are stripped from the envelope automatically — feel free to include them for debugging.
+
+### Idempotency
+
+`@ext.skeleton` handlers MUST be idempotent. The kernel may fire a refresh:
+
+- On the normal TTL tick (every `ttl` seconds, default 300)
+- On `update_config` signal (user enabled / disabled an extension, admin rotated access policies)
+- On worker startup if the user's skeleton workflow is fresh
+
+Side-effects beyond read-and-return (e.g. counters, API writes, notifications) cause double-charging or duplicate state mutations. Keep the handler pure.
+
+## Live-invalidate on enable / disable (kernel 2026-04-22+)
+
+When a user enables or disables an extension via Settings:
+
+1. Auth GW publishes `imperal:config:invalidate` with `{scope: "user_extension", app_id, action}`.
+2. Kernel `config_invalidation_listener` flushes access caches, on disable **purges** the app's Redis skeleton keys for that user (`imperal:skeleton:{app_id}:{user_id}:*` only — chat history and other namespaces are unreachable by construction), and signals the user's `skeleton-imperal-hub-{user_id}` workflow with `update_config`.
+3. Workflow reloads `_load_sections` → auto-derives sections → next tick fires any new refresh tools.
+
+**End-to-end latency:** < 2 seconds from Panel click to classifier envelope update. Extensions don't need to handle enable/disable specially — `ctx.store` data survives disable (only Redis skeleton cache is purged). On re-enable, the next skeleton tick repopulates.
+
+**Federal-grade purge safety:** the kernel's `purge_app_skeleton` helper is hardcoded to the `imperal:skeleton:{app_id}:{user_id}:*` key prefix. Chat history (`imperal:hub:chat:*`), confirmations, events, billing, processes all live in orthogonal top-level namespaces — physically unreachable by any well-formed purge pattern. Every SCAN result is re-verified against the literal prefix before DEL (defence-in-depth against hypothetical Redis client bugs). Validator: `scripts/validate_skeleton_live_invalidate.py` (13 test cases including `test_chat_history_untouched_on_purge` and `test_cross_user_keys_untouched`).
 
 ---
 
