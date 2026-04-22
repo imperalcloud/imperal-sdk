@@ -2,10 +2,30 @@
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, AsyncIterator
+import logging
+import re
 import httpx
 
 from imperal_sdk.types.pagination import Page
+from imperal_sdk.types.store_contracts import ListUsersRequest, ListUsersResponse  # noqa: F401  # ListUsersRequest imported as drift-sentinel per I-SDK-GW-CONTRACT-1
+from imperal_sdk.store.exceptions import StoreUnavailable, StoreContractError
+
+_log = logging.getLogger(__name__)
+_FORBIDDEN_COLLECTION = re.compile(r"[:\*\?\[\]\s/]")
+
+
+def _emit_threat_counter(app: str, tenant: str) -> None:
+    """Emit SigNoz counter for cross-context bypass attempts.
+
+    I-STORE-THREAT-COUNTER-1 — always 0. Any non-zero firing = real incident.
+    Phase 1 stub: structured warning log. Real OTEL counter lands in
+    observability activate-phase (see spec §7).
+    """
+    _log.warning(
+        "store.cross_context_bypass_attempt",
+        extra={"app_id": app, "tenant_id": tenant},
+    )
 
 
 @dataclass
@@ -15,6 +35,7 @@ class Document:
     data: dict
     created_at: str | None = None
     updated_at: str | None = None
+    user_id: str | None = None  # set by query_all (bulk fan-out); None for user-scoped queries
 
     def __getitem__(self, key):
         return self.data[key]
@@ -107,3 +128,129 @@ class StoreClient:
                 return 0
             resp.raise_for_status()
             return resp.json().get("count", 0)
+
+    async def list_users(
+        self,
+        collection: str,
+        *,
+        page_size: int = 500,
+    ) -> AsyncIterator[str]:
+        """Yield user_ids with records in this extension's collection.
+
+        System-context only. Use with ``ctx.as_user(uid)`` for per-user fan-out:
+
+            async for uid in ctx.store.list_users("wt_monitors"):
+                user_ctx = ctx.as_user(uid)
+                monitors = await user_ctx.store.query(
+                    "wt_monitors", where={"enabled": True})
+                for m in monitors.data:
+                    await check_monitor(user_ctx, m)
+
+        Invariants: I-LIST-USERS-1 (system-context guard),
+                    I-LIST-USERS-4 (cursor pagination).
+
+        Raises:
+            RuntimeError: caller is not system-context.
+            StoreUnavailable: Auth Gateway unreachable.
+            ValueError: forbidden chars in collection or invalid page_size.
+        """
+        if self._user_id != "__system__":
+            _emit_threat_counter(app=self._extension_id, tenant=self._tenant_id)
+            raise RuntimeError(
+                "ctx.store.list_users() requires system context "
+                f"(got user_id={self._user_id!r}); "
+                "intended for @ext.schedule / @ext.signal handlers."
+            )
+        if _FORBIDDEN_COLLECTION.search(collection):
+            raise ValueError(f"forbidden chars in collection: {collection!r}")
+        if not (1 <= page_size <= 10000):
+            raise ValueError(f"page_size must be 1..10000, got {page_size}")
+
+        cursor: str | None = None
+        async with httpx.AsyncClient() as client:
+            while True:
+                resp = await client.get(
+                    f"{self._gateway_url}/v1/internal/store/{collection}/list_users",
+                    params={
+                        "extension_id": self._extension_id,
+                        "tenant_id": self._tenant_id,
+                        "cursor": cursor or "0",
+                        "limit": page_size,
+                    },
+                    headers=self._headers(),
+                    timeout=30,
+                )
+                if resp.status_code in (502, 503, 504):
+                    raise StoreUnavailable(retry_after=30)
+                resp.raise_for_status()
+                try:
+                    parsed = ListUsersResponse.model_validate_json(resp.text)
+                except Exception as e:
+                    raise StoreContractError(
+                        f"invalid ListUsersResponse from Auth GW: {e}") from e
+                for uid in parsed.user_ids:
+                    yield uid
+                if parsed.next_cursor is None:
+                    return
+                cursor = parsed.next_cursor
+
+    async def query_all(
+        self,
+        collection: str,
+        *,
+        limit: int = 500,
+    ) -> list[Document]:
+        """Return ALL documents in collection across all users.
+
+        System-context only. Returns list[Document] in a single HTTP call —
+        use for bulk fan-out when ``ctx.store.list_users()`` + ``ctx.as_user()``
+        would cause N+1 HTTP inefficiency (e.g. event_poller that reads every
+        account per tick).
+
+        ``Document.user_id`` is populated from the store row so callers can
+        dispatch per-user work without a second round-trip.
+
+        Invariants: I-LIST-USERS-1 (system-context guard — reused for query_all).
+
+        Raises:
+            RuntimeError: caller is not system-context.
+            StoreUnavailable: Auth Gateway unreachable.
+            ValueError: forbidden chars in collection or invalid limit.
+        """
+        if self._user_id != "__system__":
+            _emit_threat_counter(app=self._extension_id, tenant=self._tenant_id)
+            raise RuntimeError(
+                "ctx.store.query_all() requires system context "
+                f"(got user_id={self._user_id!r})."
+            )
+        if _FORBIDDEN_COLLECTION.search(collection):
+            raise ValueError(f"forbidden chars in collection: {collection!r}")
+        if not (1 <= limit <= 10000):
+            raise ValueError(f"limit must be 1..10000, got {limit}")
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self._gateway_url}/v1/internal/store/{collection}/all",
+                params={
+                    "extension_id": self._extension_id,
+                    "tenant_id": self._tenant_id,
+                    "limit": limit,
+                },
+                headers=self._headers(),
+                timeout=30,
+            )
+            if resp.status_code in (502, 503, 504):
+                raise StoreUnavailable(retry_after=30)
+            resp.raise_for_status()
+            docs = resp.json() or []
+            return [
+                Document(
+                    id=d["id"],
+                    collection=collection,
+                    data=d.get("data", {}),
+                    created_at=d.get("created_at"),
+                    updated_at=d.get("updated_at"),
+                    user_id=d.get("user_id"),
+                )
+                for d in docs
+            ]
