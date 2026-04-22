@@ -14,6 +14,7 @@ from imperal_sdk.chat.filters import enforce_os_identity, enforce_response_style
 from imperal_sdk.chat.prompt import inject_language
 from imperal_sdk.chat.action_result import ActionResult
 from imperal_sdk.chat.guards import check_guards
+from imperal_sdk.chat.narration_guard import augment_system_with_narration_rule
 
 if TYPE_CHECKING:
     from imperal_sdk.chat.extension import ChatExtension
@@ -90,9 +91,18 @@ async def _build_factual_response(chat_ext: ChatExtension, ctx, client) -> str:
         if _ulang and _ulang.lower() != "english":
             _lang_hint = f" Respond in {_ulang}."
         _uid = str(getattr(ctx.user, "id", "")) if hasattr(ctx, "user") and ctx.user else ""
+        _factual_system = (
+            f"Format the action results into a detailed, natural response.{_lang_hint} "
+            "Describe what each function did with specifics from the results. Be thorough. No emojis."
+        )
+        # I-NARRATION-STRICT-1: every narration LLM call must carry the
+        # strict anti-fabrication postamble. Non-regex, language-agnostic.
+        _factual_system = augment_system_with_narration_rule(
+            _factual_system, chat_ext._functions_called
+        )
         final_resp = await client.create_message(
             max_tokens=_response_tokens,
-            system=f"Format the action results into a detailed, natural response.{_lang_hint} Describe what each function did with specifics from the results. Be thorough. No emojis.",
+            system=_factual_system,
             messages=[{"role": "user", "content": f"Action results:\n{_factual_summary}"}],
             purpose="execution", user_id=_uid,
         )
@@ -232,7 +242,14 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
                 log.info(f"Context budget: system={_sys_tokens_est} msgs={_msg_tokens_est} total={_total_est} window={_effective_window} ext={chat_ext.tool_name}")
 
             _uid = str(getattr(ctx.user, "id", "")) if hasattr(ctx, "user") and ctx.user else ""
-            resp = await client.create_message(max_tokens=2048, system=system, messages=messages, tools=tools, purpose="execution", user_id=_uid, **_api_kwargs)
+            # I-NARRATION-STRICT-1: augment system prompt with anti-fabrication
+            # postamble carrying the current _functions_called snapshot. When
+            # LLM emits no more tool_use, the concluding narration is then
+            # bound to the structurally-true list. Language-agnostic.
+            _system_for_round = augment_system_with_narration_rule(
+                system, chat_ext._functions_called
+            )
+            resp = await client.create_message(max_tokens=2048, system=_system_for_round, messages=messages, tools=tools, purpose="execution", user_id=_uid, **_api_kwargs)
 
             tool_uses = [b for b in resp.content if b.type == "tool_use"]
             if not tool_uses:
