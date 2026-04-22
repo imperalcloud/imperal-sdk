@@ -2,6 +2,49 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.25 — 2026-04-22
+
+### Refactor
+
+- **`Document` dataclass dedup.** Consolidated
+  `imperal_sdk.store.client.Document` (which previously declared its own
+  local copy) and `imperal_sdk.types.models.Document` into a single
+  canonical class in `imperal_sdk.types.models`. The canonical class now
+  includes every field (`id`, `collection`, `data`, `extension_id`,
+  `tenant_id`, `created_at`, `updated_at`, `user_id`) and the helper
+  methods (`__getitem__`, `get`) that previously lived only on the
+  `store.client` variant. Both `imperal_sdk.Document` and
+  `imperal_sdk.store.client.Document` now resolve to the same class,
+  verified by contract test `tests/test_document_contract.py`.
+
+### Backward compatibility
+
+- `user_id`, `created_at`, `updated_at` defaults are now `""` on the
+  `store.client.Document` path (previously `None`). Wire contract now
+  matches `DocumentModel` Pydantic (which already used `""` defaults).
+  All `StoreClient` methods coerce `None` responses from the Auth
+  Gateway to `""` via `r.get("created_at") or ""`, so the only caller
+  impact is code that explicitly checked
+  `if doc.created_at is None: ...` — change to
+  `if not doc.created_at: ...`.
+
+### Docs
+
+- Narration guardrail documentation added in `docs/` (Rule 21 in
+  `extension-guidelines.md`, `tools.md` guardrail subsection,
+  `quickstart.md` callout, `concepts.md` integrity protocol section).
+  Committed post-1.5.24 (`4d76cb8`) and included in this release.
+
+### Internal
+
+- New regression test `tests/test_document_contract.py` asserts:
+  (a) dataclass field set is a subset of the `DocumentModel` Pydantic
+  field set, (b) dataclass → `asdict` → `DocumentModel.model_validate`
+  roundtrips cleanly, (c) `store.client.Document is types.models.Document`
+  identity, (d) top-level `imperal_sdk.Document` re-export identity,
+  (e) helper methods `__getitem__` and `get` work, (f) default values
+  match the Pydantic contract.
+
 ## 1.5.24 — 2026-04-22
 
 ### Security / Integrity: strict narration anti-fabrication postamble

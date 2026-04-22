@@ -10,7 +10,16 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Document:
-    """A document in the extension store."""
+    """A document in the extension store.
+
+    Canonical dataclass — the single source of truth for Document shape
+    across the SDK. `StoreClient.query/get/query_all/...` all return
+    instances of this class.
+
+    Wire contract equivalent: ``imperal_sdk.types.client_contracts.DocumentModel``
+    (Pydantic). Field shape + defaults must match — verified by contract test
+    ``tests/test_document_contract.py``.
+    """
     id: str
     collection: str
     data: dict
@@ -19,6 +28,12 @@ class Document:
     created_at: str = ""
     updated_at: str = ""
     user_id: str = ""
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def get(self, key, default=None):
+        return self.data.get(key, default)
 
 
 @dataclass

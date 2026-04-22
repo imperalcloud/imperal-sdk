@@ -1,15 +1,17 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 from __future__ import annotations
-from dataclasses import dataclass
 from typing import Any, AsyncIterator
 import logging
 import re
 import httpx
 
 from imperal_sdk.types.pagination import Page
+from imperal_sdk.types.models import Document  # canonical Document dataclass (1.5.25+)
 from imperal_sdk.types.store_contracts import ListUsersRequest, ListUsersResponse  # noqa: F401  # ListUsersRequest imported as drift-sentinel per I-SDK-GW-CONTRACT-1
 from imperal_sdk.store.exceptions import StoreUnavailable, StoreContractError
+
+__all__ = ["StoreClient", "Document"]  # re-export Document for legacy imports
 
 _log = logging.getLogger(__name__)
 _FORBIDDEN_COLLECTION = re.compile(r"[:\*\?\[\]\s/]")
@@ -26,22 +28,6 @@ def _emit_threat_counter(app: str, tenant: str) -> None:
         "store.cross_context_bypass_attempt",
         extra={"app_id": app, "tenant_id": tenant},
     )
-
-
-@dataclass
-class Document:
-    id: str
-    collection: str
-    data: dict
-    created_at: str | None = None
-    updated_at: str | None = None
-    user_id: str | None = None  # set by query_all (bulk fan-out); None for user-scoped queries
-
-    def __getitem__(self, key):
-        return self.data[key]
-
-    def get(self, key, default=None):
-        return self.data.get(key, default)
 
 
 class StoreClient:
@@ -69,7 +55,7 @@ class StoreClient:
             resp = await client.post(f"{self._gateway_url}/v1/internal/store", json={"collection": collection, "data": data, "user_id": self._user_id, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             resp.raise_for_status()
             r = resp.json()
-            return Document(id=r["id"], collection=collection, data=r.get("data", data), created_at=r.get("created_at"), updated_at=r.get("updated_at"))
+            return Document(id=r["id"], collection=collection, data=r.get("data", data), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "")
 
     async def get(self, collection: str, doc_id: str | None = None) -> Document | None:
         """Get a document. Supports both get(collection, doc_id) and get('collection/doc_id')."""
@@ -80,7 +66,7 @@ class StoreClient:
             if resp.status_code == 404: return None
             resp.raise_for_status()
             r = resp.json()
-            return Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at"), updated_at=r.get("updated_at"))
+            return Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "")
 
     async def set(self, key: str, data: Any) -> Document:
         """Upsert shortcut: set('collection/doc_id', data). Creates or updates."""
@@ -104,9 +90,9 @@ class StoreClient:
             resp.raise_for_status()
             raw = resp.json()
             if isinstance(raw, list):
-                items = [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at"), updated_at=r.get("updated_at")) for r in raw]
+                items = [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "") for r in raw]
                 return Page(data=items, has_more=False)
-            items = [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at"), updated_at=r.get("updated_at")) for r in raw.get("data", [])]
+            items = [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "") for r in raw.get("data", [])]
             return Page(data=items, cursor=raw.get("cursor"), has_more=raw.get("has_more", False), total=raw.get("total"))
 
     async def update(self, collection: str, doc_id: str, data: dict) -> Document:
@@ -114,7 +100,7 @@ class StoreClient:
             resp = await client.patch(f"{self._gateway_url}/v1/internal/store/{collection}/{doc_id}", json={"data": data, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             resp.raise_for_status()
             r = resp.json()
-            return Document(id=r["id"], collection=collection, data=r.get("data", data), created_at=r.get("created_at"), updated_at=r.get("updated_at"))
+            return Document(id=r["id"], collection=collection, data=r.get("data", data), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "")
 
     async def delete(self, collection: str, doc_id: str) -> bool:
         async with httpx.AsyncClient() as client:
@@ -248,9 +234,9 @@ class StoreClient:
                     id=d["id"],
                     collection=collection,
                     data=d.get("data", {}),
-                    created_at=d.get("created_at"),
-                    updated_at=d.get("updated_at"),
-                    user_id=d.get("user_id"),
+                    created_at=d.get("created_at") or "",
+                    updated_at=d.get("updated_at") or "",
+                    user_id=d.get("user_id") or "",
                 )
                 for d in docs
             ]
