@@ -1,15 +1,16 @@
 {
+  "$id": "https://imperal.io/schemas/document.schema.json",
   "additionalProperties": false,
   "description": "One row in the extension store. Returned from ctx.store.get(), .query(), .create(), .update().",
   "properties": {
-    "id": {
-      "minLength": 1,
-      "title": "Id",
-      "type": "string"
-    },
     "collection": {
       "minLength": 1,
       "title": "Collection",
+      "type": "string"
+    },
+    "created_at": {
+      "default": "",
+      "title": "Created At",
       "type": "string"
     },
     "data": {
@@ -22,14 +23,14 @@
       "title": "Extension Id",
       "type": "string"
     },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
     "tenant_id": {
       "default": "default",
       "title": "Tenant Id",
-      "type": "string"
-    },
-    "created_at": {
-      "default": "",
-      "title": "Created At",
       "type": "string"
     },
     "updated_at": {
@@ -39,7 +40,6 @@
     },
     "user_id": {
       "default": "",
-      "description": "populated by ctx.store.query_all (1.5.23+); empty for single-user contexts",
       "title": "User Id",
       "type": "string"
     }
@@ -49,6 +49,5 @@
     "collection"
   ],
   "title": "Imperal Document",
-  "type": "object",
-  "$id": "https://imperal.io/schemas/document.schema.json"
+  "type": "object"
 }
