@@ -55,6 +55,7 @@ class DocumentModel(BaseModel):
     tenant_id: str = "default"
     created_at: str = ""
     updated_at: str = ""
+    user_id: str = ""  # populated by ctx.store.query_all (1.5.23+); empty for single-user contexts
 
 
 class CompletionResultModel(BaseModel):
