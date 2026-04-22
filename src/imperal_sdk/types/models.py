@@ -18,7 +18,7 @@ class Document:
     tenant_id: str = "default"
     created_at: str = ""
     updated_at: str = ""
-    user_id: str | None = None
+    user_id: str = ""
 
 
 @dataclass
