@@ -1,0 +1,47 @@
+{
+  "ai": [
+    "complete"
+  ],
+  "billing": [
+    "check_limits",
+    "get_balance",
+    "get_subscription",
+    "track_usage"
+  ],
+  "config": [
+    "all",
+    "get",
+    "get_section"
+  ],
+  "http": [
+    "delete",
+    "get",
+    "patch",
+    "post",
+    "put"
+  ],
+  "notify": [
+    "send"
+  ],
+  "skeleton": [
+    "get",
+    "update"
+  ],
+  "storage": [
+    "delete",
+    "download",
+    "list",
+    "upload"
+  ],
+  "store": [
+    "count",
+    "create",
+    "delete",
+    "get",
+    "list",
+    "list_users",
+    "query",
+    "set",
+    "update"
+  ]
+}
