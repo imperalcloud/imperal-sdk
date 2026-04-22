@@ -145,3 +145,104 @@ class Context:
         import logging
         logger = logging.getLogger(f"ext.{self._extension_id}")
         getattr(logger, level, logger.info)(message)
+
+    def as_user(self, user_id: str) -> "Context":
+        """Return scoped Context for target user_id.
+
+        System-context only. Rewires per-user clients (store, skeleton,
+        notify, billing) with new user_id; inherits ai/storage/http/config.
+
+        Invariants: I-AS-USER-1 (system-context guard),
+                    I-AS-USER-2 (only user.id changes; extension/tenant/agency preserved).
+
+        Raises:
+            RuntimeError: caller is not system-context.
+            ValueError: user_id is empty or "__system__".
+        """
+        if self.user.id != "__system__":
+            raise RuntimeError(
+                f"ctx.as_user() requires system context (got {self.user.id!r})"
+            )
+        if not user_id or user_id == "__system__":
+            raise ValueError(
+                f"target user_id must be non-empty, non-system: {user_id!r}"
+            )
+
+        new_user = User(
+            id=user_id,
+            email=self.user.email,
+            tenant_id=self.user.tenant_id,
+            agency_id=getattr(self.user, "agency_id", None),
+            role=self.user.role,
+            scopes=list(self.user.scopes),
+            attributes=dict(self.user.attributes, scoped_from="__system__"),
+        )
+
+        new_store = self._rebuild_store_for(user_id) if self.store else None
+        new_skeleton = self._rebuild_skeleton_for(user_id) if self.skeleton else None
+        new_notify = self._rebuild_notify_for(user_id) if self.notify else None
+        new_billing = self._rebuild_billing_for(user_id) if self.billing else None
+
+        return Context(
+            user=new_user,
+            tenant=self.tenant,
+            store=new_store,
+            skeleton=new_skeleton,
+            notify=new_notify,
+            billing=new_billing,
+            # Reused — not user-scoped
+            ai=self.ai,
+            db=self.db,
+            storage=self.storage,
+            http=self.http,
+            tools=self.tools,
+            config=self.config,
+            extensions=self.extensions,
+            time=self.time,
+            agency_id=self.agency_id,
+            agency_theme=self.agency_theme,
+            _extension_id=self._extension_id,
+            _metadata=dict(self._metadata),
+        )
+
+    def _rebuild_store_for(self, user_id: str):
+        from imperal_sdk.store.client import StoreClient
+        return StoreClient(
+            gateway_url=self.store._gateway_url,
+            service_token=self.store._auth_token,
+            extension_id=self._extension_id,
+            user_id=user_id,
+            tenant_id=self.user.tenant_id,
+        )
+
+    def _rebuild_skeleton_for(self, user_id: str):
+        from imperal_sdk.skeleton.client import SkeletonClient
+        # SkeletonClient stores its token as `_token` (accepts both
+        # auth_token= and service_token= in __init__, unified at construction).
+        return SkeletonClient(
+            gateway_url=self.skeleton._gateway_url,
+            service_token=self.skeleton._token,
+            extension_id=self._extension_id,
+            user_id=user_id,
+        )
+
+    def _rebuild_notify_for(self, user_id: str):
+        from imperal_sdk.notify.client import NotifyClient
+        return NotifyClient(
+            gateway_url=self.notify._gateway_url,
+            service_token=self.notify._auth_token,
+            user_id=user_id,
+        )
+
+    def _rebuild_billing_for(self, user_id: str):
+        try:
+            from imperal_sdk.billing.client import BillingClient
+        except ImportError:
+            return None
+        # BillingClient separates service_token and auth_token; preserve both.
+        return BillingClient(
+            gateway_url=self.billing._gateway_url,
+            service_token=getattr(self.billing, "_service_token", ""),
+            auth_token=getattr(self.billing, "_auth_token", ""),
+            user_id=user_id,
+        )
