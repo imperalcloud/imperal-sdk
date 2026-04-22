@@ -35,6 +35,7 @@ class Document:
     data: dict
     created_at: str | None = None
     updated_at: str | None = None
+    user_id: str | None = None  # set by query_all (bulk fan-out); None for user-scoped queries
 
     def __getitem__(self, key):
         return self.data[key]
@@ -192,3 +193,64 @@ class StoreClient:
                 if parsed.next_cursor is None:
                     return
                 cursor = parsed.next_cursor
+
+    async def query_all(
+        self,
+        collection: str,
+        *,
+        limit: int = 500,
+    ) -> list[Document]:
+        """Return ALL documents in collection across all users.
+
+        System-context only. Returns list[Document] in a single HTTP call —
+        use for bulk fan-out when ``ctx.store.list_users()`` + ``ctx.as_user()``
+        would cause N+1 HTTP inefficiency (e.g. event_poller that reads every
+        account per tick).
+
+        ``Document.user_id`` is populated from the store row so callers can
+        dispatch per-user work without a second round-trip.
+
+        Invariants: I-LIST-USERS-1 (system-context guard — reused for query_all).
+
+        Raises:
+            RuntimeError: caller is not system-context.
+            StoreUnavailable: Auth Gateway unreachable.
+            ValueError: forbidden chars in collection or invalid limit.
+        """
+        if self._user_id != "__system__":
+            _emit_threat_counter(app=self._extension_id, tenant=self._tenant_id)
+            raise RuntimeError(
+                "ctx.store.query_all() requires system context "
+                f"(got user_id={self._user_id!r})."
+            )
+        if _FORBIDDEN_COLLECTION.search(collection):
+            raise ValueError(f"forbidden chars in collection: {collection!r}")
+        if not (1 <= limit <= 10000):
+            raise ValueError(f"limit must be 1..10000, got {limit}")
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self._gateway_url}/v1/internal/store/{collection}/all",
+                params={
+                    "extension_id": self._extension_id,
+                    "tenant_id": self._tenant_id,
+                    "limit": limit,
+                },
+                headers=self._headers(),
+                timeout=30,
+            )
+            if resp.status_code in (502, 503, 504):
+                raise StoreUnavailable(retry_after=30)
+            resp.raise_for_status()
+            docs = resp.json() or []
+            return [
+                Document(
+                    id=d["id"],
+                    collection=collection,
+                    data=d.get("data", {}),
+                    created_at=d.get("created_at"),
+                    updated_at=d.get("updated_at"),
+                    user_id=d.get("user_id"),
+                )
+                for d in docs
+            ]
