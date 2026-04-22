@@ -41,6 +41,7 @@
     "list",
     "list_users",
     "query",
+    "query_all",
     "set",
     "update"
   ]
