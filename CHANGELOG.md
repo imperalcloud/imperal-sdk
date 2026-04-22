@@ -2,6 +2,55 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.24 — 2026-04-22
+
+### Security / Integrity: strict narration anti-fabrication postamble
+
+Every ChatExtension narration LLM call now carries a **language-agnostic
+system-prompt postamble** that binds the model's final prose to the
+structurally-true `_functions_called` list. The rule is stated in plain
+language, works for any human language (English, Russian, Ukrainian,
+Turkish, Hebrew, German, Chinese, Arabic, …), and does NOT rely on
+regex / vocabulary / post-hoc detection.
+
+This closes a federal-compliance gap where the final narration round
+could fabricate operations that never ran (e.g. claiming "I archived
+3 emails" when only `mail.list` executed). The prior detection-based
+approach (kernel commit `d66db64`, `truth_gate.py` regex) has been
+**reverted** in favor of this preventive fix at source.
+
+**New module:** `imperal_sdk.chat.narration_guard`
+
+- `STRICT_NARRATION_POSTAMBLE` — the frozen rule text with a
+  `{functions_called_summary}` slot.
+- `format_functions_called_summary(fc_list)` — render
+  `_functions_called` as a bulleted summary with SUCCESS / ERROR /
+  CONFIRM_REQUIRED status per call plus totals line.
+- `augment_system_with_narration_rule(system, fc_list)` — appends the
+  postamble to any system prompt, substituting the current snapshot.
+
+**Wiring** (`imperal_sdk.chat.handler`):
+
+- The main tool-use loop call (final narration round) now passes the
+  augmented system prompt on every round, so whenever the LLM decides
+  no more tools are needed the concluding prose is bound to truth.
+- `_build_factual_response` (post-write summary) also augments.
+
+**Invariants**
+
+- **I-NARRATION-STRICT-1**: every narration LLM call in the SDK routes
+  through `augment_system_with_narration_rule`. No direct
+  `system=`-only call is allowed in the narration path.
+- **I-NARRATION-STRICT-2**: the postamble text is frozen and identical
+  in every language — it describes the rule rather than parroting
+  phrasing back.
+
+### Tests
+
+- `tests/test_narration_guard.py` — 16 tests covering postamble shape,
+  summary format (success / error / intercepted / mixed / empty),
+  augmentation behaviour (empty prompt, None fc, slot substitution).
+
 ## 1.5.23 (2026-04-XX)
 
 ### Added
