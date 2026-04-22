@@ -126,6 +126,19 @@ return ActionResult.error("Account disconnected", retryable=False)
 
 ChatExtension sets `_handled=True` only when at least one `@chat.function` was called. If the LLM responds with a clarifying question (no function called), `_handled=False` is returned — that request is not recorded as an action. This prevents clarifying questions from appearing as ledger entries.
 
+### Narration guardrail (v1.5.24+)
+
+Final narration — the prose ChatExtension returns to the user after all tool calls — is automatically bound to `_functions_called` via a system-prompt postamble. This is handled inside `handle_message` and `_build_factual_response`; **extension authors do not call anything to enable it, but must not bypass it either**.
+
+What this means:
+- If your `@chat.function` returns `status=error`, the narration will say the operation failed. The LLM cannot soften it to a success claim.
+- If the LLM considered calling a function but didn't, it will NOT describe it as "done" in the final narration.
+- The postamble is language-agnostic — users in any language get the same honesty guarantee.
+
+If you need custom narration logic (very rare), build on top of `ChatExtension` rather than replacing its narration path. See Rule 21 in `extension-guidelines.md`.
+
+Implementation: `imperal_sdk.chat.narration_guard` module; `STRICT_NARRATION_POSTAMBLE` + `augment_system_with_narration_rule(system, fc_list)` helpers.
+
 ### Full Example
 
 ```python

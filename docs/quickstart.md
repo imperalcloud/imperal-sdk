@@ -134,6 +134,8 @@ async def fn_delete_note(ctx, params: DeleteNoteParams) -> ActionResult:
 
 `@chat.function` handlers contain business logic only — no LLM calls, no routing. ChatExtension's internal LLM formats the response. ICNLI Integrity rules are auto-injected.
 
+> **Narration honesty (v1.5.24+) is automatic** — final user-facing prose is bound to `_functions_called` via a language-agnostic system-prompt postamble. If your function returns `status=error`, the narration will honestly report that. See Rule 21 in [extension-guidelines.md](extension-guidelines.md).
+
 ---
 
 ## 4. Validate

@@ -815,4 +815,29 @@ I-DOCS-VS-API-1 (phantom-ref linter).
 
 ---
 
+### Rule 21 — LLM narration is auto-bound to `_functions_called`
+
+**SDK 1.5.24+** ships a language-agnostic narration guardrail for ChatExtension:
+
+- Every narration LLM call is auto-wrapped by the SDK handler with `augment_system_with_narration_rule(system, fc_list)`, which appends `STRICT_NARRATION_POSTAMBLE` + the current `_functions_called` snapshot to the system prompt.
+- This structurally prevents the LLM from fabricating action reports ("I archived 3 emails", "Email sent successfully") when the corresponding function call didn't happen.
+- The rule is stated in plain language and enforces the same policy in English, Russian, Ukrainian, Turkish, Hebrew, German, Chinese, Arabic, or any other language — no regex, no per-language vocabulary.
+
+**As an extension author, you MUST:**
+
+- NOT override the system prompt passed to the inner LLM for final narration. Always let the SDK handler do the augmentation (it happens automatically inside `handle_message` and `_build_factual_response`).
+- NOT call the LLM directly for user-facing narration outside `ChatExtension`. If you need to generate prose, use `ctx.ai.complete(...)` ONLY for intermediate steps (data extraction, summarisation of tool results) — the handler-driven narration is what reaches the user.
+- Trust `_functions_called` as ground truth. If your tool returned status=error, the narration will honestly report that, not soften it.
+
+**Invariants (kernel + SDK):**
+- `I-NARRATION-STRICT-1` — every narration LLM call routes through `augment_system_with_narration_rule`. No direct `system=`-only narration call anywhere in the chat path.
+- `I-NARRATION-STRICT-2` — postamble text is frozen and language-neutral. It describes the rule rather than parroting phrasing back.
+
+**Background:** Pre-1.5.24, the inner narration round could generate prose claiming tool successes that never happened (incident 2026-04-22). A kernel-side regex detector was tried and reverted in favour of this preventive source-level fix.
+
+**Module:** `imperal_sdk.chat.narration_guard`  
+**Design:** `docs/superpowers/specs/2026-04-22-chat-ext-inner-truth-gate-design.md` (internal)
+
+---
+
 See also: [Quickstart](quickstart.md) | [SDK Clients](clients.md) | [Skeleton](skeleton.md)

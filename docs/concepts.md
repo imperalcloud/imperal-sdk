@@ -404,6 +404,10 @@ For best results, combine with:
 - **Verify-after-write** patterns -- after mutating state, read it back to confirm the change
 - **Return `ActionResult`** -- use `ActionResult.success(data, summary)` and `ActionResult.error(msg, retryable)` for unambiguous status reporting. Explicit RESULT prefixes in string returns are legacy — use ActionResult instead.
 
+### Narration guardrail (SDK 1.5.24+)
+
+On top of the 8 ICNLI rules, ChatExtension's final narration round is bound to structural truth: the SDK handler passes every narration LLM call through `augment_system_with_narration_rule(system, fc_list)` (module `imperal_sdk.chat.narration_guard`), which appends a frozen, language-agnostic postamble + the live `_functions_called` snapshot. This means the user-facing prose cannot fabricate successes for functions that never ran, and cannot soften `status=error` into a success claim — the truth flows `_functions_called` → postamble → final text. Extensions get this automatically; see Rule 21 in [extension-guidelines.md](extension-guidelines.md).
+
 ---
 
 ## 8. Skeleton (Background State)

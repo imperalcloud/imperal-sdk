@@ -51,7 +51,7 @@ approach (kernel commit `d66db64`, `truth_gate.py` regex) has been
   summary format (success / error / intercepted / mixed / empty),
   augmentation behaviour (empty prompt, None fc, slot substitution).
 
-## 1.5.23 (2026-04-XX)
+## 1.5.23 — 2026-04-22
 
 ### Added
 - `ctx.store.list_users(collection=None)` — system-context AsyncIterator for user-iteration (GAP-A closure)
