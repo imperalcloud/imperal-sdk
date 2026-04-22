@@ -797,4 +797,22 @@ See [SDK Clients — ctx.db](clients.md#4-ctxdb----dbclient) for full API.
 
 ---
 
+### Rule 20 — System-context fan-out uses `ctx.store.list_users()`
+
+Extensions with `@ext.schedule` or `@ext.signal` handlers that need per-user
+work MUST use `ctx.store.list_users(collection)` + `ctx.as_user(user_id)` rather
+than direct Redis/HTTP calls or manually-maintained user lists.
+
+**Why:** `ctx.store.query()` in system-context (`user_id="__system__"`)
+returns empty — the frozen user_id scope never matches real user docs.
+Use `list_users` to discover users, then `as_user(uid)` to build a scoped
+Context for per-user store operations.
+
+**Enforcement:** I-KERNEL-NO-DIRECT-HTTPX-STORE-1 (CI grep gate),
+I-DOCS-VS-API-1 (phantom-ref linter).
+
+**Docs:** `context-object.md` § `ctx.store.list_users`, § `ctx.as_user`.
+
+---
+
 See also: [Quickstart](quickstart.md) | [SDK Clients](clients.md) | [Skeleton](skeleton.md)

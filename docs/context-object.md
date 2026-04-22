@@ -293,6 +293,58 @@ async def open_tickets(ctx: Context) -> str:
 - Deletes are soft deletes with an audit trail. Deleted documents are excluded from queries and counts automatically.
 - The store is automatically metered. Usage counts toward the tenant's storage quota.
 
+### `ctx.store.list_users(collection, page_size=500)`
+
+**System context only.** Returns AsyncIterator yielding user_ids with records in this extension's collection. Raises `RuntimeError` if called in user-context.
+
+```python
+async for user_id in ctx.store.list_users("wt_monitors"):
+    user_ctx = ctx.as_user(user_id)
+    monitors = await user_ctx.store.query("wt_monitors", where={"enabled": True})
+    for m in monitors.data:
+        await check_monitor(user_ctx, m)
+```
+
+**Invariants:** I-LIST-USERS-1..4.
+
+**Raises:**
+- `RuntimeError` — caller is not system-context
+- `StoreUnavailable` — Auth Gateway unreachable (catch + skip scheduler tick)
+- `ValueError` — forbidden chars in collection or invalid page_size
+
+**Performance:** paginated (cursor-based, 500/page default). Suitable for collections up to 100k+ users.
+
+### `ctx.store.query_all(collection, limit=500)`
+
+**System context only.** Returns `list[Document]` in a single HTTP call. Use for bulk fan-out when `list_users` + `as_user` + per-user query would be N+1 inefficient (e.g. event poller scanning all OAuth tokens).
+
+```python
+docs = await ctx.store.query_all("gmail_accounts")
+for doc in docs:
+    if doc.data.get("provider") == "gmail":
+        # doc.user_id is populated by query_all
+        ...
+```
+
+**Invariants:** I-LIST-USERS-1 (reused), I-SDK-GW-CONTRACT-1.
+
+### `ctx.as_user(user_id) -> Context`
+
+**System context only.** Returns a new `Context` scoped to `user_id` — rewires `store`, `skeleton`, `notify`, `billing` clients with the new user_id. `ai`, `storage`, `http`, `config`, `time`, `_extension_id`, `agency_id` are inherited.
+
+```python
+# Inside @ext.schedule:
+user_ctx = ctx.as_user("user-123")
+doc = await user_ctx.store.get("my_coll", "doc-id")  # scoped to user-123
+await user_ctx.notify("hi from scheduler")  # notifies user-123
+```
+
+**Invariants:** I-AS-USER-1 (system-context guard), I-AS-USER-2 (only user.id changes; extension/tenant/agency preserved).
+
+**Raises:**
+- `RuntimeError` — caller is not system-context (prevents chain-rescoping)
+- `ValueError` — empty user_id or `"__system__"`
+
 ---
 
 ## ctx.db

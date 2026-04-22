@@ -2,6 +2,27 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.23 (2026-04-XX)
+
+### Added
+- `ctx.store.list_users(collection=None)` — system-context AsyncIterator for user-iteration (GAP-A closure)
+- `ctx.store.query_all(collection)` — bulk Documents in single HTTP call for system-context fan-out
+- `ctx.as_user(user_id)` — scoped Context primitive for per-user work inside system handlers
+- Shared contracts module `imperal_sdk.types.store_contracts` — drift-proofed via JSON Schema snapshot
+- SDK tools module: `imperal_sdk.tools.generate_api_surface` — emits public API surface for docs-vs-api linter
+- `Document.user_id: str | None = None` — optional field populated by `query_all`
+- `StoreUnavailable` and `StoreContractError` exceptions
+
+### Fixed
+- GAP-A root cause: `ctx.store.query()` in system-context silently returned empty because `StoreClient.user_id` was frozen to `"__system__"`. The new `list_users` + `as_user` pair enables proper fan-out.
+- `imperal_kernel/services/ext_scheduler.py:24` phantom reference to non-existent `list_users` method
+
+### Internal
+- Kernel migrations: 4 direct-httpx bypasses in `activities/kernel_resolve.py`, `services/event_poller/accounts.py`, `llm/provider.py` migrated to SDK `StoreClient` surface (I-KERNEL-NO-DIRECT-HTTPX-STORE-1)
+- Text-linter `docs-vs-api` shipped in kernel with fixture-based self-tests + baseline CI gate (I-DOCS-VS-API-1..3)
+- Doctest CI integration (I-DOCTEST-SDK-1)
+- Web-tools `wt_monitor_runner` migrated to list_users+as_user fan-out (was silently broken)
+
 ## 1.5.22 — 2026-04-22
 
 ### New: `@ext.skeleton` decorator + V13 validator rule
