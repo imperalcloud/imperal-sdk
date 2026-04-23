@@ -2,6 +2,45 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.26 — 2026-04-23
+
+Phase P2 of the Federal-Grade Chat Integrity roadmap (spec:
+`docs/superpowers/specs/2026-04-23-federal-grade-chat-integrity-design.md`).
+
+### Features
+
+- **feat(chat/narration): `EMIT_NARRATION_TOOL` schema + `NarrationEmission`
+  Pydantic parser.** New structural tool the kernel injects into every
+  ChatExtension turn; replaces soft-rule narration_guard postamble (kept
+  as belt-and-suspenders). Every claim is now verified against
+  `_functions_called` by the kernel's 5-gate verifier (I-NARRATION-VERIFIED).
+- **feat(chat/error_codes): structured error taxonomy.** 9 codes mapped to
+  i18n keys; replaces raw `str(e)` content in tool_results. Closes P0-4
+  (error string bleeding into user-visible write args). SDK + kernel
+  carry identical catalogs (drift-guarded).
+- **feat(chat/handler): three bundled changes:** structured error_code in
+  `_execute_function` exception handlers (Task 20); `EMIT_NARRATION_TOOL`
+  wiring into tool schema + terminal branch in the tool-use loop
+  (Task 27); fresh-fetch round-0 `tool_choice` enforcement from
+  `ctx.skeleton._fresh_fetch_required` (Task 32, closes P1-7).
+- **feat(chat/guards): `check_write_arg_bleed` pre-dispatch guard.**
+  Belt-and-suspenders layer on top of structured error codes: rejects
+  write/destructive tool calls whose args contain any ERROR_TAXONOMY
+  substring. I-WRITE-ARG-NO-BLEED. Case-insensitive, nested-value coverage.
+
+### Invariants introduced (wire-contract with kernel)
+
+- I-NARRATION-TOOL-SHAPE-1 — EMIT_NARRATION_TOOL schema frozen
+- I-NARRATION-STATUS-ENUM-1 — status enum `{success, error, intercepted}` shared with kernel `_functions_called[*].status`
+- I-NARRATION-FROZEN-1 — `NarrationEmission` immutable post-parse
+- I-WRITE-ARG-NO-BLEED — write args scanned for ERROR_TAXONOMY substrings pre-dispatch
+
+### Tests
+
+9 new tests in `test_handler_p2.py` (structured errors + emit_narration wire + fresh-fetch) + 11 in `test_narration_emission.py` + 7 in `test_error_codes.py` + 12 in `test_write_arg_bleed.py` = **39 new tests, all green**.
+
+Commits: `e130426` `762af72` `abfe937` `a78d429` (rebased onto origin/main 265f201 from pre-P2 baseline d5ca155).
+
 ## 1.5.25 — 2026-04-22
 
 ### Refactor
