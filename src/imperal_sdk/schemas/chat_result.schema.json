@@ -104,6 +104,19 @@
       "default": false,
       "title": "Task Cancelled",
       "type": "boolean"
+    },
+    "_narration_emission": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Narration Emission"
     }
   },
   "title": "Imperal ChatResult Payload",

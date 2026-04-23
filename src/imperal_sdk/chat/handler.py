@@ -4,16 +4,38 @@
 
 Contains the full LLM tool-use loop extracted from ChatExtension._handle().
 All state access goes through the `chat_ext` parameter (the ChatExtension instance).
+
+Federal-Grade Chat Integrity hooks (spec 2026-04-23):
+
+  * P2 Task 20 — structured error_code in ``_execute_function`` + unknown
+    sub-function early exit. Raw ``str(e)`` no longer lands in tool_result
+    content or ``_functions_called[*].result`` — that was the vector
+    ``check_write_arg_bleed`` (Task 21) guards against.
+
+  * P2 Task 27 — ``EMIT_NARRATION_TOOL`` is augmented onto every tool list
+    passed to ``client.create_message``. When the LLM emits a tool_use with
+    ``name == "emit_narration"``, the loop terminates and the parsed
+    ``NarrationEmission`` is attached to the returned ``ChatResult`` (or
+    ``None`` on malformed input — best-effort prose still surfaces).
+
+  * P2 Task 32 — round-0 ``tool_choice`` enforcement. When the classifier
+    stamps ``ctx.skeleton["_fresh_fetch_required"]`` with a single tool name
+    the LLM MUST use, we pass ``tool_choice={"type":"tool","name":X}``.
+    Multi-tool fresh-fetch falls back to ``tool_choice={"type":"any"}`` +
+    post-round verification log line.
 """
 from __future__ import annotations
 import json
 import logging
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError as PydanticValidationError
+
 from imperal_sdk.chat.filters import enforce_os_identity, enforce_response_style, normalize_markdown, trim_tool_result
 from imperal_sdk.chat.prompt import inject_language
 from imperal_sdk.chat.action_result import ActionResult
 from imperal_sdk.chat.guards import check_guards
+from imperal_sdk.chat.narration import EMIT_NARRATION_TOOL, NarrationEmission, parse_narration_emission
 from imperal_sdk.chat.narration_guard import augment_system_with_narration_rule
 
 if TYPE_CHECKING:
@@ -112,19 +134,29 @@ async def _build_factual_response(chat_ext: ChatExtension, ctx, client) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Function execution
+# Function execution  (P2 Task 20 — structured error_code surfaces)
 # ---------------------------------------------------------------------------
 
 async def _execute_function(chat_ext: ChatExtension, ctx, tu, action_type: str, cfg: dict) -> str:
-    """Execute a single function call and return the tool result content string."""
+    """Execute a single function call and return the tool result content string.
+
+    Error contract (I-ERR-CODE-1): every failure surfaces in BOTH the
+    JSON-encoded content AND ``_functions_called[-1]["result"]`` as a dict
+    carrying an ``error_code`` drawn from
+    :mod:`imperal_sdk.chat.error_codes`. No raw ``str(exception)`` output.
+    """
+    # ── Unknown sub-function early exit ──────────────────────────────────
     if tu.name not in chat_ext._functions:
+        available = list(chat_ext._functions.keys())
         content = json.dumps({
             "RESULT": "ERROR",
-            "error": f"Unknown function '{tu.name}'. Available: {list(chat_ext._functions.keys())}",
+            "error_code": "UNKNOWN_SUB_FUNCTION",
+            "detail": f"'{tu.name}' not in this extension. Available: {available}",
         })
         chat_ext._functions_called.append({
             "name": tu.name, "params": tu.input, "action_type": action_type,
-            "success": False, "intercepted": False, "event": "", "result": None,
+            "success": False, "intercepted": False, "event": "",
+            "result": {"error_code": "UNKNOWN_SUB_FUNCTION"},
         })
         return trim_tool_result(content, cfg["max_result_tokens"], cfg["list_truncate_items"], cfg["string_truncate_chars"])
 
@@ -166,12 +198,45 @@ async def _execute_function(chat_ext: ChatExtension, ctx, tu, action_type: str, 
 
     except TaskCancelled:
         raise
-    except Exception as e:
-        log.error(f"ChatExtension function error {tu.name}: {e}")
-        content = json.dumps({"RESULT": "ERROR", "error": str(e)})
+
+    except PydanticValidationError as e:
+        # Arg-validation failure on the auto-detected Pydantic model. Surface
+        # missing fields explicitly so the LLM can self-correct without
+        # having to parse a freeform string. This is also the error surface
+        # the write-arg-bleed guard (Task 21) reads on subsequent calls.
+        missing = []
+        for err in e.errors():
+            if err.get("type") == "missing":
+                loc = err.get("loc") or ()
+                if loc:
+                    missing.append(loc[0])
+        log.error(f"ChatExtension validation error {tu.name}: missing={missing}")
+        content = json.dumps({
+            "RESULT": "ERROR",
+            "error_code": "VALIDATION_MISSING_FIELD",
+            "missing_fields": missing,
+        })
         chat_ext._functions_called.append({
             "name": tu.name, "params": tu.input, "action_type": action_type,
-            "success": False, "intercepted": False, "event": "", "result": None,
+            "success": False, "intercepted": False, "event": "",
+            "result": {"error_code": "VALIDATION_MISSING_FIELD", "missing_fields": missing},
+        })
+        return trim_tool_result(content, cfg["max_result_tokens"], cfg["list_truncate_items"], cfg["string_truncate_chars"])
+
+    except Exception as e:
+        # Generic internal failure. error_class is the exception type name
+        # (safe to expose) but str(e) is NOT included — it has leaked PII,
+        # paths, and credentials historically.
+        log.error(f"ChatExtension internal error {tu.name}: {e}", exc_info=True)
+        content = json.dumps({
+            "RESULT": "ERROR",
+            "error_code": "INTERNAL",
+            "error_class": type(e).__name__,
+        })
+        chat_ext._functions_called.append({
+            "name": tu.name, "params": tu.input, "action_type": action_type,
+            "success": False, "intercepted": False, "event": "",
+            "result": {"error_code": "INTERNAL", "error_class": type(e).__name__},
         })
         return trim_tool_result(content, cfg["max_result_tokens"], cfg["list_truncate_items"], cfg["string_truncate_chars"])
 
@@ -191,6 +256,10 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
     tools = chat_ext._build_tool_schemas()
     if not tools:
         return chat_ext._make_chat_result(response="No functions registered")
+
+    # P2 Task 27 — augment the extension's tools with EMIT_NARRATION_TOOL.
+    # Shared ref (not a copy) so provider adapters can identity-compare.
+    _tools_for_llm = list(tools) + [EMIT_NARRATION_TOOL]
 
     system = chat_ext._build_system_prompt(ctx)
     _sys_tokens_est = len(system) // 3
@@ -226,12 +295,40 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
 
     _chain_mode = getattr(ctx, "_chain_mode", False)
 
+    # P2 Task 32 — classifier fresh-fetch hint. When the classifier knows
+    # the user's turn requires a live read (e.g. "new mail?" demands an
+    # inbox fetch because skeleton snapshot is stale), it stamps
+    # ``ctx.skeleton["_fresh_fetch_required"] = [tool_name, ...]``. We
+    # honour the hint on round 0 only.
+    _required_fresh: list[str] = []
+    if isinstance(getattr(ctx, "skeleton", None), dict):
+        _required_fresh = list(ctx.skeleton.get("_fresh_fetch_required", []) or [])
+
     try:
         for _round in range(_max_tool_rounds):
-            _api_kwargs = {}
+            _api_kwargs: dict = {}
+
+            # Pre-existing rule: first round or chain mode → force tool use.
             if (_chain_mode or (_round == 0 and tools)) and _round == 0:
                 _api_kwargs["tool_choice"] = {"type": "any"}
                 log.info(f"ChatExtension {chat_ext.tool_name}: forcing tool_choice=any (chain={_chain_mode})")
+
+            # P2 Task 32 — fresh-fetch override of tool_choice on round 0.
+            if _required_fresh and _round == 0:
+                if len(_required_fresh) == 1 and _required_fresh[0] in chat_ext._functions:
+                    _api_kwargs["tool_choice"] = {"type": "tool", "name": _required_fresh[0]}
+                    log.info(
+                        f"ChatExtension {chat_ext.tool_name}: fresh-fetch enforcement "
+                        f"tool_choice={_required_fresh[0]}"
+                    )
+                else:
+                    # Multi-required: Anthropic tool_choice cannot express OR
+                    # over tool names. Fall back to "any" + post-round verify.
+                    log.info(
+                        f"ChatExtension {chat_ext.tool_name}: fresh-fetch multi-required "
+                        f"fallback tool_choice=any required={_required_fresh}"
+                    )
+                    _api_kwargs["tool_choice"] = {"type": "any"}
 
             # Observability
             _msg_tokens_est = sum(len(m["content"]) if isinstance(m["content"], str) else sum(len(str(x)) for x in m["content"]) if isinstance(m["content"], list) else 0 for m in messages) // 3
@@ -243,13 +340,17 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
 
             _uid = str(getattr(ctx.user, "id", "")) if hasattr(ctx, "user") and ctx.user else ""
             # I-NARRATION-STRICT-1: augment system prompt with anti-fabrication
-            # postamble carrying the current _functions_called snapshot. When
-            # LLM emits no more tool_use, the concluding narration is then
-            # bound to the structurally-true list. Language-agnostic.
+            # postamble carrying the current _functions_called snapshot (belt-
+            # and-suspenders alongside EMIT_NARRATION_TOOL per spec §3.9).
+            # Language-agnostic. Coexists with P2 emit_narration terminal tool.
             _system_for_round = augment_system_with_narration_rule(
                 system, chat_ext._functions_called
             )
-            resp = await client.create_message(max_tokens=2048, system=_system_for_round, messages=messages, tools=tools, purpose="execution", user_id=_uid, **_api_kwargs)
+            resp = await client.create_message(
+                max_tokens=2048, system=_system_for_round, messages=messages,
+                tools=_tools_for_llm,
+                purpose="execution", user_id=_uid, **_api_kwargs,
+            )
 
             tool_uses = [b for b in resp.content if b.type == "tool_use"]
             if not tool_uses:
@@ -258,6 +359,27 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
                 text = enforce_response_style(text)
                 text = normalize_markdown(text)
                 return chat_ext._make_chat_result(response=text, handled=bool(chat_ext._functions_called))
+
+            # P2 Task 27 — emit_narration is a terminal tool. If present in
+            # the batch, exit immediately with the parsed emission attached.
+            for tu in tool_uses:
+                if tu.name == "emit_narration":
+                    emission: NarrationEmission | None = None
+                    _tu_input = tu.input if isinstance(tu.input, dict) else {}
+                    try:
+                        emission = parse_narration_emission(_tu_input)
+                    except Exception as e:
+                        log.error(f"ChatExtension {chat_ext.tool_name}: emit_narration parse error: {e}")
+                        emission = None
+                    text = _tu_input.get("prose", "") if isinstance(_tu_input, dict) else ""
+                    text = enforce_os_identity(text)
+                    text = enforce_response_style(text)
+                    text = normalize_markdown(text)
+                    return chat_ext._make_chat_result(
+                        response=text,
+                        handled=bool(chat_ext._functions_called),
+                        narration_emission=emission.model_dump() if emission is not None else None,
+                    )
 
             messages.append({"role": "assistant", "content": resp.content})
             tool_results = []
@@ -277,6 +399,19 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
                 return chat_ext._make_chat_result(response="Action requires confirmation.", intercepted=True, message_type="confirmation")
 
             messages.append({"role": "user", "content": tool_results})
+
+            # P2 Task 32 — fresh-fetch verification on round 0. The hint is
+            # best-effort: we log a violation but don't hard-fail — the
+            # kernel narration verifier (Task 28) handles consistency.
+            if _round == 0 and _required_fresh:
+                _recent = chat_ext._functions_called[-len(tool_uses):] if tool_uses else []
+                called_names = {fc["name"] for fc in _recent}
+                missing_fresh = [r for r in _required_fresh if r not in called_names]
+                if missing_fresh:
+                    log.warning(
+                        f"ChatExtension {chat_ext.tool_name}: fresh-fetch violation "
+                        f"round 0 missed={missing_fresh}"
+                    )
 
             if _round >= 1:
                 has_successful_write = any(fc["action_type"] in ("write", "destructive") and fc["success"] for fc in chat_ext._functions_called if not fc["intercepted"])

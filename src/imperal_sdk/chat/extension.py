@@ -134,8 +134,15 @@ class ChatExtension:
 
     def _make_chat_result(self, response: str, handled: bool = False,
                           message_type: str = "text", intercepted: bool = False,
-                          task_cancelled: bool = False, action_meta: dict = None) -> dict:
-        """Build return dict using ChatResult for typed construction."""
+                          task_cancelled: bool = False, action_meta: dict = None,
+                          narration_emission: dict | None = None) -> dict:
+        """Build return dict using ChatResult for typed construction.
+
+        narration_emission: when the LLM completed the turn via
+            EMIT_NARRATION_TOOL (P2 Task 27), this carries the parsed
+            NarrationEmission as a plain dict (.model_dump()). None for
+            free-form text responses or on parse failure.
+        """
         from imperal_sdk.types.chat_result import ChatResult, FunctionCall as FC
 
         fcs = []
@@ -162,6 +169,7 @@ class ChatExtension:
             action_meta=action_meta or {},
             intercepted=intercepted,
             task_cancelled=task_cancelled,
+            narration_emission=narration_emission,
         )
         return cr.to_dict()
 

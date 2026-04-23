@@ -201,6 +201,15 @@ class ChatResultModel(BaseModel):
     action_meta: Dict[str, Any] = Field(default_factory=dict, alias="_action_meta")
     intercepted: bool = Field(default=False, alias="_intercepted")
     task_cancelled: bool = Field(default=False, alias="_task_cancelled")
+    # P2 Task 27 — NarrationEmission attached when the LLM completed the
+    # turn via EMIT_NARRATION_TOOL. Optional (free-form text responses and
+    # parse failures leave this null). Nested schema intentionally left open
+    # at the transport layer — strict shape validation is owned by the
+    # kernel narration verifier + the Pydantic NarrationEmission model in
+    # imperal_sdk.chat.narration.
+    narration_emission: Optional[Dict[str, Any]] = Field(
+        default=None, alias="_narration_emission"
+    )
 
 
 # === Shared validator plumbing =======================================

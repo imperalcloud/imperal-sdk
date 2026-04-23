@@ -6,7 +6,7 @@ serialization (Temporal activities expect dict).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from imperal_sdk.types.action_result import ActionResult
@@ -67,6 +67,12 @@ class ChatResult:
     action_meta: dict = field(default_factory=dict)
     intercepted: bool = False
     task_cancelled: bool = False
+    # P2 Task 27 — Narration Contract Hybrid. When the LLM completes a turn
+    # by invoking EMIT_NARRATION_TOOL, the parsed NarrationEmission is stored
+    # here as a plain dict (model_dump) so kernel/Temporal can serialize it.
+    # None when the LLM used free-form text or the emission failed Pydantic
+    # validation (fallback to malformed-but-best-effort prose).
+    narration_emission: Optional[dict] = None
 
     def to_dict(self) -> dict:
         """Serialize to dict for kernel/Temporal transport."""
@@ -79,6 +85,7 @@ class ChatResult:
             "_action_meta": self.action_meta,
             "_intercepted": self.intercepted,
             "_task_cancelled": self.task_cancelled,
+            "_narration_emission": self.narration_emission,
         }
 
     @staticmethod
@@ -95,4 +102,5 @@ class ChatResult:
             action_meta=d.get("_action_meta", {}),
             intercepted=d.get("_intercepted", False),
             task_cancelled=d.get("_task_cancelled", False),
+            narration_emission=d.get("_narration_emission"),
         )
