@@ -2,14 +2,15 @@
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Security guards for the ChatExtension tool-use loop.
 
-Intent guard, target-scope guard, and 2-step confirmation guard.
-All guards return a JSON content string when blocking/intercepting,
-or None when the tool_use should proceed to execution.
+Intent guard, target-scope guard, write-arg-bleed guard, and 2-step
+confirmation guard. All guards return a JSON content string when
+blocking/intercepting, or None when the tool_use should proceed to
+execution.
 """
 from __future__ import annotations
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Iterable
 
 if TYPE_CHECKING:
     from imperal_sdk.chat.extension import ChatExtension
@@ -24,6 +25,24 @@ except ImportError:
     )
     def _check_target_scope(**kwargs):
         return {"allowed": False, "cross_user": True, "error": "target_scope_unavailable"}
+
+# Canonical error-code taxonomy (P2 Task 19 → imperal_sdk.chat.error_codes.ERROR_TAXONOMY).
+# Import with fallback mirroring the exact 9 keys — so a missing/broken
+# Task 19 module still leaves the bleed guard operational on the canonical set.
+try:
+    from imperal_sdk.chat.error_codes import ERROR_TAXONOMY  # type: ignore
+except ImportError:  # pragma: no cover — defensive
+    ERROR_TAXONOMY = frozenset({
+        "VALIDATION_MISSING_FIELD",
+        "VALIDATION_TYPE_ERROR",
+        "UNKNOWN_TOOL",
+        "UNKNOWN_SUB_FUNCTION",
+        "PERMISSION_DENIED",
+        "BACKEND_TIMEOUT",
+        "BACKEND_5XX",
+        "RATE_LIMITED",
+        "INTERNAL",
+    })
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +97,20 @@ def check_guards(
             ),
         })
 
+    # ── Write-arg-bleed guard (I-WRITE-ARG-NO-BLEED) ──────────────
+    # Defence-in-depth: reject any write/destructive call whose args contain
+    # substrings of prior ERROR_TAXONOMY codes, even if the LLM paraphrased
+    # an error_code into user-visible text. Runs BEFORE target_scope so we
+    # fail fast on poisoned inputs without wasting cycles on scope checks.
+    bleed = check_write_arg_bleed(tu, chat_ext._functions_called, action_type)
+    if bleed is not None:
+        chat_ext._functions_called.append({
+            "name": tu.name, "params": tu.input,
+            "action_type": action_type, "success": False, "intercepted": False,
+            "event": "", "result": None,
+        })
+        return json.dumps({"RESULT": "BLOCKED", "error": bleed})
+
     # ── Target scope guard ────────────────────────────────────────
     blocked = _check_target_scope_guard(chat_ext, ctx, tu, action_type, confirmation_required)
     if blocked is not None:
@@ -87,6 +120,86 @@ def check_guards(
     intercepted = _check_confirmation_guard(chat_ext, ctx, tu, action_type, confirmation_required)
     if intercepted is not None:
         return intercepted
+
+    return None
+
+
+def check_write_arg_bleed(
+    tu,
+    functions_called: Iterable[dict[str, Any]],
+    action_type: str,
+) -> str | None:
+    """Reject write/destructive calls whose args contain a substring of any
+    ERROR_TAXONOMY code when at least one prior tool call recorded an error
+    code.
+
+    Invariant I-WRITE-ARG-NO-BLEED — belt-and-suspenders over Task 19
+    (structured error_codes) and Task 20 (tool_result hygiene). Even if an
+    LLM paraphrases an error_code into prose, catch it before dispatch.
+
+    Design notes:
+    * Skips when ``action_type not in ("write", "destructive")`` — read args
+      are free to echo error codes.
+    * Skips when there is no prior error code — nothing to bleed from.
+    * Serialises ``tu.input`` as JSON so nested dict/list values are scanned
+      exhaustively.
+    * Matching is case-insensitive — LLMs rephrase casing but preserve
+      letter order (``validation_missing_field`` still lights up).
+    * Scans the full ERROR_TAXONOMY, not just prior-this-turn codes — any
+      taxonomy string appearing in a write arg is suspicious by construction.
+
+    Federal discipline: never logs ``tu.input`` (may contain PII). Logs only
+    tool name and the matched error code.
+
+    Returns
+    -------
+    str | None
+        ``None`` to allow, or a human-readable rejection reason to block.
+        The caller (``check_guards``) wraps this into the standard
+        ``{"RESULT": "BLOCKED", "error": ...}`` JSON envelope and appends
+        a ``_functions_called`` audit entry.
+    """
+    if action_type not in ("write", "destructive"):
+        return None
+
+    # Only meaningful when there is at least one prior error code on record.
+    has_prior_error_code = False
+    for fc in functions_called or ():
+        if fc.get("success"):
+            continue
+        result = fc.get("result")
+        if isinstance(result, dict) and result.get("error_code"):
+            has_prior_error_code = True
+            break
+    if not has_prior_error_code:
+        return None
+
+    # Exhaustive nested scan via JSON serialisation. Defensive fallback on
+    # payloads that cannot be serialised (exotic objects) — we allow rather
+    # than block, because we cannot prove a bleed on something we could not
+    # serialise; failing closed here would be a DoS vector on legitimate calls.
+    try:
+        payload_lower = json.dumps(
+            getattr(tu, "input", {}),
+            ensure_ascii=False,
+            default=str,
+        ).lower()
+    except Exception:
+        return None
+
+    # Iterating ERROR_TAXONOMY yields the 9 string keys whether it's a
+    # ``dict[str, dict]`` (Task 19 shape) or a ``frozenset[str]`` (fallback).
+    for code in ERROR_TAXONOMY:
+        if code.lower() in payload_lower:
+            log.warning(
+                f"ChatExtension guard: WRITE_ARG_BLEED blocked {tu.name} "
+                f"(matched error_code={code}, action={action_type})"
+            )
+            return (
+                f"WRITE_ARG_BLEED rejected: tool call '{tu.name}' args contain "
+                f"error_code substring '{code}'. The LLM appears to be paraphrasing "
+                "a prior error into user-visible output. Retry without that text."
+            )
 
     return None
 
