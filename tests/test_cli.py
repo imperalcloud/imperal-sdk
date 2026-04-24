@@ -14,7 +14,11 @@ def test_cli_version():
 
 
 def test_cli_init_chat_template():
-    """Default chat template generates ChatExtension + ActionResult scaffold."""
+    """Default (--template chat) generates v2-style Extension scaffold.
+
+    v2.0.0: --chat flag is retained as alias for CLI-level backward
+    compatibility; both templates emit the same v2 scaffold.
+    """
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init", "my-test-ext"])
@@ -28,17 +32,24 @@ def test_cli_init_chat_template():
 
         with open("my-test-ext/main.py") as f:
             content = f.read()
-            assert 'Extension("my-test-ext"' in content
-            assert "ChatExtension" in content
-            assert "ActionResult" in content
-            assert 'version="1.0.0"' in content
+            # v2 markers
+            assert "Extension" in content
+            assert "@_ext.tool" in content
+            assert "output_schema" in content
+            assert 'app_id = "my-test-ext"' in content
+            assert 'version = "1.0.0"' in content
+            assert "class MyTestExt(Extension)" in content
+            # v1 residue MUST NOT be present
+            assert "ChatExtension" not in content
+            assert "_system_prompt" not in content
+            assert "llm_orchestrator" not in content
 
         with open("my-test-ext/requirements.txt") as f:
             assert "imperal-sdk>=1.0.0" in f.read()
 
 
 def test_cli_init_tool_template():
-    """Tool template generates bare @ext.tool scaffold."""
+    """--template tool generates the same v2-style scaffold as --template chat."""
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init", "my-tool-ext", "--template", "tool"])
@@ -48,9 +59,12 @@ def test_cli_init_tool_template():
 
         with open("my-tool-ext/main.py") as f:
             content = f.read()
-            assert 'Extension("my-tool-ext"' in content
-            assert "@ext.tool" in content
-            assert 'version="1.0.0"' in content
+            assert "Extension" in content
+            assert "@_ext.tool" in content
+            assert "output_schema" in content
+            assert 'app_id = "my-tool-ext"' in content
+            assert 'version = "1.0.0"' in content
+            assert "ChatExtension" not in content
 
 
 def test_cli_init_invalid_template():

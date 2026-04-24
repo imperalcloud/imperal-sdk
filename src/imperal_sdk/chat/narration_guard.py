@@ -5,12 +5,15 @@
 Context (federal-grade, v1.5.24)
 ================================
 
-The final narration round of a ChatExtension tool-use loop is an LLM call
-that turns the actual ``_functions_called`` list into a user-facing
-response. Before v1.5.24, the narration LLM occasionally **fabricated**
-actions that never ran — e.g. claiming "I archived 3 emails and deleted
-the spam folder" when only ``mail.list`` had actually been invoked. This
-is a federal compliance breach (audit-trail divergence from reality).
+v2.0.0: the final narration round of a chat turn is an LLM call run
+kernel-side by the Webbee Narrator that turns the actual
+``_functions_called`` list into a user-facing response. Before v1.5.24 (in
+the pre-v2 ChatExtension era) the narration LLM occasionally
+**fabricated** actions that never ran — e.g. claiming "I archived 3
+emails and deleted the spam folder" when only ``mail.list`` had actually
+been invoked. This is a federal compliance breach (audit-trail divergence
+from reality). The guardrail applies identically whether the caller is
+the Webbee Narrator's platform LLM or a user's BYO LLM.
 
 The fix is **preventive and structural**, not detective:
 
@@ -146,7 +149,7 @@ def format_functions_called_summary(
     narration LLM can see "nothing happened" explicitly.
 
     Args:
-        functions_called: the ``ChatExtension._functions_called`` list (or None).
+        functions_called: the kernel-collected ``_functions_called`` list (or None).
 
     Returns:
         A plain-text summary — safe for direct substitution into the postamble.

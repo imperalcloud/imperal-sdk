@@ -65,44 +65,68 @@ def cli():
 
 @cli.command()
 @click.argument("name")
-@click.option("--template", type=click.Choice(["chat", "tool"]), default="chat", help="Extension template")
+@click.option(
+    "--template",
+    type=click.Choice(["chat", "tool"]),
+    default="chat",
+    help=(
+        "Extension template. v2.0.0: 'chat' and 'tool' produce the same "
+        "v2-style scaffold (ChatExtension removed). The 'chat' alias is "
+        "kept for CLI backward compatibility."
+    ),
+)
 def init(name: str, template: str):
-    """Scaffold a new extension project."""
+    """Scaffold a new extension project.
+
+    v2.0.0: extensions are pure tool providers. Both ``--template chat``
+    and ``--template tool`` emit a class-based ``Extension`` subclass that
+    registers one example tool via ``@ext.tool`` with an ``output_schema``
+    Pydantic model. Webbee Narrator (kernel-side) renders all user-facing
+    prose; no per-extension system prompt is permitted.
+    """
     os.makedirs(name, exist_ok=True)
     os.makedirs(f"{name}/tests", exist_ok=True)
 
-    if template == "chat":
-        main_content = f'''"""{name} — Imperal Cloud Extension."""
+    # Class name: "my-test-ext" -> "MyTestExt"
+    class_name = "".join(word.capitalize() for word in re.split(r"[-_]", name) if word)
+    if not class_name:
+        class_name = "MyExtension"
+
+    # v2.0.0 scaffold: class-based Extension subclass (recommended shape) with
+    # module-level ``ext`` instance exported so CLI commands `dev`/`validate`/
+    # `deploy` can `from main import ext` uniformly. Both --template chat and
+    # --template tool emit the same scaffold; the --chat flag is retained as
+    # a CLI-level alias for UX familiarity.
+    # Note: `from imperal_sdk import ext as _ext` avoids shadowing the
+    # module-level decorator namespace with the local instance.
+    main_content = f'''"""{name} — Imperal Cloud Extension (SDK v2.0.0)."""
+from imperal_sdk import Extension, ext as _ext
 from pydantic import BaseModel
-from imperal_sdk import Extension, ChatExtension, ActionResult
-
-ext = Extension("{name}", version="1.0.0")
-chat = ChatExtension(ext, tool_name="{name}", description="{name.replace('-', ' ').title()} extension")
 
 
-class GreetParams(BaseModel):
-    name: str = "World"
+class ExampleResult(BaseModel):
+    """Output schema for the example tool."""
+
+    message: str
 
 
-@chat.function("greet", description="Say hello", params={{}}, action_type="read")
-async def fn_greet(ctx, params: GreetParams) -> ActionResult:
-    """Greet someone by name."""
-    return ActionResult.success(
-        data={{"message": f"Hello, {{params.name}}!"}},
-        summary=f"Greeted {{params.name}}",
+class {class_name}(Extension):
+    app_id = "{name}"
+    version = "1.0.0"
+
+    @_ext.tool(
+        description="Example tool — replace with actual functionality description",
+        output_schema=ExampleResult,
     )
-'''
-    else:
-        main_content = f'''"""{name} — Imperal Cloud Extension."""
-from imperal_sdk import Extension
-
-ext = Extension("{name}", version="1.0.0")
+    async def example_tool(self, ctx, who: str = "World") -> ExampleResult:
+        """Greet someone by name."""
+        return ExampleResult(message=f"Hello, {{who}}!")
 
 
-@ext.tool("{name}", description="{name.replace('-', ' ').title()}")
-async def hello(ctx, name: str = "World"):
-    """Say hello."""
-    return {{"message": f"Hello, {{name}}!"}}
+# Instance exported for the CLI (`imperal dev` / `imperal validate` /
+# `imperal deploy`). Webbee Narrator renders user-facing prose; extensions
+# are pure tool providers.
+ext = {class_name}(app_id="{name}", version="1.0.0")
 '''
 
     with open(f"{name}/main.py", "w") as f:
@@ -115,14 +139,18 @@ async def hello(ctx, name: str = "World"):
         pass
 
     test_content = f'''"""Tests for {name} extension."""
-import pytest
-from imperal_sdk.testing import MockContext
 from main import ext
 
 
 def test_extension_registered():
     assert ext.app_id == "{name}"
     assert ext.version == "1.0.0"
+
+
+def test_example_tool_registered():
+    # v2.0.0: @ext.tool stamps _tool_meta on the function object; the
+    # subclass __init_subclass__ collects them into cls._tools_registry.
+    assert "example_tool" in type(ext)._tools_registry
 '''
 
     with open(f"{name}/tests/test_main.py", "w") as f:
@@ -233,6 +261,7 @@ def validate(path: str):
             validate_source_tree,
             validate_manifest_v1_6_0,
         )
+        from imperal_sdk.validators import run_v14
         report = validate_extension(ext)
 
         # v1.6.0 AST rules (SKEL-GUARD-*, CACHE-MODEL-1, CACHE-TTL-1,
@@ -240,6 +269,36 @@ def validate(path: str):
         source_root = os.getcwd()
         for issue in validate_source_tree(source_root):
             report.issues.append(issue)
+
+        # V14 (v2.0.0): reject ChatExtension / _system_prompt / intake prompts
+        # / llm_orchestrator=True at source-tree level. See
+        # imperal_sdk.validators.v14_no_chatext + tests/test_validator_v14.py.
+        v14_result = run_v14(source_root)
+        for issue_str in v14_result.issues:
+            # Parse "path:line: rest" shape produced by run_v14 when possible;
+            # fall back to message-only for filesystem-marker lines.
+            file_part, line_no, message = "", 0, issue_str
+            if ":" in issue_str:
+                head, _, tail = issue_str.partition(": ")
+                if ":" in head:
+                    path_part, _, ln = head.rpartition(":")
+                    if ln.isdigit():
+                        file_part = path_part
+                        line_no = int(ln)
+                        message = tail
+                    else:
+                        file_part = head
+                        message = tail
+                else:
+                    file_part = head
+                    message = tail
+            report.issues.append(ValidationIssue(
+                rule="V14", level="ERROR",
+                message=message,
+                file=file_part,
+                line=line_no,
+                fix="Remove the v1-era marker — see SDK v2.0.0 migration guide.",
+            ))
 
         # Close V8 — validate filesystem imperal.json if present. Replaces
         # the "runtime-only" V8 warning with concrete M1..M5 structural

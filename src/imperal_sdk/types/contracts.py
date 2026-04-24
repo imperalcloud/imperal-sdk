@@ -178,12 +178,12 @@ class FunctionCallModel(BaseModel):
 class ChatResultModel(BaseModel):
     """Pydantic contract for `ChatResult.to_dict()` output.
 
-    Serialized return from `ChatExtension._handle()`; crosses Temporal
-    activity history on every chat turn. The on-wire keys are
-    underscore-prefixed (`_handled`, `_functions_called`, ...) — the
-    kernel's hub dispatcher depends on that prefix to distinguish its
-    transport metadata from raw tool output. Pydantic aliases map them
-    to readable Python attribute names.
+    v2.0.0: serialized output of the kernel-side Webbee Narrator's
+    chat-turn composition — crosses Temporal activity history on every
+    turn. The on-wire keys are underscore-prefixed (`_handled`,
+    `_functions_called`, ...) — the kernel's hub dispatcher depends on
+    that prefix to distinguish its transport metadata from raw tool
+    output. Pydantic aliases map them to readable Python attribute names.
     """
 
     # No `populate_by_name` — the wire format is the contract; only the
@@ -370,10 +370,10 @@ def get_chat_result_schema() -> Dict[str, Any]:
         id_slug="chat_result",
         title="Imperal ChatResult Payload",
         description=(
-            "Serialized return from ChatExtension._handle() — the "
-            "kernel-transport form of a chat turn's output. Underscore-"
-            "prefixed keys distinguish transport metadata from raw "
-            "tool response. Crosses Temporal activity history."
+            "Serialized output of the kernel-side Webbee Narrator's "
+            "chat turn — the transport form handed off across Temporal "
+            "activity boundaries. Underscore-prefixed keys distinguish "
+            "transport metadata from raw tool response."
         ),
     )
 

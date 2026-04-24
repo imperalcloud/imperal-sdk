@@ -2,12 +2,12 @@
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Federal-Grade Chat Integrity — emit_narration tool contract (P2 Task 18).
 
-Structural foundation for Component 1 (Narration Contract Hybrid). The kernel
-injects ``EMIT_NARRATION_TOOL`` into every ChatExtension turn and requires the
-LLM to call it to terminate the turn with narrated prose. The LLM cannot
-fabricate — every claim made in ``per_call_verdicts`` is structurally
-verified against ``_functions_called`` by the kernel before the response
-reaches the user.
+Structural foundation for Component 1 (Narration Contract Hybrid). v2.0.0:
+the kernel-side Webbee Narrator injects ``EMIT_NARRATION_TOOL`` into every
+chat turn and requires the LLM to call it to terminate the turn with
+narrated prose. The LLM cannot fabricate — every claim made in
+``per_call_verdicts`` is structurally verified against ``_functions_called``
+by the kernel before the response reaches the user.
 
 Spec: ``docs/superpowers/specs/2026-04-23-federal-grade-chat-integrity-design.md``
 §3.2 (Narration Contract Hybrid).
