@@ -37,8 +37,15 @@ class AIProtocol(Protocol):
 
 @runtime_checkable
 class SkeletonProtocol(Protocol):
+    """Read-only skeleton accessor.
+
+    v1.6.0 breaking change: ``update()`` removed. The kernel
+    ``skeleton_save_section`` activity is the sole writer. Extensions
+    return fresh data from their ``@ext.skeleton`` tool.
+
+    Invariants: I-SKELETON-PROTOCOL-READ-ONLY, I-NO-SKELETON-PUT.
+    """
     async def get(self, section: str) -> Any: ...
-    async def update(self, section: str, data: Any) -> None: ...
 
 
 @runtime_checkable
