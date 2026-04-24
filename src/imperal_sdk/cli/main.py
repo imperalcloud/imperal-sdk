@@ -229,12 +229,22 @@ def validate(path: str):
 
         from imperal_sdk.validator import validate_extension, ValidationIssue
         from imperal_sdk.manifest_schema import validate_manifest_dict
+        from imperal_sdk.validator_v1_6_0 import (
+            validate_source_tree,
+            validate_manifest_v1_6_0,
+        )
         report = validate_extension(ext)
+
+        # v1.6.0 AST rules (SKEL-GUARD-*, CACHE-MODEL-1, CACHE-TTL-1,
+        # MANIFEST-SKELETON-1) — source-level, independent of ext instance.
+        source_root = os.getcwd()
+        for issue in validate_source_tree(source_root):
+            report.issues.append(issue)
 
         # Close V8 — validate filesystem imperal.json if present. Replaces
         # the "runtime-only" V8 warning with concrete M1..M5 structural
         # issues from the JSON Schema contract.
-        manifest_path = os.path.join(os.getcwd(), "imperal.json")
+        manifest_path = os.path.join(source_root, "imperal.json")
         if os.path.exists(manifest_path):
             # Drop the V8 placeholder warning — we have the real answer now.
             report.issues = [i for i in report.issues if i.rule != "V8"]
@@ -243,6 +253,9 @@ def validate(path: str):
                     disk_manifest = json.load(f)
                 for issue in validate_manifest_dict(disk_manifest):
                     issue.file = "imperal.json"
+                    report.issues.append(issue)
+                # SDK-VERSION-1 — cross-check sdk_version against source usage.
+                for issue in validate_manifest_v1_6_0(disk_manifest, source_root):
                     report.issues.append(issue)
             except json.JSONDecodeError as e:
                 report.issues.append(ValidationIssue(

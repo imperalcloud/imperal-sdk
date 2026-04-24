@@ -27,6 +27,10 @@ from imperal_sdk.types import (
 )
 from imperal_sdk.protocols import ExtensionProtocol
 from imperal_sdk.validator import validate_extension, ValidationReport, ValidationIssue
+from imperal_sdk.validator_v1_6_0 import (
+    validate_source_tree,
+    validate_manifest_v1_6_0,
+)
 
 __version__ = "1.5.27"
 
@@ -52,6 +56,7 @@ __all__ = [
     "Event", "WebhookRequest", "WebhookResponse", "HealthStatus",
     # Protocol + Validator
     "ExtensionProtocol", "validate_extension", "ValidationReport", "ValidationIssue",
+    "validate_source_tree", "validate_manifest_v1_6_0",
     # UI
     "ui",
 ]
