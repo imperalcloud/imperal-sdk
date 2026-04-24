@@ -85,8 +85,23 @@ class Extension:
         After collection, runs the status_tool existence check
         (I-STATUS-TOOL-MUST-EXIST) so malformed extensions fail loud during
         module import rather than at first-dispatch.
+
+        Also rejects ``_system_prompt`` class attribute at class-def time
+        (I-LOADER-REJECT-SYSTEM-PROMPT) — ChatExtension and per-extension
+        system prompts were removed in v2.0.0; Webbee Narrator renders all
+        user-facing prose kernel-side.
         """
         super().__init_subclass__(**kwargs)
+        # v2.0 hard reject: ``_system_prompt`` class attribute. Must run BEFORE
+        # tool-registry wiring so the loader gets a precise error even for
+        # otherwise-malformed extensions.
+        if "_system_prompt" in cls.__dict__:
+            raise TypeError(
+                f"Extension {cls.__name__} defines _system_prompt class attribute. "
+                "ChatExtension and _system_prompt removed in SDK v2.0.0. "
+                "Extensions are pure tool providers; Webbee Narrator writes all user-facing prose. "
+                "See migration guide: docs/dev/sdk-v2-migration.md"
+            )
         registry: dict[str, Callable] = {}
         # Walk the subclass namespace only. We deliberately skip inherited
         # members so each subclass declares its own tools explicitly; mixing
@@ -159,6 +174,21 @@ class Extension:
         # refers to different classes. Invariant:
         # I-CACHE-MODEL-ON-EXTENSION-INSTANCE.
         self._cache_models: dict[str, type] = {}
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Guard against instance-level ``_system_prompt`` assignment.
+
+        Catches subclasses that set ``self._system_prompt = ...`` inside their
+        own ``__init__`` (after ``super().__init__()``) and any external
+        mutation. The class-def form is rejected in :meth:`__init_subclass__`.
+        Invariant I-LOADER-REJECT-SYSTEM-PROMPT.
+        """
+        if name == "_system_prompt":
+            raise TypeError(
+                f"Extension {type(self).__name__} sets _system_prompt instance attribute. "
+                "ChatExtension and _system_prompt removed in SDK v2.0.0."
+            )
+        super().__setattr__(name, value)
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""
