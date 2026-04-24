@@ -2,6 +2,47 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.6.0 — 2026-04-24
+
+### BREAKING CHANGES
+
+- `ctx.skeleton.update()` method removed. `SkeletonProtocol` is read-only.
+  Kernel skeleton_save_section activity is sole writer. (I-SKELETON-PROTOCOL-READ-ONLY)
+- `ctx.skeleton_data` attribute removed from Context. Skeleton tools must call
+  `await ctx.skeleton.get(section)` explicitly to diff against previous state.
+  (I-NO-CTX-SKELETON-DATA)
+- `ctx.skeleton` access from `@ext.panel`, `@ext.tool`, `@chat.function`
+  contexts raises `SkeletonAccessForbidden`. Only `@ext.skeleton` tools may
+  access skeleton. (I-SKELETON-LLM-ONLY)
+- Non-skeleton tools no longer receive skeleton snapshot in kernel dispatch
+  args. (I-KERNEL-EMPTY-SKELETON-ARG)
+- Auth GW `/v1/internal/skeleton` PUT endpoint removed; GET requires
+  `Authorization: ImperalCallToken <HMAC-SHA256>` header with tool_type="skeleton"
+  scope.
+
+### NEW
+
+- `ctx.cache` — Pydantic-typed runtime cache with TTL 5-300s, 64 KB value cap,
+  per-extension namespace. Register models via `@<ext>.cache_model("name")`.
+  Backed by Auth GW `/v1/internal/extcache/{app_id}/{user_id}/{model}/{hash}`
+  with HMAC call-token + Pydantic Field(ge=5, le=300) enforcement.
+- `Extension.cache_model(name)` — decorator method for registering cache value
+  shapes per extension instance (no global module state).
+- HMAC call-token authentication for `/v1/internal/skeleton` and
+  `/v1/internal/extcache`. Kernel mints per-call; Auth GW verifies with shared
+  `IMPERAL_CALL_TOKEN_HMAC_SECRET` + jti replay protection via Redis SETNX.
+- Validator rules: SKEL-GUARD-1/2/3, CACHE-MODEL-1, CACHE-TTL-1,
+  MANIFEST-SKELETON-1, SDK-VERSION-1.
+- `SkeletonAccessForbidden(PermissionError)` exposed via `imperal_sdk.errors`.
+
+### MIGRATION
+
+See `docs/superpowers/specs/2026-04-24-skeleton-llm-only-sdk-v1.6.0-design.md`
+section 6 for mail-client and sharelock-v2 migration examples. External
+extensions must migrate their own code — kernel v1.6.0 deploy breaks
+`ctx.skeleton_data` / `ctx.skeleton.update()` / cross-context `ctx.skeleton.get()`
+users.
+
 ## 1.5.27 — 2026-04-24
 
 Packaging-only release. Bundles the P2 Task 20 hotfix that was applied
