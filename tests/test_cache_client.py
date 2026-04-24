@@ -273,7 +273,42 @@ async def test_set_sends_auth_headers():
     h = kw["headers"]
     assert h["X-Service-Token"] == "svc"
     assert h["Authorization"] == "ImperalCallToken tok"
-    assert kw["params"]["ttl"] == 60
+
+
+@pytest.mark.asyncio
+async def test_set_sends_envelope_and_ttl_seconds_body_shape():
+    """PUT body must be {'envelope': {...}, 'ttl_seconds': N} per Auth GW
+    CacheSetRequest schema (Phase 3). Assert the absence of the old shapes
+    (params={'ttl': ...} and content=<bytes>) so regressions are loud."""
+    ext, Model = _make_ext_with_model()
+    http = FakeHttp()
+    client = _make_client(ext, http)
+    url = client._url("inbox_summary", "k")
+    http.program("PUT", url, FakeResponse(200, {}))
+    await client.set("k", Model(unread=3), ttl_seconds=60)
+    method, called_url, kw = http.calls[0]
+    assert method == "PUT"
+    assert called_url == url
+    # New body shape — exact keys + ttl_seconds value
+    assert "json" in kw, "set() must send PUT body via json= kwarg"
+    body = kw["json"]
+    assert set(body.keys()) == {"envelope", "ttl_seconds"}, (
+        f"PUT body keys must be exactly {{'envelope','ttl_seconds'}}, "
+        f"got {set(body.keys())}"
+    )
+    assert body["ttl_seconds"] == 60
+    env = body["envelope"]
+    assert env["model"] == "inbox_summary"
+    assert env["version"] == 1
+    assert env["data"] == {"unread": 3, "latest_subject": ""}
+    assert "cached_at" in env
+    # Old-shape absence
+    assert "params" not in kw, (
+        "set() must NOT send ttl as query param (Phase 3 contract uses body)"
+    )
+    assert "content" not in kw, (
+        "set() must NOT send bytes body (Phase 3 contract uses JSON body)"
+    )
 
 
 @pytest.mark.asyncio
@@ -283,6 +318,67 @@ async def test_delete_ok_on_404():
     client = _make_client(ext, http)
     # default 404 — should NOT raise
     await client.delete("k")
+
+
+@pytest.mark.asyncio
+async def test_delete_iterates_all_registered_models():
+    """delete() must issue DELETE per registered model since key can live
+    under any. Literal ``*`` in URL path is a no-op against Phase 3 Auth GW."""
+    ext = Extension(app_id="mail")
+
+    @ext.cache_model("inbox_summary")
+    class InboxSummary(BaseModel):
+        unread: int = 0
+
+    @ext.cache_model("thread_snapshot")
+    class ThreadSnapshot(BaseModel):
+        subject: str = ""
+
+    @ext.cache_model("draft_cache")
+    class Draft(BaseModel):
+        body: str = ""
+
+    http = FakeHttp()
+    # Program every model-scoped URL to return 404 (idempotent delete)
+    client = _make_client(ext, http)
+    for model_name in ("inbox_summary", "thread_snapshot", "draft_cache"):
+        http.program(
+            "DELETE",
+            client._url(model_name, "some-key"),
+            FakeResponse(404),
+        )
+
+    await client.delete("some-key")
+
+    methods = [c[0] for c in http.calls]
+    urls = [c[1] for c in http.calls]
+
+    assert methods.count("DELETE") == 3, (
+        f"Expected 3 DELETE calls (one per registered model), got {methods}"
+    )
+    # Each call must hit a distinct model path segment — no literal "*"
+    model_segs = []
+    for u in urls:
+        # URL form: .../extcache/{app}/{user}/{model}/{hash}
+        parts = u.split("/")
+        # model is 2nd from the end
+        model_segs.append(parts[-2])
+    assert set(model_segs) == {"inbox_summary", "thread_snapshot", "draft_cache"}
+    assert "*" not in model_segs, (
+        "delete() must NOT use literal '*' in URL path — Phase 3 Auth GW does "
+        "not support wildcard and would silently no-op"
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_no_models_registered_is_noop():
+    """When the extension has zero cache_model registrations, delete() must
+    be a well-defined no-op (no DELETE issued)."""
+    ext = Extension(app_id="mail")
+    http = FakeHttp()
+    client = _make_client(ext, http)
+    await client.delete("some-key")
+    assert [c[0] for c in http.calls] == []
 
 
 # ---------------------------------------------------------------------------

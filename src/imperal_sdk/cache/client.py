@@ -192,28 +192,47 @@ class CacheClient:
                 f"cache value envelope too large: {len(payload_bytes)} > "
                 f"{_VALUE_MAX_BYTES} bytes (I-CACHE-VALUE-SIZE-CAP-64KB)"
             )
+        # Enforce envelope-size cap regardless of transport shape — the
+        # serialised body we compute above is the same bytes that end up in
+        # Redis, so the cap applies whether we send ``content=`` or ``json=``.
+        _ = payload_bytes  # kept for size validation side-effect; not sent
         resp = await self._request(
             "PUT",
             self._url(model_name, key),
-            content=payload_bytes,
-            headers={**self._headers(), "Content-Type": "application/json"},
-            params={"ttl": ttl_seconds},
+            headers=self._headers(),
+            json={"envelope": envelope, "ttl_seconds": ttl_seconds},
         )
         resp.raise_for_status()
 
     async def delete(self, key: str) -> None:
+        """Delete cache entry under all registered model namespaces.
+
+        The Phase 3 Auth GW does NOT support a wildcard model segment — a
+        literal ``"*"`` would DELETE the key
+        ``imperal:extcache:{app}:{user}:*:{hash}`` (a silent no-op on any
+        real entry). Since a key can exist under any registered model, we
+        iterate all models and issue one DELETE per namespace. Idempotent;
+        404 is not an error.
+        """
         _validate_key(key)
-        # Deletion does not require the model name (the Auth GW key space is
-        # model-scoped, but the gateway will wildcard-delete on our behalf
-        # via the app/user/key-hash pair). Use "*" as the model segment.
-        url = (
-            f"{self._gw_url}/v1/internal/extcache/"
-            f"{self._app_id}/{self._user_id}/*/{_hash_key(key)}"
-        )
-        resp = await self._request("DELETE", url, headers=self._headers())
-        if resp.status_code == 404:
-            return
-        resp.raise_for_status()
+        key_hash = _hash_key(key)
+        ext = self._extension
+        models: list[str]
+        if ext is not None and hasattr(ext, "_cache_models"):
+            models = list(ext._cache_models.keys())
+        else:
+            models = []
+        for model_name in models:
+            url = (
+                f"{self._gw_url}/v1/internal/extcache/"
+                f"{self._app_id}/{self._user_id}/{model_name}/{key_hash}"
+            )
+            resp = await self._request(
+                "DELETE", url, headers=self._headers()
+            )
+            if resp.status_code in (200, 204, 404):
+                continue
+            resp.raise_for_status()
 
     async def get_or_fetch(
         self,
