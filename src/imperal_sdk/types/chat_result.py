@@ -1,7 +1,12 @@
-"""ChatResult and FunctionCall — typed returns from ChatExtension._handle().
+"""ChatResult and FunctionCall — typed on-wire chat turn output.
 
-Replaces raw dict returns. Provides to_dict()/from_dict() for kernel
-serialization (Temporal activities expect dict).
+v1 ChatExtension was removed in SDK v2.0.0. These dataclasses remain as
+the kernel-side transport contract produced by the Webbee Narrator's
+NarrationEmission flow: ``FunctionCall`` records each tool invocation the
+kernel dispatched during a turn, and ``ChatResult`` bundles them with the
+final narrated response for Temporal-activity handoff. Provides
+``to_dict()`` / ``from_dict()`` for (de)serialization across activity
+boundaries (Temporal expects dict).
 """
 from __future__ import annotations
 
@@ -65,7 +70,14 @@ class FunctionCall:
 
 @dataclass
 class ChatResult:
-    """Typed return from ChatExtension._handle(). Replaces ad-hoc dict."""
+    """Typed chat turn output — Webbee Narrator emission + tool call record.
+
+    v2.0.0: produced kernel-side by the Webbee Narrator after it composes
+    the final ``NarrationEmission`` for a chat turn. ``functions_called``
+    carries the concrete tool calls the kernel dispatched; ``response`` is
+    the narrated prose; ``narration_emission`` (when present) is the
+    structured parse of the emit_narration tool-call that bounded the turn.
+    """
 
     response: str
     handled: bool = False

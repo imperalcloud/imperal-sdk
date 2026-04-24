@@ -61,7 +61,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Serialized return from ChatExtension._handle() \u2014 the kernel-transport form of a chat turn's output. Underscore-prefixed keys distinguish transport metadata from raw tool response. Crosses Temporal activity history.",
+  "description": "Serialized output of the kernel-side Webbee Narrator's chat turn \u2014 the transport form handed off across Temporal activity boundaries. Underscore-prefixed keys distinguish transport metadata from raw tool response.",
   "properties": {
     "response": {
       "default": "",
