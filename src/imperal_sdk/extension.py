@@ -2,24 +2,13 @@
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 from __future__ import annotations
 import inspect
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
-@dataclass
-class ToolDef:
-    name: str
-    func: Callable
-    scopes: list[str] = field(default_factory=list)
-    description: str = ""
-    # v2.0.0 fields (Webbee Single Voice contract). All have safe defaults so
-    # v1 ``Extension("app").tool(name)`` instance-based registrations remain
-    # valid — only the v2 class-based ``@ext.tool`` decorator enforces them.
-    output_schema: type | None = None          # Pydantic BaseModel subclass (required in v2)
-    long_running: bool = False
-    estimated_duration_s: int | None = None
-    status_tool: str | None = None             # Companion tool name on same Extension
-    llm_backed: bool = False                   # Calls purpose="execution" LLM internally
-    cost_credits: int = 0                      # Pre-ACK confirmation gate
+# ToolDef is the canonical tool shape — its source of truth is tool_def.py.
+# Re-exported here so legacy ``from imperal_sdk.extension import ToolDef``
+# imports (SDK internals, extensions, tests) continue to work unchanged.
+from imperal_sdk.tool_def import ToolDef  # noqa: F401 re-export
 
 @dataclass
 class SignalDef:
