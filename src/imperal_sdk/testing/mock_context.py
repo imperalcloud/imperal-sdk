@@ -296,6 +296,7 @@ def MockContext(
     tenant_id: str = "default",
     extension_id: str = "test-ext",
     config: dict | None = None,
+    tool_type: str = "tool",
 ) -> Context:
     """Create a MockContext for testing. Drop-in replacement for Context.
 
@@ -307,6 +308,10 @@ def MockContext(
         tenant_id: Tenant ID. Defaults to "default".
         extension_id: Extension ID set on _extension_id. Defaults to "test-ext".
         config: Config dict for MockConfig. Supports dot-path access.
+        tool_type: Dispatch surface — ``"tool"`` (default) / ``"skeleton"`` /
+            ``"panel"`` / ``"chat_fn"``. In v1.6.0 only ``"skeleton"`` may read
+            ``ctx.skeleton``; other types raise ``SkeletonAccessForbidden``.
+            Pass ``"skeleton"`` in tests that exercise skeleton reads.
 
     Returns:
         A fully populated Context with all mock clients.
@@ -336,4 +341,5 @@ def MockContext(
             hour_local=0,
         ),
         _extension_id=extension_id,
+        _tool_type=tool_type,
     )

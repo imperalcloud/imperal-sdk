@@ -222,26 +222,45 @@ class TestMockBilling:
 
 
 class TestMockSkeleton:
+    """v1.6.0 contract: ctx.skeleton is read-only; only ``@ext.skeleton`` tools
+    (``tool_type="skeleton"``) may read sections. Writes happen kernel-side
+    via ``skeleton_save_section`` activity, never through SDK. Tests that need
+    to prime sections do so via ``ctx._raw_skeleton`` directly (test-only
+    backdoor; not a public API). Invariant: I-SKELETON-LLM-ONLY.
+    """
+
     @pytest.mark.asyncio
-    async def test_get_nonexistent(self):
-        ctx = MockContext()
+    async def test_get_nonexistent_in_skeleton_scope(self):
+        ctx = MockContext(tool_type="skeleton")
         assert await ctx.skeleton.get("inbox") is None
 
     @pytest.mark.asyncio
-    async def test_update_and_get(self):
-        ctx = MockContext()
-        await ctx.skeleton.update("inbox", {"unread": 5})
+    async def test_prime_and_get(self):
+        """Prime MockSkeleton directly via _raw_skeleton (bypasses guard);
+        read via ctx.skeleton.get() under skeleton scope. Tests that the
+        mock serves reads correctly, not the removed write contract."""
+        ctx = MockContext(tool_type="skeleton")
+        ctx._raw_skeleton._sections["inbox"] = {"unread": 5}
         data = await ctx.skeleton.get("inbox")
         assert data is not None
         assert data["unread"] == 5
 
     @pytest.mark.asyncio
-    async def test_update_overwrites(self):
-        ctx = MockContext()
-        await ctx.skeleton.update("stats", {"count": 1})
-        await ctx.skeleton.update("stats", {"count": 2})
+    async def test_prime_overwrites(self):
+        ctx = MockContext(tool_type="skeleton")
+        ctx._raw_skeleton._sections["stats"] = {"count": 1}
+        ctx._raw_skeleton._sections["stats"] = {"count": 2}
         data = await ctx.skeleton.get("stats")
         assert data["count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_get_blocked_outside_skeleton_scope(self):
+        """Regression: non-@ext.skeleton contexts raise SkeletonAccessForbidden
+        even in tests. Confirms the guard survives the mock plumbing."""
+        from imperal_sdk.errors import SkeletonAccessForbidden
+        ctx = MockContext(tool_type="tool")  # default, explicit for clarity
+        with pytest.raises(SkeletonAccessForbidden):
+            await ctx.skeleton.get("inbox")
 
 
 class TestMockNotify:
