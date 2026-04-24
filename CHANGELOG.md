@@ -2,6 +2,90 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 2.0.0 — 2026-04-24
+
+### BREAKING CHANGES (Webbee Single Voice)
+
+SDK v2.0.0 is a hard-breaking release paired with Imperal kernel v2
+(Webbee Single Voice architecture). Every extension must migrate.
+See migration guide: `docs/dev/sdk-v2-migration.md` (internal) and
+spec `docs/superpowers/specs/2026-04-24-webbee-single-voice-design.md`.
+
+**Removed:**
+- `ChatExtension` class — extensions no longer have their own LLM loops
+- `_system_prompt` attribute — Narrator writes all user-facing prose
+- `imperal_sdk.chat.handler` module — deleted (LLM tool-use loop)
+- `imperal_sdk.chat.filters` module — moved kernel-side (Narrator post-filter)
+- `imperal_sdk.chat.guards`, `chat.prompt`, `chat.refusal` — deleted (handler-scoped)
+- Per-ext LLM orchestrator discovery (`llm_orchestrator=True` flag)
+- Legacy validator rules V4, V5, V6, V7, V10, V11 (ChatExtension-specific)
+
+**Added:**
+- `TaskStatus` Pydantic model — shape for long_running tool status probes
+- `@ext.tool` required fields:
+  - `output_schema: type[BaseModel]` (every tool declares typed output)
+  - `description: str` (min 20 chars, read by Routing LLM)
+  - `long_running: bool` + `estimated_duration_s: int` + `status_tool: str` pair
+  - `llm_backed: bool` (tools that internally call purpose="execution" LLM)
+  - `cost_credits: int` (pre-ACK confirmation gate)
+- V14 validator rule — deploy-time rejection of v1-style extensions
+  (ChatExtension, `_system_prompt`, `llm_orchestrator`, `system_prompt.txt`, `intake.txt`)
+- Extension runtime guards: `__init_subclass__` + `__setattr__` reject
+  `_system_prompt` at class-def AND instance-assignment time
+- `long_running=True` tools: kernel enforces matching `status_tool` at class-def + instance init
+- `src/imperal_sdk/tool_def.py` as source-of-truth module for ToolDef dataclass
+
+**Invariants introduced:**
+- I-TOOL-SCHEMA-REQUIRED
+- I-TOOL-DESC-MINIMUM
+- I-LONG-RUNNING-STATUS-REQUIRED
+- I-STATUS-TOOL-MUST-EXIST
+- I-LOADER-REJECT-CHATEXT
+- I-LOADER-REJECT-SYSTEM-PROMPT
+- I-LOADER-REJECT-ORCHESTRATOR
+
+**CLI changes:**
+- `imperal init` + `imperal init --chat` both emit v2 Extension scaffold
+  with `@ext.tool` + `output_schema`. ChatExtension removed from all templates.
+
+**Contract preserved (unchanged from v1.6.x):**
+- `@ext.skeleton` decorator (session 44 I-SKELETON-LLM-ONLY contract)
+- `@ext.cache_model` decorator
+- `ctx.store`, `ctx.cache`, `ctx.http`, `ctx.user`, `ctx.tenant` accessors
+- ActionResult / Event / FunctionCall data schemas
+- Narration emission schema (`chat.narration.NarrationEmission`)
+- Federal kernel primitives (`chat.kernel_primitives`)
+- Error taxonomy (`chat.error_codes`)
+- Narration identity guards (`chat.narration_guard`)
+
+**Migration:**
+
+Before (v1.x):
+```python
+class NotesExtension(ChatExtension):
+    _system_prompt = "I am the notes assistant"
+
+    @ext.tool(scopes=["notes:read"])
+    async def list_notes(self):
+        return {"notes": [...]}
+```
+
+After (v2.0):
+```python
+class NoteList(BaseModel):
+    notes: list[dict]
+    count: int
+
+class NotesExtension(Extension):
+    @ext.tool(
+        description="List the user's notes, optionally filtered by folder",
+        output_schema=NoteList,
+        scopes=["notes:read"],
+    )
+    async def list_notes(self) -> NoteList:
+        return NoteList(notes=[...], count=0)
+```
+
 ## 1.6.2 — 2026-04-24
 
 ### Fixed
