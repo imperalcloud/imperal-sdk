@@ -1,636 +1,307 @@
-# Skeleton -- Live Application Memory
+# Skeleton -- LLM-Only Application Memory (v1.6.0)
 
-**SDK version:** imperal-sdk 1.5.6
-**Last updated:** 2026-04-17 (v1.5.6: FC.result event-publishing fix — `@chat.function(event="X")` now correctly fires sidebar `refresh="on_event:X"`; v1.5.5: `ui.Graph` Cytoscape; v1.5.4: `@ext.tray()` + `TrayResponse`; v1.5.0: billing_status skeleton section)
+**SDK version:** imperal-sdk 1.6.0
+**Last updated:** 2026-04-24 (v1.6.0 breaking release — skeleton is LLM-only, read-only from non-skeleton code; `ctx.cache` replaces skeleton for panel-side runtime state)
 **Audience:** Extension developers building on Imperal Cloud
 
 ---
 
 ## Overview
 
-The Skeleton is Imperal Cloud's persistent, auto-refreshing data layer for extensions. Think of it as application memory -- structured data that the platform keeps warm so your tools never need to make blocking API calls during user interactions.
+The Skeleton is Imperal Cloud's persistent, auto-refreshing data layer for **the AI classifier / routing LLM**. It is the AI's view of your extension's state: small structured snapshots the platform keeps warm so the LLM can classify intent and route to the right extension without paying a cold-fetch tax on every user turn.
 
-Every extension defines zero or more **skeleton sections**. Each section is a named block of data (a Python dict) that either:
+**Skeleton is LLM-only in v1.6.0.** Panels, `@chat.function` tools, webhooks, and regular `@ext.tool` handlers **cannot** read or write skeleton. They will get a `SkeletonAccessForbidden` exception the moment they touch `ctx.skeleton`.
 
-1. **Refreshes on a schedule** (TTL-based), or
-2. **Updates on demand** when your tools, signals, or schedules write to it via `ctx.skeleton.update()`.
+For panel-side runtime data (pages of mail, API responses, throttled counters), use **[`ctx.cache`](context-object.md#ctxcache)** — Pydantic-typed, TTL 5-300s, 64 KB cap, per-extension namespace. That is the v1.6.0 replacement for "skeleton as a general-purpose cache."
 
-When a user sends a message, the platform loads all skeleton sections into the context *before* dispatching to your tool. Your tool reads skeleton data instantly -- zero latency, zero API calls.
+### What the kernel guarantees
 
 ```
-User sends message
-       |
-       v
-Platform loads skeleton from Redis
-       |
-       v
-ctx.skeleton_data is pre-loaded (dict snapshot)
-       |
-       v
-Your tool reads: data = ctx.skeleton_data.get("case_status", {})
-       |
-       v
-Instant data -- no API call needed
+  AI routing turn
+         |
+         v
+  [skeleton-refresh tool] --runs on TTL, returns new state--> kernel persists via
+                                                              privileged activity
+         |
+         v
+  Redis: imperal:skeleton:{app}:{user}:{section}
+         |
+         v
+  Classifier envelope: "[SKELETON] mail.mail: unread=3, total=17 (cached ~17s ago)"
+         |
+         v
+  Routing LLM picks target_apps based on fresh-vs-stale signal
 ```
 
-### Reading vs. writing skeleton data
+### Who can touch skeleton
 
-| Operation | API | Performance | Use case |
-|-----------|-----|-------------|----------|
-| **Read** (in tools) | `ctx.skeleton_data["section"]` | Instant (pre-loaded) | Access cached state during tool execution |
-| **Write** | `await ctx.skeleton.update(section, data)` | Network call | Update state in signals/schedules/tools |
-| **Read** (after write) | `await ctx.skeleton.get(section)` | Network call | Read latest value after a recent write |
+| Actor | Read `ctx.skeleton.get(...)` | Write skeleton |
+|---|---|---|
+| `@ext.skeleton` tool | Allowed (returns previous snapshot for diff) | Return new state — kernel persists |
+| `@ext.panel`, `@chat.function`, `@ext.tool` | **Forbidden** — raises `SkeletonAccessForbidden` | **Forbidden** |
+| Kernel (skeleton_save_section activity) | Allowed (sole writer) | Allowed (sole writer) |
 
-> **Prefer `ctx.skeleton_data` for reading in tools.** It is pre-loaded by the ContextFactory before your function runs -- zero latency, zero network calls. Use `ctx.skeleton.get()` only when you need the absolute latest value after a write within the same execution.
+### What changed from v1.5.x
 
-> **Skeleton v2 (2026-04-04):** Skeleton is now tick-only. The skeleton signal has been removed from executor step 6. DB writes + SSE events handle real-time updates. The skeleton engine is a periodic background context aggregator on its tick interval only. The rule engine is a separate, independent background task.
-
-> **Freshness validation (2026-04-06):** Every skeleton section now carries `_refreshed_at` (unix timestamp) and `_freshness` metadata (`refreshed_at` + `ttl_remaining`). The kernel scans sections on load: if TTL remaining < 10% of original OR age > 2x TTL, the context gets `_stale_sections` warnings. This tells the LLM to prefer function calls over stale skeleton cache. Extensions can check freshness via `ctx.skeleton_data["section"]["_freshness"]["ttl_remaining"]`.
+- **`ctx.skeleton.update(section, data)` is gone.** `SkeletonProtocol` is read-only. Skeleton tools RETURN new state via `ActionResult.success(data=...)` and the kernel persists via `skeleton_save_section` activity (single writer, audit-logged).
+- **`ctx.skeleton_data` attribute is gone.** Non-skeleton tools no longer receive a pre-loaded snapshot in their context. If you need prior state for a diff, call `await ctx.skeleton.get(section)` from inside your `@ext.skeleton` tool — it is legal in that context.
+- **`ctx.skeleton` from non-skeleton code raises `SkeletonAccessForbidden`.** This is a `PermissionError` subclass — catch it explicitly or let it surface as a 403.
+- **`@ext.tool("skeleton_refresh_<X>")` naming convention deprecated** in favour of the canonical `@ext.skeleton("section_name", ttl=..., alert=True)` decorator (v1.5.22+). The old naming convention still works but the validator flags it as `MANIFEST-SKELETON-1`.
+- **HMAC call-token auth on `/v1/internal/skeleton`.** The kernel signs each call; Auth GW verifies with `IMPERAL_CALL_TOKEN_HMAC_SECRET` + Redis SETNX jti replay protection. The skeleton PUT endpoint is removed — only the kernel's privileged save path writes.
 
 ---
 
-## Writing Skeleton Data
+## Writing a skeleton tool
 
-### From a signal handler
+Use `@ext.skeleton(section_name, ttl=..., alert=True, description=...)`. The decorator:
 
-The most common pattern: update skeleton data when an event occurs.
+1. Registers a tool named `skeleton_refresh_<section_name>` on the extension's skeleton plane.
+2. Stashes metadata on the `ToolDef` so the portal replay hook and kernel auto-derive pick it up.
+3. Marks the tool as a "skeleton tool type" — `ctx.skeleton` is unlocked inside it.
 
 ```python
-from imperal_sdk import Extension, Context
+from pydantic import BaseModel
+from imperal_sdk import Extension, ActionResult
 
-ext = Extension("my-app")
+ext = Extension("mail", version="1.6.0")
 
-@ext.signal("on_user_login")
-async def on_login(ctx: Context, user: dict) -> None:
-    cases = await ctx.store.query("cases", filter={"status": "open"}, limit=5)
-    await ctx.skeleton.update("recent_cases", {
-        "count": len(cases),
-        "cases": [{"id": c["_id"], "title": c["title"]} for c in cases],
-    })
+
+class MailSection(BaseModel):
+    unread: int
+    total: int
+    inbox: list[dict]
+
+
+@ext.skeleton("mail", ttl=525, alert=True,
+              description="Mail unread/total counts for classifier")
+async def skeleton_refresh_mail(ctx) -> ActionResult:
+    # Optional: diff against previous state.
+    # This is legal inside an @ext.skeleton tool.
+    prev = await ctx.skeleton.get("mail")
+
+    # Fetch fresh state from the upstream provider.
+    inbox = await _fetch_gmail_inbox(ctx)
+    unread = sum(1 for m in inbox if "UNREAD" in m.get("labelIds", []))
+
+    section = MailSection(unread=unread, total=len(inbox), inbox=inbox[:20])
+
+    # RETURN the new state. The kernel's skeleton_save_section activity
+    # persists it. Do NOT call ctx.skeleton.update(...) — the method
+    # does not exist in v1.6.0.
+    return ActionResult.success(
+        data=section.model_dump(),
+        summary=f"{unread} unread of {len(inbox)}",
+    )
 ```
 
-### From a tool
-
-Update skeleton after a state change so subsequent tool calls have fresh data.
+### `@ext.skeleton` decorator signature
 
 ```python
-@ext.tool("close_case", scopes=["cases:write"], description="Close a case")
-async def close_case(ctx: Context, case_id: str) -> str:
-    case = await ctx.store.get("cases", case_id)
-    case["status"] = "closed"
-    await ctx.store.create("cases", case)
-
-    # Update skeleton immediately
-    open_cases = await ctx.store.query("cases", filter={"status": "open"}, limit=5)
-    await ctx.skeleton.update("recent_cases", {
-        "count": len(open_cases),
-        "cases": [{"id": c["_id"], "title": c["title"]} for c in open_cases],
-    })
-
-    return f"Case {case_id} closed."
+Extension.skeleton(
+    section_name: str,          # "mail", "recent_cases", etc. Must be [a-zA-Z0-9_-]+
+    *,
+    ttl: int = 300,             # Seconds. Classifier envelope uses this for
+                                # "cached ~Xs ago" hinting.
+    alert: bool = False,        # If True, kernel emits skeleton_alert_<section>
+                                # when the section crosses a threshold.
+    description: str = "",      # Human-readable summary for docs + portal.
+)
 ```
 
-### From a scheduled task
+### Alert tools
 
-Periodically refresh skeleton data in the background.
-
-```python
-@ext.schedule("refresh_dashboard", cron="*/5 * * * *")
-async def refresh_dashboard(ctx: Context) -> None:
-    """Refresh dashboard metrics every 5 minutes."""
-    open_count = await ctx.store.count("cases", filter={"status": "open"})
-    critical_count = await ctx.store.count("cases", filter={"priority": "critical"})
-
-    await ctx.skeleton.update("dashboard", {
-        "open_cases": open_count,
-        "critical_cases": critical_count,
-        "last_refreshed": datetime.now(timezone.utc).isoformat(),
-    })
-```
-
----
-
-## Reading Skeleton Data
-
-### In a tool (use ctx.skeleton_data -- instant, pre-loaded)
+If you pass `alert=True`, the kernel also expects a sibling tool named `skeleton_alert_<section>` that returns a truthy `ActionResult` when the section warrants pushing a user-facing notification. This keeps alerting logic next to the state that triggers it.
 
 ```python
-@ext.tool("quick_status", description="Show a quick status summary")
-async def quick_status(ctx: Context) -> str:
-    # Use ctx.skeleton_data for reads in tools -- instant, no network call
-    data = ctx.skeleton_data.get("recent_cases", {})
-    if not data:
-        return "No cached data available."
+@ext.skeleton("mail", ttl=525, alert=True)
+async def skeleton_refresh_mail(ctx) -> ActionResult: ...
 
-    count = data.get("count", 0)
-    cases = data.get("cases", [])
-    lines = [f"- {c['title']}" for c in cases]
-    return f"You have {count} open case(s):\n" + "\n".join(lines)
-```
-
-### In a signal handler (use ctx.skeleton.get() if you need freshest value after a write)
-
-```python
-@ext.signal("on_new_case")
-async def on_new_case(ctx: Context, case: dict) -> None:
-    existing = await ctx.skeleton.get("recent_cases")
-    cases = existing.get("cases", []) if existing else []
-    cases.insert(0, {"id": case["_id"], "title": case["title"]})
-    cases = cases[:5]  # Keep only 5 most recent
-
-    await ctx.skeleton.update("recent_cases", {
-        "count": len(cases),
-        "cases": cases,
-    })
-```
-
----
-
-## Skeleton Refresh Tools
-
-When the platform calls a skeleton refresh (via the `refresh_activity` configured in the Registry), it invokes your tool through `execute_sdk_tool`. Skeleton refresh tools are an exception to the `_kernel_ctx` requirement — the SkeletonWorkflow calls execute_sdk_tool without `_kernel_ctx`, and the kernel builds a minimal fallback KernelContext from user_info. Skeleton refresh tools must return `{"response": data_dict}` instead of a plain string. The `execute_sdk_tool` kernel reads the `"response"` key and writes the data to the skeleton section in Redis.
-
-> **V6 (Pydantic params) applies to `@chat.function` only.** The Pydantic `BaseModel` parameter convention (V6 in `imperal validate`) is for `@chat.function` handlers only. `@ext.tool`, `@ext.signal`, `@ext.schedule`, and `@ext.skeleton` use plain `**kwargs` or named parameters as before — they are called by the platform with keyword arguments, not by an LLM tool-use schema.
-
-### Naming convention (kernel auto-derive, since SDK 1.5.22 / kernel 2026-04-22)
-
-The kernel discovers skeleton sections from tool names that follow the convention:
-
-- `skeleton_refresh_<X>` → refresh activity for section `<X>`
-- `skeleton_alert_<X>` → optional paired alert activity when `alert_on_change=True`
-
-Registry `skeleton_sections` rows still win when explicitly set (useful for custom TTL overrides), but are **no longer required**: any extension shipping a correctly-named refresh tool is picked up by the kernel's `_derive_skeleton_sections_from_tools` helper at load time. This means **zero Registry migration for new extensions** — ship the tool, the platform wires it.
-
-Invariants enforced kernel-side: `I-SKEL-AUTO-DERIVE-1`, `I-SKEL-SUMMARY-VALUES-1`, `I-SKEL-FRESHNESS-1`, `I-SKEL-PER-USER-1`, `I-SKEL-LIVE-INVALIDATE`, `I-PURGE-SKELETON-SCOPE`. See the platform docs at `docs/imperal-cloud/skeleton-architecture.md` for the full kernel-side contract.
-
-### Recommended — `@ext.skeleton` decorator (SDK 1.5.22+)
-
-The cleanest way to register a skeleton section. Applies the naming convention, threads `alert` / `ttl` hints, and rejects wildcards/separators that would break the Redis key path:
-
-```python
-@ext.skeleton("case_status", alert=True, ttl=60)
-async def refresh_case_status(ctx: Context) -> dict:
-    """Called by the skeleton engine on TTL expiry + immediately on enable."""
-    open_cases = await ctx.store.query("cases", filter={"status": "open"}, limit=10)
-    return {"response": {
-        # Flat scalar fields surface directly in the classifier envelope as
-        # "cases.case_status: count=N, has_urgent=true, ..." — route-able
-        # signal for the intent classifier without any per-extension prompt rule.
-        "count":       len(open_cases),
-        "has_urgent":  any(c.get("priority") == "urgent" for c in open_cases),
-        # Nested structures collapse to shape hints in the envelope.
-        "cases":       [{"id": c["_id"], "title": c["title"]} for c in open_cases],
-    }}
-
-# OPTIONAL — paired alert tool. Fires ONLY when alert=True on the refresh
-# decorator AND the section data changed since the last tick.
-@ext.tool("skeleton_alert_case_status", description="Alert on case-status change")
-async def alert_case_status(ctx: Context, section_name: str, old: dict, new: dict, **kwargs) -> dict:
-    if new["count"] > old.get("count", 0):
-        await ctx.notify(f"New cases opened: {new['count'] - old.get('count', 0)}")
-    return {"response": {"acknowledged": True}}
-```
-
-### Equivalent — plain `@ext.tool` with explicit naming
-
-`@ext.skeleton` is pure sugar; the kernel discovers sections via the tool name alone. You can always write the tool directly if you need full control:
-
-```python
-@ext.tool("skeleton_refresh_case_status", description="Refresh case status for skeleton")
-async def refresh_case_status(ctx: Context) -> dict:
+@ext.tool("skeleton_alert_mail", action_type="read",
+          description="Alert condition for mail skeleton")
+async def alert_mail(ctx) -> ActionResult:
+    # Read from the classifier-visible snapshot via ctx.cache or by calling
+    # skeleton_refresh_mail directly — NOT via ctx.skeleton.get() outside
+    # an @ext.skeleton tool.
     ...
 ```
 
-**`imperal validate` (V13) warns** on tools named `refresh_*` or `alert_*` WITHOUT the `skeleton_` prefix — those will not be picked up by kernel auto-derive.
-
-### Return shape best practices
-
-Surface **scalar fields at the top level** — numbers, bools, short strings, enum values. The intent classifier reads up to 6 scalar fields per section inline (`total=3, critical=0, warning=1, ok=2`) so it can route based on what the user actually has. Nested dicts and lists collapse to shape hints (`accounts=dict[3 keys]`). Internal metadata fields prefixed with `_` (e.g. `_freshness`, `_ttl_seconds`) are stripped from the envelope automatically — feel free to include them for debugging.
-
-### Idempotency
-
-`@ext.skeleton` handlers MUST be idempotent. The kernel may fire a refresh:
-
-- On the normal TTL tick (every `ttl` seconds, default 300)
-- On `update_config` signal (user enabled / disabled an extension, admin rotated access policies)
-- On worker startup if the user's skeleton workflow is fresh
-
-Side-effects beyond read-and-return (e.g. counters, API writes, notifications) cause double-charging or duplicate state mutations. Keep the handler pure.
-
-## Live-invalidate on enable / disable (kernel 2026-04-22+)
-
-When a user enables or disables an extension via Settings:
-
-1. Auth GW publishes `imperal:config:invalidate` with `{scope: "user_extension", app_id, action}`.
-2. Kernel `config_invalidation_listener` flushes access caches, on disable **purges** the app's Redis skeleton keys for that user (`imperal:skeleton:{app_id}:{user_id}:*` only — chat history and other namespaces are unreachable by construction), and signals the user's `skeleton-imperal-hub-{user_id}` workflow with `update_config`.
-3. Workflow reloads `_load_sections` → auto-derives sections → next tick fires any new refresh tools.
-
-**End-to-end latency:** < 2 seconds from Panel click to classifier envelope update. Extensions don't need to handle enable/disable specially — `ctx.store` data survives disable (only Redis skeleton cache is purged). On re-enable, the next skeleton tick repopulates.
-
-**Federal-grade purge safety:** the kernel's `purge_app_skeleton` helper is hardcoded to the `imperal:skeleton:{app_id}:{user_id}:*` key prefix. Chat history (`imperal:hub:chat:*`), confirmations, events, billing, processes all live in orthogonal top-level namespaces — physically unreachable by any well-formed purge pattern. Every SCAN result is re-verified against the literal prefix before DEL (defence-in-depth against hypothetical Redis client bugs). Validator: `scripts/validate_skeleton_live_invalidate.py` (13 test cases including `test_chat_history_untouched_on_purge` and `test_cross_user_keys_untouched`).
-
 ---
 
-## Extension Activation and Suspension
+## Reading skeleton state
 
-When an extension is activated or suspended (via the Registry API), the platform sends an `update_config` signal to the running skeleton workflow **immediately**. This means:
+### From a skeleton tool — legal
 
-- **Activation:** The skeleton starts refreshing the new extension's sections on the next tick. No restart needed.
-- **Suspension:** The skeleton stops refreshing the suspended extension's sections immediately.
-
-The `hub_mode` and `extensions_info` fields are injected into `skeleton_data._context` so that tools can read which extensions are active and whether the session is running in hub mode.
+Inside an `@ext.skeleton` function, `ctx.skeleton.get(section)` is allowed and returns the previous snapshot (or `None` on first run).
 
 ```python
-@ext.tool("check_context", description="Check runtime context")
-async def check_context(ctx: Context) -> str:
-    context_info = ctx.skeleton_data.get("_context", {})
-    hub_mode = context_info.get("hub_mode", False)
-    extensions = context_info.get("extensions_info", [])
-    return f"Hub mode: {hub_mode}, Active extensions: {len(extensions)}"
+@ext.skeleton("recent_cases", ttl=60)
+async def skeleton_refresh_cases(ctx) -> ActionResult:
+    prev = await ctx.skeleton.get("recent_cases") or {}
+    current_ids = {c["id"] for c in prev.get("cases", [])}
+    fresh = await ctx.store.query("cases", where={"status": "open"}, limit=5)
+    # ... detect deltas, emit events, return fresh state ...
+    return ActionResult.success(data=...)
 ```
 
----
-
-## Change Detection and Proactive Alerts
-
-When you call `ctx.skeleton.update()`, the platform compares the new data with the previous value. If the data differs and `alert_on_change` is enabled for the section, the platform can send a proactive notification to the user.
-
-### Configuring change detection
-
-Change detection is configured in the Registry when you register skeleton sections:
-
-```bash
-curl -X PUT https://api.imperal.io/v1/apps/my-app/tools \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: imp_reg_key_xxx" \
-  -d '{
-    "tools": [...],
-    "skeleton_sections": [
-        {
-            "name": "case_status",
-            "refresh_activity": "refresh_case_status",
-            "alert_activity": "alert_case_status",
-            "ttl": 60,
-            "alert_on_change": true
-        }
-    ]
-  }'
-```
-
-Or with the SDK manifest, skeleton sections referenced in your code are auto-detected by `imperal build` (which generates the manifest). Use `imperal validate` to check compliance before deploying.
-
-### How comparison works
-
-The platform performs a deep equality check on the dict:
-
-```
-Previous: {"status": "processing", "file_count": 30}
-Current:  {"status": "completed", "file_count": 50}
-Result:   CHANGED --> alert handler is called
-```
-
-### What triggers a change
-
-- Any value in the dict changes (including nested values).
-- A key is added or removed.
-- List ordering changes.
-
-### What does NOT trigger a change
-
-- Writing identical data (same keys and values as before).
-- Redis key expiry and re-creation with the same data.
-
-### Tip: avoid noisy diffs
-
-Do not include volatile fields like timestamps or counters that change on every update unless they are meaningful to the user.
+### From a panel / chat function / regular tool — forbidden
 
 ```python
-# Noisy -- triggers change every refresh because of timestamp
-await ctx.skeleton.update("status", {
-    "value": "processing",
-    "checked_at": datetime.now().isoformat(),
-})
-
-# Clean -- only triggers when the actual status changes
-await ctx.skeleton.update("status", {
-    "value": "processing",
-    "file_count": 50,
-})
-```
-
----
-
-## TTL and Auto-Refresh
-
-Each skeleton section has a configurable TTL (time-to-live) that determines how often the platform refreshes the data.
-
-### How the refresh cycle works
-
-The skeleton engine uses the section's configured TTL as the **tick interval** -- if you set `ttl: 60`, the section refreshes every 60 seconds. The Redis key is stored with a TTL of `section_ttl * 2` (twice the refresh interval) to ensure data survives one missed refresh cycle before expiring.
-
-```
-t=0s    Section created/updated via ctx.skeleton.update()
-        Data stored in Redis with TTL = section_ttl * 2 (e.g., 120s for a 60s TTL)
-
-t=60s   Platform calls refresh_activity (tick = TTL)
-        New data compared with previous
-        If changed: alert_activity is called
-
-t=120s  Next refresh cycle
-...
-```
-
-### TTL guidelines
-
-| Data Type | TTL | Rationale |
-|-----------|-----|-----------|
-| Rapidly changing (live metrics, active processing) | 15-30s | Near-real-time visibility |
-| Moderate (case status, file lists) | 60-120s | Balance between freshness and load |
-| Slow-changing (user profile, subscription) | 300-600s | Rarely changes mid-session |
-| Near-static (app config, feature flags) | 900-1800s | Changes only on deploy |
-
-### Redis storage
-
-| Property | Value |
-|----------|-------|
-| Key format | `imperal:skeleton:{app_id}:{user_id}:{section_name}` |
-| Serialization | JSON |
-| Redis TTL | `section_ttl * 2` (auto-expires if refresh stops) |
-| Max payload | 64 KB per section |
-
----
-
-## Cold Start Handling
-
-When a user sends their first message (or after a restart), skeleton data may not be populated yet. The platform does not block the tool call waiting for skeleton data -- your tool receives an empty dict from `ctx.skeleton_data` and must handle the empty case.
-
-### Recommended pattern: fallback to direct query
-
-```python
-@ext.tool("case_info", description="Show case details")
-async def case_info(ctx: Context, case_id: str) -> str:
-    # Try skeleton first (pre-loaded, instant)
-    data = ctx.skeleton_data.get("case_status", {})
-
-    if not data:
-        # Cold start -- skeleton not populated yet, query directly
-        case = await ctx.store.get("cases", case_id)
-        data = {
-            "title": case["title"],
-            "status": case["status"],
-            "file_count": case.get("file_count", 0),
-        }
-        # Populate skeleton for next time
-        await ctx.skeleton.update("case_status", data)
-
-    return (
-        f"**{data.get('title', 'Unknown')}**\n"
-        f"Status: {data.get('status', 'unknown')}\n"
-        f"Files: {data.get('file_count', 0)}"
-    )
-```
-
-### Why not wait for skeleton?
-
-Blocking the tool call until skeleton loads would add latency to the user's first message. The fallback pattern provides an instant response on cold start. Subsequent messages benefit from the pre-populated skeleton.
-
----
-
-## Cross-Extension Context
-
-When a user has multiple active extensions, the platform loads skeleton data from all extensions the user has access to. This means your tool can read data produced by other extensions the user has installed, and vice versa.
-
-> **Per-user access filtering (2026-04-09):** The skeleton engine only refreshes extensions the user actually has access to (RBAC-filtered via Auth Gateway). Previously it refreshed all registered extensions for every user. This means `ctx.skeleton_data` contains only data from extensions in the user's enabled set -- no leaked cross-user data from extensions the user cannot access.
-
-For example, if a user has both `case-manager` (with a `case_status` section) and `compliance-checker` (with a `compliance_score` section) active, a tool in either extension can read both sections.
-
-### How it works
-
-The platform's skeleton loader reads Redis keys across all `app_id` values for the user and merges them into a single context. No configuration is needed on your part -- the platform handles cross-extension loading automatically.
-
-### Important: section name uniqueness
-
-If two extensions define a section with the same name, each extension's data is stored separately (keyed by `app_id`). There is no conflict. However, when reading via `ctx.skeleton.get()`, your extension sees its own section by default. To read another extension's section, use the fully qualified form:
-
-```python
-# Read your own section
-my_data = await ctx.skeleton.get("status")
-
-# Read another extension's section (if the user has it active)
-compliance = await ctx.skeleton.get("compliance-checker:compliance_score")
-```
-
----
-
-## Best Practices
-
-### What to put in skeleton
-
-Skeleton is for **extension application data only** — data your extension produces and the assistant needs for instant access. It is NOT a place for platform configuration, system settings, or feature flags that belong in the Unified Config Store.
-
-- **Status flags:** `analysis_status`, `account_state`, `connection_status`
-- **Counters:** `open_cases`, `pending_tasks`, `unread_messages`
-- **Summaries:** Top-level case info, recent activity, key metrics
-- **Extension caches:** Inbox cache, notes stats, recent document list
-
-### What NOT to put in skeleton
-
-- **Platform configuration:** Extension settings, AI model choices, feature flags, user preferences. Use the Unified Config Store (read via `ctx.config`).
-- **Large blobs:** Full reports, raw file contents, base64-encoded images. Store a reference and fetch on demand.
-- **Volatile timestamps:** Fields that change every refresh but carry no user-facing meaning.
-- **Credentials:** API keys, passwords, tokens. Use secure environment variables.
-- **Easily computed data:** If your tool can cheaply derive it from other skeleton data, do not store it separately.
-
-### Section design guidelines
-
-| Guideline | Rationale |
-|-----------|-----------|
-| One concern per section | Independent TTLs, independent change detection |
-| Prefer flat structures | Change detection is more predictable |
-| Keep payloads under 16 KB | 64 KB is the hard limit, but smaller is faster |
-| Use stable keys | Do not dynamically generate top-level keys |
-| Avoid arrays of unbounded length | Cap lists (e.g., `[:20]`) to prevent payload growth |
-
----
-
-## Complete Example: Case Monitoring
-
-```python
-from imperal_sdk import Extension, Context
-from datetime import datetime, timezone
-
-ext = Extension("case-monitor")
-
-
-# ---------------------------------------------------------------------------
-# Signal: update skeleton when a case is created or modified
-# ---------------------------------------------------------------------------
-
-@ext.signal("on_case_update")
-async def on_case_update(ctx: Context, case: dict) -> None:
-    """React to case creation or modification."""
-    open_cases = await ctx.store.query(
-        "cases",
-        filter={"status": "open"},
-        sort="-updated_at",
-        limit=10,
-    )
-
-    await ctx.skeleton.update("case_dashboard", {
-        "open_count": len(open_cases),
-        "cases": [
-            {
-                "id": c["_id"],
-                "title": c["title"],
-                "priority": c.get("priority", "normal"),
-                "updated": c.get("updated_at"),
-            }
-            for c in open_cases
-        ],
-    })
-
-    # Notify on critical cases
-    if case.get("priority") == "critical":
-        await ctx.notify(
-            title="Critical Case Update",
-            body=f"Case '{case['title']}' has been updated.",
-            priority="high",
-        )
-
-
-# ---------------------------------------------------------------------------
-# Schedule: periodic refresh
-# ---------------------------------------------------------------------------
-
-@ext.schedule("refresh_stats", cron="*/2 * * * *")
-async def refresh_stats(ctx: Context) -> None:
-    """Refresh aggregate statistics every 2 minutes."""
-    total = await ctx.store.count("cases")
-    open_count = await ctx.store.count("cases", filter={"status": "open"})
-    closed_count = await ctx.store.count("cases", filter={"status": "closed"})
-
-    await ctx.skeleton.update("case_stats", {
-        "total": total,
-        "open": open_count,
-        "closed": closed_count,
-        "close_rate": round(closed_count / total * 100, 1) if total > 0 else 0,
-    })
-
-
-# ---------------------------------------------------------------------------
-# Tool: read skeleton data instantly
-# ---------------------------------------------------------------------------
-
-@ext.tool("dashboard", description="Show case dashboard summary")
-async def dashboard(ctx: Context) -> str:
-    # Use ctx.skeleton_data for instant reads in tools (pre-loaded, no network call)
-    dash = ctx.skeleton_data.get("case_dashboard", {})
-    stats = ctx.skeleton_data.get("case_stats", {})
-
-    if not dash and not stats:
-        return "No data available yet. Try again in a moment."
-
-    lines = []
-
-    if stats:
-        lines.append(
-            f"**Overview:** {stats.get('open', 0)} open / "
-            f"{stats.get('closed', 0)} closed / "
-            f"{stats.get('total', 0)} total "
-            f"({stats.get('close_rate', 0)}% close rate)"
-        )
-
-    if dash and dash.get("cases"):
-        lines.append("\n**Recent open cases:**")
-        for c in dash["cases"][:5]:
-            priority = f" [{c['priority'].upper()}]" if c.get("priority") == "critical" else ""
-            lines.append(f"- {c['title']}{priority}")
-
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Tool: case details with skeleton fallback
-# ---------------------------------------------------------------------------
-
-@ext.tool("case_detail", description="Show detailed info for a specific case")
-async def case_detail(ctx: Context, case_id: str) -> str:
-    # Try skeleton for quick summary (pre-loaded, instant)
-    dash = ctx.skeleton_data.get("case_dashboard", {})
-    cached = None
-    if dash:
-        for c in dash.get("cases", []):
-            if c["id"] == case_id:
-                cached = c
-                break
-
-    # Always fetch full data from store for accuracy
-    case = await ctx.store.get("cases", case_id)
-
-    return (
-        f"## {case['title']}\n\n"
-        f"**Status:** {case['status']}\n"
-        f"**Priority:** {case.get('priority', 'normal')}\n"
-        f"**Created:** {case.get('created_at', 'N/A')}\n"
-        f"**Files:** {case.get('file_count', 0)}\n\n"
-        f"{case.get('description', 'No description.')}"
-    )
-```
-
----
-
-## Architecture
-
-```
-+-----------------------+       +----------------------------------+
-|  Your Extension       |       |  Imperal Cloud Platform          |
-|                       |       |                                  |
-|  @ext.signal          |       |  Skeleton Engine                 |
-|  @ext.schedule        |------>|  - Stores data in Redis          |
-|  @ext.tool            |       |  - Runs change detection         |
-|  ctx.skeleton.update()|       |  - Sends proactive alerts        |
-|  ctx.skeleton.get()   |<------|  - Loads data for tool calls     |
-|                       |       |                                  |
-+-----------------------+       |         +--------+               |
-                                |         | Redis  |               |
-                                |         +--------+               |
-                                +----------------------------------+
-```
-
----
-
-## Billing Status Skeleton Section
-
-The `billing` system extension registers a skeleton section `billing_status` that provides real-time billing context to the assistant. This section is refreshed by the `refresh_billing_status` tool with a TTL of 60 seconds.
-
-### Data returned
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `balance` | `int` | Tokens remaining in the current billing period |
-| `plan` | `str` | Active plan name (micro, starter, pro, business, enterprise) |
-| `cap` | `int` | Plan token cap |
-| `alert_level` | `str` | `"ok"`, `"warning"` (< 20% remaining), or `"critical"` (< 5% remaining) |
-
-### How it works
-
-The billing extension (`/opt/extensions/billing/`) registers `refresh_billing_status` as a skeleton refresh tool. The skeleton engine calls it every 60 seconds per user. The assistant receives `billing_status` in `ctx.skeleton_data` automatically, enabling proactive warnings when the user's balance is low.
-
-```python
-# Reading billing status from skeleton (in any extension)
-billing = ctx.skeleton_data.get("billing_status", {})
-if billing.get("alert_level") == "critical":
-    # User is nearly out of tokens -- inform them proactively
+@ext.panel("inbox", slot="main", title="Inbox")
+async def panel_inbox(ctx, **kwargs):
+    # BAD — raises SkeletonAccessForbidden in v1.6.0.
+    mail = await ctx.skeleton.get("mail")
+
+    # GOOD — use ctx.cache or call an ExtensionsClient method on your own
+    # extension that pulls the data from its authoritative source.
     ...
 ```
 
-This is a platform-provided skeleton section. Extension developers do not need to register or refresh it -- it is always available for users with the billing extension active.
+### From a `@chat.function` — forbidden
+
+```python
+@chat.function("what_is_unread", action_type="read")
+async def fn_unread(ctx, params) -> ActionResult:
+    # BAD — SkeletonAccessForbidden.
+    mail = await ctx.skeleton.get("mail")
+    # GOOD — either fetch via ctx.store / ctx.http / ctx.cache, or expose
+    # a dedicated @ext.tool that runs in the same isolation bucket.
+    ...
+```
+
+The classifier envelope already sees skeleton — the LLM does not need your function to re-expose it. Chat functions are for acting on user requests, not for leaking skeleton state back into the conversation (that is the classifier's job, not yours).
 
 ---
 
-## Related Documentation
+## The classifier envelope
 
-- [Context Object](context-object.md) -- `ctx.skeleton` methods and usage
-- [Tools](tools.md) -- Tools that consume skeleton data
-- [Concepts](concepts.md) -- Background state in the ICNLI OS model
-- [API Reference](api-reference.md) -- Skeleton section registration via Registry
+Every classifier turn receives a structured `[SKELETON]` block derived from Redis. v1.6.0 adds a strict authority header + per-section freshness tag:
+
+```
+[SKELETON] -- AUTHORITATIVE for availability/presence/0-vs-nonzero,
+           STALE for specific numbers/metrics (route via target_apps for fresh fetch).
+
+- mail.mail (cached ~17s ago): unread=3, total=17
+- analytics.visitors (cached ~2m05s ago): today=1143
+- sharelock.cases (cached ~1h02m ago): open=14, closed=8
+- (other sections ... freshness unknown)
+```
+
+Key contract (I-SKELETON-STALENESS-ENVELOPE):
+- `(cached ~Xs ago)` tag is derived from `_refreshed_at` in the stored section.
+- Header tokens `AUTHORITATIVE` + `STALE` are load-bearing — the routing LLM uses them to decide when to force a fresh fetch via a skeleton refresh.
+- Dict sections are flattened to scalar key/value pairs (`_*` internal fields skipped).
+- Non-dict sections render without a freshness tag.
+
+---
+
+## Freshness + staleness
+
+Every skeleton section carries:
+- `_refreshed_at` — unix timestamp of last successful refresh.
+- `_ttl` — the `ttl` argument from `@ext.skeleton`.
+
+The kernel's `skeleton_check_stale` activity compares `now - _refreshed_at` against the section's own `_ttl` (not the workflow-level app_id — I-SKEL-CHECK-STALE-PER-SECTION-APPID). When age > TTL, the workflow enqueues `skeleton_refresh_<section>` for that app+user.
+
+This means a mail section with `ttl=525` and an analytics section with `ttl=60` are refreshed on **independent** cadences on the same user, with no cross-section over-fetching.
+
+---
+
+## Migration from v1.5.x
+
+### Pattern 1 — tool that used `ctx.skeleton_data["X"]`
+
+```python
+# v1.5.x
+@chat.function("summarise_inbox", action_type="read")
+async def summarise(ctx, params) -> ActionResult:
+    mail = ctx.skeleton_data.get("mail", {})
+    return ActionResult.success(data=mail)
+
+# v1.6.0 — skeleton is LLM-only; move to ctx.cache or a dedicated fetch.
+from pydantic import BaseModel
+
+class MailSnapshot(BaseModel):
+    unread: int
+    total: int
+
+@ext.cache_model("mail_snapshot")
+class _MailSnapshotCache(MailSnapshot):
+    pass
+
+@chat.function("summarise_inbox", action_type="read")
+async def summarise(ctx, params) -> ActionResult:
+    snap = await ctx.cache.get_or_fetch(
+        key="latest",
+        model=MailSnapshot,
+        ttl_seconds=60,
+        fetcher=lambda: _count_mail(ctx),
+    )
+    return ActionResult.success(data=snap.model_dump())
+```
+
+### Pattern 2 — tool that called `ctx.skeleton.update(...)`
+
+```python
+# v1.5.x
+@ext.signal("on_case_closed")
+async def on_close(ctx, case_id: str) -> None:
+    await ctx.skeleton.update("recent_cases", {"count": 0, "cases": []})
+
+# v1.6.0 — either emit a platform event and let your @ext.skeleton tool
+# re-derive state next tick, OR promote the logic into an @ext.skeleton
+# handler.
+@ext.skeleton("recent_cases", ttl=60)
+async def skeleton_refresh_cases(ctx) -> ActionResult:
+    cases = await ctx.store.query("cases", where={"status": "open"}, limit=5)
+    return ActionResult.success(
+        data={"count": len(cases),
+              "cases": [{"id": c["id"], "title": c["data"]["title"]} for c in cases]},
+        summary=f"{len(cases)} open cases",
+    )
+```
+
+### Pattern 3 — `@ext.tool("skeleton_refresh_X")` naming convention
+
+```python
+# v1.5.x — still works but triggers MANIFEST-SKELETON-1
+@ext.tool("skeleton_refresh_mail", action_type="read", description="...")
+async def refresh_mail(ctx) -> ActionResult: ...
+
+# v1.6.0 — canonical form
+@ext.skeleton("mail", ttl=525, alert=True, description="...")
+async def skeleton_refresh_mail(ctx) -> ActionResult: ...
+```
+
+---
+
+## Validator rules (v1.6.0 additions)
+
+Run `imperal validate` or `python -m imperal_sdk.validator_v1_6_0` — the v1.6.0 ruleset adds:
+
+| Rule | Meaning |
+|---|---|
+| **SKEL-GUARD-1** | Panel / chat function / regular tool reads `ctx.skeleton.get(...)` — will raise `SkeletonAccessForbidden` at runtime. |
+| **SKEL-GUARD-2** | Code references removed `ctx.skeleton_data` attribute. |
+| **SKEL-GUARD-3** | Code calls removed `ctx.skeleton.update(...)` method. |
+| **CACHE-MODEL-1** | `ctx.cache.get(..., model=X)` where `X` is not registered via `@ext.cache_model`. |
+| **CACHE-TTL-1** | `ctx.cache.set(ttl_seconds=N)` with `N` outside `[5, 300]`. |
+| **MANIFEST-SKELETON-1** | `@ext.tool("skeleton_refresh_*")` used in place of `@ext.skeleton`. |
+| **SDK-VERSION-1** | Extension uses a v1.6.0 feature (`ctx.cache`, `@ext.skeleton`, `SkeletonAccessForbidden`) with `imperal-sdk<1.6.0` pinned. |
+
+---
+
+## Invariants (kernel + SDK contract)
+
+- **I-SKELETON-LLM-ONLY** — `ctx.skeleton` is callable only from an `@ext.skeleton` tool. All other contexts raise `SkeletonAccessForbidden`.
+- **I-SKELETON-PROTOCOL-READ-ONLY** — `SkeletonProtocol` has no `update(...)` method. The kernel's `skeleton_save_section` activity is the sole writer.
+- **I-NO-CTX-SKELETON-DATA** — `Context` has no `skeleton_data` attribute. Tools that need prior state must call `ctx.skeleton.get(section)` from inside an `@ext.skeleton` tool.
+- **I-KERNEL-EMPTY-SKELETON-ARG** — Non-skeleton tool dispatch no longer carries a skeleton snapshot in its args. The kernel passes an empty sentinel.
+- **I-SKEL-AUTO-DERIVE-1** — If Registry has no `skeleton_sections` row for an app, the kernel derives sections from any `skeleton_refresh_<X>` tool (via the `@ext.skeleton` metadata).
+- **I-SKEL-SUMMARY-VALUES-1** — Classifier envelope renders dict sections as `key=value` scalar pairs, skipping `_*` fields.
+- **I-SKEL-FRESHNESS-1** — Every section stores `_refreshed_at`; staleness is computed per section, not per workflow.
+- **I-SKEL-PER-USER-1** — Redis keyspace is `imperal:skeleton:{app}:{user}:{section}`; no cross-user bleed.
+- **I-SKEL-LIVE-INVALIDATE** — Extension disable emits `imperal:config:invalidate`, kernel purges `imperal:skeleton:{app}:{user}:*` scoped keys in <2s.
+- **I-PURGE-SKELETON-SCOPE** — Skeleton purge routines reject `*?[]:` in identifiers, re-verify every SCAN key against the literal prefix before DEL, and are physically unable to touch `imperal:hub:chat:*` (federal-grade safety).
+- **I-SKEL-CHECK-STALE-PER-SECTION-APPID** — Staleness check honours per-section `app_id`, not the workflow-level `app_id`. Prevents 10-15× over-fetch of unrelated sections.
+- **I-SKELETON-STALENESS-ENVELOPE** — Classifier envelope prepends AUTHORITATIVE/STALE header and tags each dict section with `(cached ~Xs ago)`.
+- **I-CALL-TOKEN-HMAC** — Auth GW `/v1/internal/skeleton` accepts only HMAC-SHA256-signed call tokens with a tool_type="skeleton" scope; jti replay protection via Redis SETNX.

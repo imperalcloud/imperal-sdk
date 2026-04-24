@@ -238,9 +238,10 @@ async def context_aware_search(ctx: Context, message: str) -> str:
     recent_messages = ctx.history[-5:] if ctx.history else []
     context_summary = "\n".join(f"{m['role']}: {m['content']}" for m in recent_messages)
 
-    # Skeleton data -- pre-loaded snapshot, read-only, instant
-    active_cases = ctx.skeleton_data.get("active_cases", {})
-    current_case = active_cases.get("latest", {}).get("title", "none")
+    # v1.6.0: ctx.skeleton_data is removed and ctx.skeleton raises
+    # SkeletonAccessForbidden outside @ext.skeleton tools. Use ctx.cache
+    # for panel-side runtime data, or call a dedicated fetch helper.
+    current_case = await _latest_case_title(ctx)  # your own fetch
 
     result = await ctx.ai.complete(
         f"User is working on case: {current_case}\n"
@@ -407,11 +408,10 @@ async def create_case(ctx: Context, title: str, description: str) -> str:
         "created_by": ctx.user.id,
     })
 
-    # Update skeleton so the assistant has immediate context
-    await ctx.skeleton.update("active_cases", {
-        "latest": {"id": doc_id, "title": title},
-    })
-
+    # v1.6.0: ctx.skeleton.update() is removed. A separate @ext.skeleton
+    # tool (e.g. skeleton_refresh_active_cases) re-derives state on its TTL.
+    # Alternatively, emit a platform event and let the skeleton tick pick up
+    # the new case.
     return f"Case created: {doc_id}"
 ```
 
@@ -657,13 +657,9 @@ async def block_indicator(ctx: Context, indicator: str, reason: str) -> str:
         "blocked_by": ctx.user.id,
     })
 
-    # Update skeleton for real-time dashboard
-    blocklist = await ctx.store.query("blocklist")
-    await ctx.skeleton.update("blocklist_stats", {
-        "total": len(blocklist),
-        "last_added": indicator,
-    })
-
+    # v1.6.0: skeleton is LLM-only read-only. Define a separate
+    # @ext.skeleton("blocklist_stats", ttl=60) tool to re-derive stats
+    # on its own cadence; the platform surfaces it to the classifier.
     return f"Indicator `{indicator}` added to blocklist. Reason: {reason}"
 
 
@@ -693,10 +689,9 @@ async def generate_report(ctx: Context, days: int = 7) -> str:
 @ext.signal("on_new_threat")
 async def on_new_threat(ctx: Context, threat: dict) -> None:
     """React to new threat ingestion."""
-    await ctx.skeleton.update("active_threats", {
-        "latest": threat["name"],
-        "count": await ctx.store.count("threats"),
-    })
+    # v1.6.0: define @ext.skeleton("active_threats", ttl=60) separately.
+    # Signals can no longer write skeleton directly — only @ext.skeleton
+    # tools produce new state via ActionResult; the kernel persists.
     if threat.get("severity") in ("high", "critical"):
         await ctx.notify(
             title=f"New {threat['severity']} threat detected",

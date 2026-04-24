@@ -36,11 +36,13 @@ async def analyze(ctx: Context, message: str) -> str:
 class Context:
     user: User                 # Verified user identity
     history: list              # Pre-loaded conversation history (read-only)
-    skeleton_data: dict        # Pre-loaded skeleton snapshot (read-only)
     store: StoreClient         # Tier 1: managed document storage
     db: DBClient               # Tier 2: dedicated schema (requires capability)
     ai: AIClient               # AI completions (auto-metered)
-    skeleton: SkeletonClient   # Write skeleton sections (network call)
+    skeleton: SkeletonProtocol # LLM-only read-only skeleton (v1.6.0). Raises
+                               # SkeletonAccessForbidden outside @ext.skeleton tools.
+    cache: CacheClient         # v1.6.0: Pydantic-typed runtime cache, TTL 5-300s,
+                               # 64 KB cap, per-extension namespace.
     billing: BillingClient     # Check limits and subscription (read-only)
     notify: NotifyClient       # Push notifications to the user
     storage: StorageClient     # File storage (S3-compatible)
@@ -57,7 +59,9 @@ class Context:
     _confirmation_actions: dict   # Per-category: {"destructive": True, "write": False}
 ```
 
-> **Note:** The `Context` is created by the platform's **ContextFactory** in the ICNLI OS kernel. The factory pre-loads `history` and `skeleton_data` before your function runs, so reading them is instant (no network call). The user's message is passed as a separate `message` keyword argument to your tool function, not as a field on Context.
+> **Note:** The `Context` is created by the platform's **ContextFactory** in the ICNLI OS kernel. The factory pre-loads `history` before your function runs, so reading it is instant (no network call). The user's message is passed as a separate `message` keyword argument to your tool function, not as a field on Context.
+>
+> **v1.6.0 change:** `ctx.skeleton_data` is removed. Skeleton is LLM-only — the classifier envelope surfaces skeleton state to the routing LLM. Non-skeleton tools that need panel-side runtime data should use `ctx.cache` (see below). See [docs/skeleton.md](skeleton.md) for migration examples.
 
 ---
 
@@ -176,49 +180,13 @@ async def summarize_conversation(ctx: Context, message: str) -> str:
 
 ---
 
-## ctx.skeleton_data
+## ctx.skeleton_data (removed in v1.6.0)
 
-Pre-loaded snapshot of all skeleton sections for the current user. This is a **read-only dict** loaded by the ContextFactory before your function runs. Accessing `ctx.skeleton_data` is instant -- no network call.
+**`ctx.skeleton_data` no longer exists.** Skeleton is LLM-only in v1.6.0 — only the routing LLM sees skeleton state via the classifier envelope. Non-skeleton tools (panels, chat functions, regular tools) cannot read it.
 
-### Reading vs. writing skeleton data
+If you previously used `ctx.skeleton_data[...]` for panel-side runtime data, migrate to [`ctx.cache`](#ctxcache). If you genuinely need previous skeleton state for a diff, do that work inside an `@ext.skeleton` tool — `ctx.skeleton.get(section)` is legal in that context only.
 
-| Operation | API | Performance | Use case |
-|-----------|-----|-------------|----------|
-| **Read** | `ctx.skeleton_data` | Instant (pre-loaded) | Access cached state in tools |
-| **Write** | `ctx.skeleton.update()` | Network call | Update state in signals/schedules |
-| **Read (remote)** | `ctx.skeleton.get()` | Network call | Read latest value after a write |
-
-### Example
-
-```python
-@ext.tool("quick_status", description="Quick status from cached data")
-async def quick_status(ctx: Context, message: str) -> str:
-    # Read from pre-loaded snapshot -- instant, no network call
-    cases = ctx.skeleton_data.get("recent_cases", {})
-    count = cases.get("count", 0)
-    if count == 0:
-        return "No cached case data. Try asking about your cases directly."
-    titles = [c["title"] for c in cases.get("cases", [])]
-    return f"You have {count} open case(s):\n" + "\n".join(f"- {t}" for t in titles)
-
-
-@ext.signal("on_user_login")
-async def on_login(ctx: Context, user: dict) -> None:
-    # Write to skeleton -- network call, updates the stored value
-    cases = await ctx.store.query("cases", where={"status": "open"}, limit=5)
-    await ctx.skeleton.update("recent_cases", {
-        "count": len(cases),
-        "cases": [{"id": c.id, "title": c["title"]} for c in cases],
-    })
-```
-
-### Notes
-
-- `ctx.skeleton_data` is a dict keyed by section name. Each value is the section's data dict.
-- The snapshot includes a special `_context` key injected by the platform, containing `hub_mode` (bool) and `extensions_info` (list of active extension metadata). Extensions can read these to adapt behavior based on runtime context.
-- The snapshot is taken at request start. If a signal updates skeleton during the same session, the next tool invocation will see the updated value.
-- For writing skeleton state, always use `ctx.skeleton.update()` (see the [ctx.skeleton](#ctxskeleton) section below).
-- Maximum payload per section: 64 KB.
+See [`docs/skeleton.md`](skeleton.md) § Migration for worked examples.
 
 ---
 
@@ -440,63 +408,164 @@ async def ask(ctx: Context, question: str) -> str:
 
 ---
 
-## ctx.skeleton
+## ctx.skeleton (v1.6.0 — LLM-only, read-only)
 
-The skeleton **client** for writing and managing skeleton sections. This is a network client -- each call makes a request to the platform's Redis-backed skeleton store.
+Skeleton is the routing LLM's view of extension state. In v1.6.0 it is:
 
-**Status: Fully operational.** The backend (`GET/PUT /v1/internal/skeleton/{user_id}/{section}` on the Auth Gateway) is deployed and serving requests. Data is stored in Redis with per-section TTL management.
+- **Read-only** — `SkeletonProtocol` has no `update(...)` method. Skeleton tools RETURN new state via `ActionResult` and the kernel persists it via the privileged `skeleton_save_section` activity.
+- **Forbidden outside `@ext.skeleton` tools** — accessing `ctx.skeleton` from a panel, `@chat.function`, or regular `@ext.tool` raises `SkeletonAccessForbidden` (a `PermissionError` subclass).
 
-> **Reading skeleton data?** Use `ctx.skeleton_data` instead. It is pre-loaded by the ContextFactory and requires no network call. Use `ctx.skeleton` (this client) for **writing** or when you need the absolute latest value after a write.
-
-### Methods
+### Methods (inside `@ext.skeleton` only)
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `get` | `get(section: str) -> dict` | Read the latest skeleton section from Redis. Returns `{}` if not populated. Network call. |
-| `update` | `update(section: str, data: dict) -> None` | Write data to a skeleton section. Triggers change detection. Network call. |
-| `delete` | `delete(section: str) -> None` | Remove a skeleton section. Network call. |
+| `get` | `get(section: str) -> dict \| None` | Read the current skeleton section for this user. Returns `None` on first run. HMAC-authenticated call to Auth GW. |
 
-### When to use `ctx.skeleton_data` vs. `ctx.skeleton`
+`update(...)` and `delete(...)` are removed. The kernel writes skeleton via the privileged `skeleton_save_section` activity; the Auth GW PUT endpoint is gone. Extensions that need to remove or reset a section should return an empty payload from their `@ext.skeleton` tool.
 
-| Scenario | Use | Why |
-|----------|-----|-----|
-| Read state in a tool | `ctx.skeleton_data["section"]` | Instant, pre-loaded, no latency |
-| Write state in a signal or schedule | `await ctx.skeleton.update(...)` | Only way to persist changes |
-| Read immediately after writing | `await ctx.skeleton.get(...)` | Need the freshest value |
-
-### Example: writing skeleton data in a signal handler
+### Using `ctx.skeleton` correctly
 
 ```python
-@ext.signal("on_user_login")
-async def on_login(ctx: Context, user: dict) -> None:
-    cases = await ctx.store.query("cases", where={"status": "open"}, limit=5)
-    await ctx.skeleton.update("recent_cases", {
-        "count": len(cases),
-        "cases": [{"id": c.id, "title": c["title"]} for c in cases],
-    })
+from imperal_sdk import Extension, ActionResult
+
+ext = Extension("mail", version="1.6.0")
+
+@ext.skeleton("mail", ttl=525, alert=True,
+              description="Mail unread/total counts")
+async def skeleton_refresh_mail(ctx) -> ActionResult:
+    # Legal — ctx.skeleton is unlocked inside an @ext.skeleton tool.
+    prev = await ctx.skeleton.get("mail") or {}
+    inbox = await _fetch_mail(ctx)
+    new_state = {"unread": sum(1 for m in inbox if m["unread"]),
+                 "total": len(inbox)}
+    # RETURN the new state. No ctx.skeleton.update(...) in v1.6.0.
+    return ActionResult.success(data=new_state, summary=f"{new_state['unread']} unread")
 ```
 
-### Example: reading skeleton data in a tool (use ctx.skeleton_data)
+### Violations (v1.6.0 — raise `SkeletonAccessForbidden`)
 
 ```python
-@ext.tool("quick_status", description="Quick status check from cached data")
-async def quick_status(ctx: Context, message: str) -> str:
-    # Use ctx.skeleton_data for reads -- instant, no network call
-    data = ctx.skeleton_data.get("recent_cases", {})
-    if not data:
-        return "No cached data available. Try asking about your cases directly."
-    count = data.get("count", 0)
-    titles = [c["title"] for c in data.get("cases", [])]
-    return f"You have {count} open case(s):\n" + "\n".join(f"- {t}" for t in titles)
+from imperal_sdk.errors import SkeletonAccessForbidden
+
+@ext.panel("inbox", slot="main", title="Inbox")
+async def panel_inbox(ctx, **kwargs):
+    # BAD — raises SkeletonAccessForbidden.
+    mail = await ctx.skeleton.get("mail")
+    # GOOD — use ctx.cache for panel-side runtime data (see below).
+
+@chat.function("unread_count", action_type="read")
+async def fn_unread(ctx, params) -> ActionResult:
+    # BAD — raises SkeletonAccessForbidden.
+    mail = await ctx.skeleton.get("mail")
+    # GOOD — call your own fetch logic or expose a skeleton tool and let
+    # the classifier surface the count through the envelope.
 ```
 
 ### Notes
 
-- Skeleton data is stored in Redis with automatic TTL management.
-- Writing to a skeleton section triggers the platform's change detection. If the data differs from the previous value and `alert_on_change` is enabled, the user receives a proactive notification.
-- For **reading** in tools, prefer `ctx.skeleton_data` (pre-loaded, instant). Use `ctx.skeleton.get()` only when you need the absolute latest value after a recent write.
+- Auth GW verifies every skeleton call with HMAC call-token authentication (`I-CALL-TOKEN-HMAC`) + Redis SETNX jti replay protection.
 - Maximum payload per section: 64 KB.
-- See [Skeleton Reference](skeleton.md) for TTL configuration, change detection, and proactive alerts.
+- See [`docs/skeleton.md`](skeleton.md) for the `@ext.skeleton` decorator, TTL + alert semantics, classifier envelope format, and migration patterns from v1.5.x.
+
+---
+
+## ctx.cache (new in v1.6.0)
+
+Pydantic-typed runtime cache for panel-side data, API response caching, paginated list snapshots, throttled counters — anything that used to live in skeleton but is **not** meant for the routing LLM.
+
+**Status:** Backed by Auth GW `/v1/internal/extcache/{app_id}/{user_id}/{model}/{hash}`. HMAC call-token authenticated. Redis-backed, per-extension namespace, per-user scope.
+
+### Properties
+
+| Constraint | Value |
+|---|---|
+| Value shape | Pydantic `BaseModel` subclass registered via `@ext.cache_model("name")` |
+| Namespace | Per extension + per user (no cross-bleed) |
+| TTL range | 5–300 seconds (inclusive, Pydantic `Field(ge=5, le=300)`) |
+| Value size cap | 64 KB after Pydantic `model_dump_json()` |
+| Key charset | `[A-Za-z0-9_:.-]+`, max length 128 |
+| Auth | HMAC call-token on every call |
+
+### Registering a cache model
+
+`@ext.cache_model(name)` is a decorator on your `Extension` instance. It registers a Pydantic class under `name` for use with `ctx.cache.get/set(..., model=...)`.
+
+```python
+from pydantic import BaseModel
+from imperal_sdk import Extension
+
+ext = Extension("mail", version="1.6.0")
+
+
+class InboxPage(BaseModel):
+    cursor: str
+    items: list[dict]
+    has_more: bool
+
+
+@ext.cache_model("inbox_page")
+class _InboxPageCache(InboxPage):
+    pass
+```
+
+Each extension has its own registry; two extensions can register the same cache model name with different shapes without collision.
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `get` | `get(key: str, *, model: type[BaseModel]) -> BaseModel \| None` | Fetch + validate; `None` on 404 or on model-name mismatch. |
+| `set` | `set(key: str, value: BaseModel, *, ttl_seconds: int) -> None` | Store (validated, 64 KB cap, TTL 5-300s). |
+| `delete` | `delete(key: str) -> None` | Remove for every registered model. |
+| `get_or_fetch` | `get_or_fetch(key, *, model, ttl_seconds, fetcher) -> BaseModel` | Cache-aside: hit cache, else call `fetcher()`, store, return. |
+
+### Example — panel cache-aside
+
+```python
+from pydantic import BaseModel
+from imperal_sdk import Extension, ui
+
+ext = Extension("mail", version="1.6.0")
+
+class InboxPage(BaseModel):
+    cursor: str
+    items: list[dict]
+
+@ext.cache_model("inbox_page")
+class _InboxPageCache(InboxPage):
+    pass
+
+
+async def _fetch_inbox(ctx, page: int) -> InboxPage:
+    resp = await ctx.http.get(f"https://api.mail.example/inbox?page={page}")
+    data = resp.json()
+    return InboxPage(cursor=data["cursor"], items=data["items"])
+
+
+@ext.panel("inbox", slot="main", title="Inbox")
+async def panel_inbox(ctx, **kwargs):
+    page = await ctx.cache.get_or_fetch(
+        key="page:1",
+        model=InboxPage,
+        ttl_seconds=60,
+        fetcher=lambda: _fetch_inbox(ctx, page=1),
+    )
+    return ui.List(items=[_row(m) for m in page.items])
+```
+
+### Invariants
+
+- **I-CACHE-MODEL-REGISTERED** — `get/set` reject models that are not registered with `@ext.cache_model`.
+- **I-CACHE-TTL-RANGE** — `set` enforces `5 <= ttl_seconds <= 300` via Pydantic `Field(ge=5, le=300)`.
+- **I-CACHE-SIZE-64K** — `set` rejects values whose JSON serialisation exceeds 64 KB.
+- **I-CACHE-NAMESPACE** — Redis keyspace is `imperal:extcache:{app_id}:{user_id}:{model}:{hash}`; no cross-extension or cross-user bleed.
+- **I-CALL-TOKEN-HMAC** — Every `/v1/internal/extcache` call is HMAC-SHA256 signed with jti replay protection.
+
+### Notes
+
+- Use `ctx.cache` for panel-side data that the routing LLM does not need to see. Skeleton remains the right place for summary state the classifier uses (unread count, open case count, today's visitor total, ...).
+- `get_or_fetch` returns a fully-validated Pydantic model — no manual `model_validate` required.
+- Cache misses return `None` (for `get`) or invoke the `fetcher` (for `get_or_fetch`). There is no `exists()` method by design — operate on concrete values.
 
 ---
 
@@ -771,27 +840,30 @@ Extension developers do not need to manage tokens or connections. The platform h
 
 ## Context Availability by Handler Type
 
-| Attribute | `@ext.tool` | `@ext.signal` | `@ext.schedule` | `@chat.function` |
-|-----------|:-----------:|:-------------:|:---------------:|:----------------:|
-| `ctx.user` | Yes | Yes | Yes | Yes (via `self.ctx`) |
-| `ctx.history` | Yes | Yes | Yes | Yes |
-| `ctx.skeleton_data` | Yes | Yes | Yes | Yes |
-| `ctx.store` | Yes | Yes | Yes | Yes |
-| `ctx.db` | Yes | Yes | Yes | Yes |
-| `ctx.ai` | Yes | Yes | Yes | Yes |
-| `ctx.skeleton` | Yes | Yes | Yes | Yes |
-| `ctx.billing` | Yes | Yes | Yes | Yes |
-| `ctx.notify` | Yes | Yes | Yes | Yes |
-| `ctx.storage` | Yes | Yes | Yes | Yes |
-| `ctx.http` | Yes | Yes | Yes | Yes |
-| `ctx.config` | Yes | Yes | Yes | Yes |
-| `ctx.tools` | Yes | Yes | Yes | Yes |
-| `ctx._user_language` | Yes | No | No | Yes |
-| `ctx._user_language_name` | Yes | No | No | Yes |
-| `ctx._confirmation_required` | No | No | No | Yes (kernel-set) |
-| `message` (kwarg) | Yes | No | No | No (params via function args) |
+| Attribute | `@ext.tool` | `@ext.signal` | `@ext.schedule` | `@chat.function` | `@ext.skeleton` | `@ext.panel` |
+|-----------|:-----------:|:-------------:|:---------------:|:----------------:|:---------------:|:------------:|
+| `ctx.user` | Yes | Yes | Yes | Yes (via `self.ctx`) | Yes | Yes |
+| `ctx.history` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.store` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.db` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.ai` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.skeleton` (v1.6.0 read-only) | **SkeletonAccessForbidden** | **SkeletonAccessForbidden** | **SkeletonAccessForbidden** | **SkeletonAccessForbidden** | Yes (`get` only) | **SkeletonAccessForbidden** |
+| `ctx.cache` (v1.6.0) | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.billing` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.notify` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.storage` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.http` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.config` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx.tools` | Yes | Yes | Yes | Yes | Yes | Yes |
+| `ctx._user_language` | Yes | No | No | Yes | No | Yes |
+| `ctx._user_language_name` | Yes | No | No | Yes | No | Yes |
+| `ctx._confirmation_required` | No | No | No | Yes (kernel-set) | No | No |
+| `message` (kwarg) | Yes | No | No | No (params via function args) | No | No |
 
-All `Context` attributes are available in all handler types. The platform fully populates the context regardless of how the handler was triggered.
+**v1.6.0 changes:**
+- `ctx.skeleton_data` is removed — no longer in `Context`.
+- `ctx.skeleton` raises `SkeletonAccessForbidden` from every handler type except `@ext.skeleton`. Inside `@ext.skeleton` tools, only `get(section)` is available — `update` and `delete` are removed.
+- `ctx.cache` is the new runtime cache for panel-side data (TTL 5-300s, Pydantic-typed, 64 KB cap). See [§ ctx.cache](#ctxcache).
 
 ---
 

@@ -406,8 +406,44 @@ For reference — these are the Auth Gateway endpoints your users interact with:
 
 ---
 
+## HMAC Call-Token Authentication (v1.6.0)
+
+Internal kernel ↔ Auth Gateway calls for `/v1/internal/skeleton` and `/v1/internal/extcache` are authenticated with HMAC-SHA256 call tokens (not JWTs). Extension developers do not interact with this layer directly — the SDK's `SkeletonClient` and `CacheClient` mint tokens automatically when `ctx.skeleton.get(...)` or `ctx.cache.set(...)` is invoked from a legitimate kernel execution context.
+
+### Flow
+
+```
+kernel (or SDK client running in kernel worker)
+   |
+   | Authorization: ImperalCallToken <HMAC-SHA256(payload, shared_secret)>
+   | Header payload: tool_type, app_id, user_id, jti, exp
+   |
+   v
+Auth Gateway /v1/internal/skeleton or /v1/internal/extcache
+   |
+   | 1. Verify HMAC with IMPERAL_CALL_TOKEN_HMAC_SECRET (shared env var)
+   | 2. Check exp
+   | 3. Redis SETNX on jti → prevents replay
+   | 4. Enforce tool_type scope ("skeleton" or "extcache")
+```
+
+### Configuration
+
+The shared secret is provisioned as the environment variable `IMPERAL_CALL_TOKEN_HMAC_SECRET` on every kernel worker and on the Auth Gateway. See `docs/imperal-cloud/secrets.md` in the internal infrastructure repo for rotation procedures and the ops playbook.
+
+### Invariants
+
+- `I-CALL-TOKEN-HMAC` — every `/v1/internal/skeleton` + `/v1/internal/extcache` call carries `Authorization: ImperalCallToken <signature>`; Auth GW rejects missing/invalid/expired/replayed tokens with 401.
+- `I-CALL-TOKEN-SCOPE` — the payload's `tool_type` claim restricts what the token can be used for (`"skeleton"` cannot be used against `/v1/internal/extcache` and vice versa).
+
+Extension developers do not need to call `mint_call_token` directly. The SDK clients handle it. The module is exposed at `imperal_sdk.security.call_token` for internal kernel use only.
+
+---
+
 ## See Also
 
 - [SDK Quickstart](quickstart.md) — full SDK setup guide
 - [API Reference](api-reference.md) — all platform API endpoints
 - [Auth Gateway Architecture](../auth-gateway.md) — internal auth gateway design
+- [Skeleton (v1.6.0)](skeleton.md) — skeleton-LLM-only contract
+- [Context Object § ctx.cache](context-object.md#ctxcache) — Pydantic-typed runtime cache

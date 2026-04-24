@@ -29,6 +29,18 @@ Think **Shopify for AI agents**. You build it. Users install it. The platform ha
 pip install imperal-sdk
 ```
 
+### What's New in v1.6.0 (breaking)
+
+- **`ctx.cache`** — Pydantic-typed runtime cache with per-extension namespace, TTL 5–300s, 64 KB value cap. Register value shapes via `@ext.cache_model("name")`. Use this for panel-side runtime data (inbox pages, API responses) that used to live in skeleton.
+- **`@ext.skeleton(section, ttl=..., alert=True)`** — Canonical decorator for skeleton-refresh tools (replaces the `@ext.tool("skeleton_refresh_*")` naming convention). Skeleton is LLM-only — only tools decorated with `@ext.skeleton` can access `ctx.skeleton.get(section)`.
+- **`SkeletonProtocol` is read-only** — `ctx.skeleton.update(...)` is gone. Skeleton tools RETURN new state; the kernel persists via a privileged activity.
+- **`ctx.skeleton_data` removed** — use explicit `await ctx.skeleton.get(section)` inside a `@ext.skeleton` tool when you need the previous snapshot.
+- **`SkeletonAccessForbidden`** — raised when `ctx.skeleton` is accessed from a non-skeleton tool type (panel / chat function / regular tool).
+- **HMAC call-token auth** — kernel ↔ Auth GW calls for `/v1/internal/skeleton` and `/v1/internal/extcache` are signed with `IMPERAL_CALL_TOKEN_HMAC_SECRET`; Auth GW verifies with Redis `SETNX` jti replay protection.
+- **7 new validator rules** — `SKEL-GUARD-1/2/3`, `CACHE-MODEL-1`, `CACHE-TTL-1`, `MANIFEST-SKELETON-1`, `SDK-VERSION-1`.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full list and [`docs/skeleton.md`](docs/skeleton.md) + [`docs/context-object.md`](docs/context-object.md) for migration guidance.
+
 ---
 
 ## 5-Minute Quickstart
@@ -92,7 +104,7 @@ async def test_greet():
 |---------|-------------|
 | **Typed Everything** | Generic `ActionResult[T]`, `Page[T]`, typed Protocols, Pydantic params — full IDE autocomplete |
 | **Machine-Validated Contracts** | JSON Schema for `imperal.json` (v1.5.9), `ActionResult` + `Event` payloads (v1.5.10), OpenAPI 3.x for Auth Gateway / Registry / Sharelock Cases (v1.5.11). See [`docs/openapi/`](docs/openapi/). |
-| **10 SDK Clients** | `ctx.store`, `ctx.ai`, `ctx.billing`, `ctx.skeleton`, `ctx.notify`, `ctx.storage`, `ctx.http`, `ctx.config`, `ctx.extensions`, `ctx.time` |
+| **11 SDK Clients** | `ctx.store`, `ctx.ai`, `ctx.billing`, `ctx.skeleton` (LLM-only, read-only), `ctx.cache` (Pydantic-typed, TTL 5-300s), `ctx.notify`, `ctx.storage`, `ctx.http`, `ctx.config`, `ctx.extensions`, `ctx.time` |
 | **Error Hierarchy** | `ImperalError` > `APIError` > `NotFoundError`, `RateLimitError` — catch what you need |
 | **MockContext** | Drop-in test replacement with 10 mock clients. Test without a server. |
 | **CLI Tools** | `imperal init`, `imperal validate`, `imperal dev` — scaffold, validate, develop |
@@ -101,7 +113,7 @@ async def test_greet():
 | **Webhooks** | `@ext.webhook("/stripe", secret_header="Stripe-Signature")` — external HTTP ingestion |
 | **Inter-Extension API** | `@ext.expose("get_deal")` + `ctx.extensions.call("crm", "get_deal")` — typed cross-extension calls |
 | **UI Contributions** | Panels, Widgets, Commands, Context Menus, Settings, Themes — declare UI from Python |
-| **Validator** | 12 rules (V1-V12) catch issues before deployment. Claude-friendly fix reports. |
+| **Validator** | 19 rules (V1-V13 + v1.6.0 SKEL-GUARD-1/2/3, CACHE-MODEL-1, CACHE-TTL-1, MANIFEST-SKELETON-1, SDK-VERSION-1) catch issues before deployment. Claude-friendly fix reports. |
 | **Pagination** | `Page[T]` with cursor, iteration, auto-pagination — built into every list operation |
 
 ### For the Platform
@@ -329,6 +341,63 @@ result = await ctx.extensions.call("crm", "get_deal", deal_id="d123")
 
 ---
 
+## Skeleton (v1.6.0) — LLM-only, read-only
+
+Skeleton is the AI's view of your extension's state. Only tools decorated with `@ext.skeleton` can read or produce it. Panels, chat functions, and regular tools that try `ctx.skeleton.get(...)` raise `SkeletonAccessForbidden`.
+
+```python
+from pydantic import BaseModel
+from imperal_sdk import Extension, ActionResult
+
+ext = Extension("mail", version="1.6.0")
+
+
+class MailSection(BaseModel):
+    unread: int
+    total: int
+
+
+@ext.skeleton("mail", ttl=525, alert=True,
+              description="Mail unread/total counts")
+async def skeleton_refresh_mail(ctx) -> ActionResult:
+    # Skeleton tools RETURN new state — kernel persists via privileged activity.
+    # No ctx.skeleton.update() in v1.6.0.
+    unread, total = await _count_mail(ctx)
+    return ActionResult.success(
+        data=MailSection(unread=unread, total=total).model_dump(),
+        summary=f"{unread} unread of {total}",
+    )
+```
+
+For panel-side runtime data (API responses, paginated lists, throttled counters), use `ctx.cache`:
+
+```python
+from pydantic import BaseModel
+
+class InboxPage(BaseModel):
+    cursor: str
+    items: list[dict]
+
+
+@ext.cache_model("inbox_page")
+class _InboxPageCacheModel(InboxPage):
+    pass
+
+
+@ext.panel("inbox", slot="main", title="Inbox")
+async def panel_inbox(ctx, **kwargs):
+    # TTL 5-300s, 64 KB value cap, per-extension namespace, Pydantic-validated.
+    page = await ctx.cache.get_or_fetch(
+        key="page:1",
+        model=InboxPage,
+        ttl_seconds=60,
+        fetcher=lambda: _fetch_inbox(ctx, page=1),
+    )
+    return ui.List(items=[_row(m) for m in page.items])
+```
+
+---
+
 ## System Prompt Guidelines
 
 **Important:** Extensions must NOT identify as a specific assistant. The platform injects OS identity automatically.
@@ -403,7 +472,7 @@ RESULTS: 1 error, 2 warnings
          Fix: Add @ext.health_check decorator to a health check function
 ```
 
-12 rules. Catches type issues, missing annotations, banned imports, missing events. Runs in CI, in CLI, and at kernel load time.
+19 rules (12 core V1-V13 + 7 v1.6.0: SKEL-GUARD-1/2/3, CACHE-MODEL-1, CACHE-TTL-1, MANIFEST-SKELETON-1, SDK-VERSION-1). Catches type issues, missing annotations, banned imports, missing events, skeleton-guard violations, cache-model misuse. Runs in CI, in CLI, and at kernel load time.
 
 ---
 

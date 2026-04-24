@@ -495,53 +495,69 @@ async def submit_webhook(ctx: Context, url: str, payload: dict) -> str:
 
 ---
 
-## 8. ctx.skeleton -- SkeletonClient
+## 8. ctx.skeleton -- SkeletonProtocol (v1.6.0: LLM-only, read-only)
 
-Background state management. Skeleton sections are per-user, per-extension key-value stores that persist across sessions and are refreshed by background schedules. Use this client to read and write skeleton data from within tools.
+**Breaking change in v1.6.0.** Skeleton is now the AI's view of extension state. Accessing `ctx.skeleton` from any non-skeleton handler (`@ext.panel`, `@chat.function`, `@ext.tool`, `@ext.signal`, `@ext.schedule`) raises `SkeletonAccessForbidden`. Only tools decorated with `@ext.skeleton` may call `ctx.skeleton.get(section)`.
 
-For full documentation on the Skeleton system (TTL, tick behavior, background agents, proactive alerts), see **[skeleton.md](skeleton.md)**.
+For full documentation on the v1.6.0 Skeleton system (LLM-only contract, `@ext.skeleton` decorator, classifier envelope, migration from v1.5.x), see **[skeleton.md](skeleton.md)**.
 
-### Methods
-
-```python
-async def get(section: str) -> Any
-```
-
-Read a skeleton section's data. Returns `None` if the section does not exist.
+### Methods (inside `@ext.skeleton` only)
 
 ```python
-async def update(section: str, data: Any) -> None
+async def get(section: str) -> dict | None
 ```
 
-Write data to a skeleton section. Creates the section if it does not exist, replaces it if it does.
+Read the current skeleton section. Returns `None` on first run. HMAC-authenticated.
 
-### Example
+The v1.5.x `update(...)` and `delete(...)` methods are removed. Skeleton tools RETURN new state via `ActionResult.success(data=...)` and the kernel persists it via the privileged `skeleton_save_section` activity (single writer, audit-logged).
+
+### Example — v1.6.0 skeleton tool
+
+```python
+from pydantic import BaseModel
+from imperal_sdk import Extension, ActionResult
+
+ext = Extension("dashboard", version="1.6.0")
+
+
+class DashboardSection(BaseModel):
+    items: list
+    updated_at: str
+
+
+@ext.skeleton("dashboard", ttl=300, alert=False,
+              description="Dashboard summary for classifier")
+async def skeleton_refresh_dashboard(ctx) -> ActionResult:
+    prev = await ctx.skeleton.get("dashboard") or {}  # legal inside @ext.skeleton
+    resp = await ctx.http.get("https://api.example.com/dashboard")
+    section = DashboardSection(items=resp.json(), updated_at=_now())
+    return ActionResult.success(data=section.model_dump(),
+                                summary=f"{len(section.items)} items")
+```
+
+### Violations (v1.6.0)
 
 ```python
 @ext.tool("get_dashboard", description="Get cached dashboard data")
 async def get_dashboard(ctx: Context) -> str:
+    # BAD — raises SkeletonAccessForbidden in v1.6.0.
     data = await ctx.skeleton.get("dashboard")
-    if data is None:
-        return "No dashboard data cached yet"
-    return f"Last updated: {data.get('updated_at')}, items: {len(data.get('items', []))}"
 
 @ext.schedule("refresh_dashboard", cron="*/5 * * * *")
 async def refresh_dashboard(ctx: Context) -> None:
-    # Fetch fresh data and cache it in skeleton
-    resp = await ctx.http.get("https://api.example.com/dashboard")
-    await ctx.skeleton.update("dashboard", {
-        "items": resp.json(),
-        "updated_at": "2026-04-02T12:00:00Z"
-    })
+    # BAD — ctx.skeleton.update() does not exist in v1.6.0.
+    # Use @ext.skeleton("dashboard", ttl=300) instead — the kernel
+    # refreshes it on its own TTL cadence.
 ```
 
 ### Notes
 
 - Skeleton sections are scoped per extension (`extension_id`) and per user (`user_id`).
-- The `get()` method returns `None` (not an error) for missing sections.
-- Skeleton saves use the section's `app_id`, not the workflow's. This matters when multiple extensions share a skeleton workflow.
-- Tick interval equals TTL (not TTL/2). If you set TTL to 60 seconds, the section refreshes every 60 seconds. Redis TTL is set to TTL * 2 as a safety margin.
-- See [skeleton.md](skeleton.md) for the complete background agent architecture.
+- `get()` returns `None` (not an error) for missing sections.
+- Skeleton saves honour the section's own `app_id`, not the workflow's (I-SKEL-CHECK-STALE-PER-SECTION-APPID).
+- Tick interval equals TTL (not TTL/2). If you set `ttl=60`, the section refreshes every 60s. Redis TTL is set to `ttl * 2` as a safety margin.
+- Every `/v1/internal/skeleton` call is HMAC-signed with jti replay protection (I-CALL-TOKEN-HMAC).
+- For panel-side runtime data that used to live in skeleton, migrate to [`ctx.cache`](context-object.md#ctxcache).
 
 ---
 

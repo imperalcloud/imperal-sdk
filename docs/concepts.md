@@ -54,7 +54,7 @@ async def daily_report(ctx: Context) -> None: ...
                Signals fire on events
                Schedules run on cron
                Extension activation signals skeleton update_config immediately
-               hub_mode + extensions_info passed to extensions via _context in skeleton_data
+               Classifier envelope surfaces per-user skeleton state to the routing LLM
 
 4. UPDATE      Edit code, re-run deploy
                ExtensionLoader detects mtime change
@@ -247,7 +247,8 @@ Tenant: Globex Inc (imp_t_8m2x5k7p)
 You do not need to implement multi-tenancy in your code. The platform handles it transparently:
 
 - `ctx.store.query("cases")` returns only the current tenant's cases.
-- `ctx.skeleton.update("status", data)` writes to the current user's skeleton key.
+- `@ext.skeleton("status", ttl=60)` tools write to the current user's skeleton key (kernel-persisted, v1.6.0).
+- `ctx.cache.set("key", value, ttl_seconds=60)` writes to the current user's cache slot in this extension's namespace.
 - `ctx.storage.upload("file.pdf", data)` stores the file in the current tenant's namespace.
 - `ctx.billing.check_limits("ai_tokens")` checks the current tenant's limits.
 
@@ -397,7 +398,7 @@ The kernel automatically injects 8 zero-hallucination rules into every extension
 
 ### As an extension developer
 
-You do not need to implement these rules. The kernel injects them into `ctx.skeleton_data._context._icnli_integrity` before your tool function runs. If your extension uses an LLM (e.g., Claude), these rules appear in the context automatically, making the LLM less likely to hallucinate.
+You do not need to implement these rules. The kernel injects them into the classifier envelope (v1.6.0) and into every LLM call the platform makes on your extension's behalf. If your extension uses an LLM directly via `ctx.ai`, these rules are appended to the system prompt automatically, making the LLM less likely to hallucinate.
 
 For best results, combine with:
 - **Let the LLM decide** -- in normal (single) dispatch, let the LLM decide when to call functions vs respond with text. Add a text fallback rule in your system prompt for out-of-scope requests. Note: in chain mode, `tool_choice={"type":"any"}` is **forced by the kernel** on the first LLM round — this is automatic and correct behavior; extension developers do not set this.
@@ -410,20 +411,22 @@ On top of the 8 ICNLI rules, ChatExtension's final narration round is bound to s
 
 ---
 
-## 8. Skeleton (Background State)
+## 8. Skeleton (LLM-only Background State, v1.6.0)
 
-The Skeleton is the platform's persistent, auto-refreshing state layer. All skeleton backends are **fully operational** (Redis-based read/write via the Auth Gateway). See the [Skeleton Reference](skeleton.md) for full details.
+The Skeleton is the routing LLM's view of extension state — auto-refreshed, classifier-visible, read-only for non-skeleton code. See the [Skeleton Reference](skeleton.md) for full v1.6.0 details.
 
-### Summary
+### Summary (v1.6.0)
 
 | Property | Value |
 |----------|-------|
-| Purpose | Pre-computed state for instant tool access |
-| Storage | Redis + automatic TTL |
-| Write | `ctx.skeleton.update(section, data)` |
-| Read | `ctx.skeleton.get(section)` |
-| Change detection | Automatic, triggers proactive alerts |
-| Cross-extension | Data from all user's extensions is available |
+| Purpose | Give the classifier / routing LLM fresh state to make target_apps decisions |
+| Storage | Redis (keyspace `imperal:skeleton:{app}:{user}:{section}`) + per-section TTL |
+| Writer | Kernel `skeleton_save_section` activity (sole writer); `@ext.skeleton` tools RETURN new state |
+| Reader | Classifier envelope (automatic), `ctx.skeleton.get(section)` from `@ext.skeleton` tools only |
+| Non-skeleton access | Raises `SkeletonAccessForbidden` |
+| Change detection | Automatic via `_refreshed_at` + `alert=True` decorator |
+| Auth | HMAC call-token on every `/v1/internal/skeleton` call |
+| Runtime cache alternative | Use `ctx.cache` (v1.6.0) for panel-side data (TTL 5-300s, Pydantic-typed, 64 KB cap) |
 
 ### Why skeleton matters for assistant quality
 
@@ -471,7 +474,7 @@ The platform runtime is organized as an operating system kernel. Extensions are 
 | Component | Role | OS Analogy |
 |-----------|------|------------|
 | **ExtensionLoader** | Loads extension code from `/opt/extensions/{app_id}/main.py`. Uses file mtime for cache invalidation -- deploy new code, and the next request picks it up automatically. No restarts. | Dynamic linker / module loader |
-| **ContextFactory** | Creates a fully populated `Context` for each request. Pre-loads `history` (conversation) and `skeleton_data` (background state) so tools can read them instantly. Also resolves `ctx.config` from the Unified Config Store (v0.2.0). | Process environment setup |
+| **ContextFactory** | Creates a fully populated `Context` for each request. Pre-loads `history` (conversation) so tools can read it instantly. Also resolves `ctx.config` from the Unified Config Store (v0.2.0). Wires `ctx.cache` + `ctx.skeleton` (latter guarded — raises `SkeletonAccessForbidden` outside `@ext.skeleton` tools, v1.6.0). | Process environment setup |
 | **KernelContext** | Typed dataclass resolved ONCE per message by `resolve_kernel_context` activity. Contains identity, config, confirmation settings, time, language, allowed_apps, routing info. Passed through entire pipeline. | Process credentials / env |
 | **execute_sdk_tool** | The single entry point for all tool execution. Requires pre-resolved `_kernel_ctx` (KernelContext). Delegates to `_execute_extension` which enforces RBAC, loads extension, builds Context via `create_from_kctx()`, and dispatches. Hub calls `_execute_extension` directly for dispatch (no re-resolution). | System call (syscall) |
 | **Per-tenant queue isolation** | Each tenant's requests are dispatched to isolated task queues. A slow extension for one tenant cannot starve another tenant's requests. | Process scheduling / cgroups |
@@ -499,10 +502,11 @@ The resolved config is injected as `ctx.config` — a read-only `ConfigClient`. 
    b. Delegate to _execute_extension (or Hub._dispatch_one for routed calls)
    c. _execute_extension: verify app_id, enforce RBAC, load extension, build Context from KernelContext
    f. ContextFactory builds Context:
-      - user identity, history, skeleton_data, config, service clients
+      - user identity, history, config, service clients
+      - ctx.cache wired (v1.6.0); ctx.skeleton wired with tool_type guard
    g. Inject capability boundary + ICNLI Integrity Protocol
    h. Call tool function with (ctx, message=message)
-   i. Signal skeleton refresh (non-fatal)
+   i. For @ext.skeleton tools: persist returned state via skeleton_save_section activity
    j. Return result as {"response": dict}, metrics, trace span
 4. Auto-reroute if refused/errored → try next candidate
 5. Result delivered to user
@@ -527,7 +531,7 @@ When you run `imperal deploy`, the CLI places your code at `/opt/extensions/{app
 ### Key design principles
 
 - **Single execution path.** All extension code runs through `execute_sdk_tool`. There is no way to skip metrics or bypass the kernel. The kernel enforces RBAC (required_scopes) before dispatching to extensions -- two-layer defense with Auth Gateway at the API layer and kernel at the dispatch layer.
-- **Pre-loaded context.** The ContextFactory loads history and skeleton data before your tool runs. Reading `ctx.history` or `ctx.skeleton_data` is a dict/list access, not a network call.
+- **Pre-loaded context.** The ContextFactory loads history before your tool runs. Reading `ctx.history` is a list access, not a network call. Skeleton is LLM-only in v1.6.0 — use `ctx.cache` for panel-side runtime data.
 - **Mtime-based cache.** The ExtensionLoader caches loaded modules keyed by `(app_id, mtime)`. Deploy = new mtime = auto-reload. No restarts needed.
 - **Shared workers.** There are no per-extension workers. All extensions share the platform's ICNLI Worker pool, which handles scheduling, fault tolerance, and scaling transparently.
 
@@ -572,12 +576,12 @@ This is analogous to Unix IPC — processes cannot access each other's memory di
 |  |                                                                   | |
 |  |  .user           Authenticated user identity                     | |
 |  |  .history        Pre-loaded conversation history (read-only)     | |
-|  |  .skeleton_data  Pre-loaded skeleton snapshot (read-only)        | |
 |  |  .config         Resolved platform config (read-only)            | |
 |  |  .store          Tier 1: document store                          | |
 |  |  .db             Tier 2: dedicated database                      | |
 |  |  .ai             AI completions (metered)                        | |
-|  |  .skeleton       Background state (write client)                 | |
+|  |  .skeleton       v1.6.0: LLM-only read-only; forbidden elsewhere | |
+|  |  .cache          v1.6.0: Pydantic-typed runtime cache (5-300s)   | |
 |  |  .billing        Subscription and usage (read-only)              | |
 |  |  .notify         Push notifications                              | |
 |  |  .storage        File storage (S3-compatible)                    | |

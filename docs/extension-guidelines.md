@@ -66,10 +66,14 @@ async def do_x(ctx, params: DoXParams):
 async def do_y(ctx):
     return ActionResult.success(data={"status": "done"}, summary="Y completed")
 
-# Skeleton tools are separate (internal, platform-called)
-@ext.tool("skeleton_refresh_myapp", description="Skeleton refresh")
-async def on_refresh(ctx, **kwargs):
-    ...
+# v1.6.0: skeleton tools use the canonical @ext.skeleton decorator.
+# (The @ext.tool("skeleton_refresh_*") naming convention still works
+# but the validator flags it as MANIFEST-SKELETON-1.)
+@ext.skeleton("myapp", ttl=300, alert=False,
+              description="Skeleton refresh — return new state via ActionResult")
+async def skeleton_refresh_myapp(ctx):
+    # RETURN new state; the kernel's skeleton_save_section activity persists.
+    return ActionResult.success(data={"count": 0}, summary="...")
 ```
 
 ## Rules
@@ -294,14 +298,22 @@ async def connect(ctx):
     return {"auth_url": url}
 ```
 
-### 7. Skeleton Tools Are Separate
-Background refresh and alert tools use `@ext.tool` (not `@chat.function`). They're called by the platform skeleton workflow, not by users.
+### 7. Skeleton Tools Are Separate (v1.6.0: `@ext.skeleton`)
+Background refresh tools use the canonical `@ext.skeleton` decorator (not `@chat.function`, not `@ext.tool`). They are called by the platform skeleton workflow on the TTL cadence, never by users directly. In v1.6.0 they RETURN new state — the kernel persists via the privileged `skeleton_save_section` activity.
 
 ```python
-@ext.tool("skeleton_refresh_myapp", description="Skeleton refresh")
-async def on_refresh(ctx, **kwargs):
-    # Fetch fresh data, return for skeleton cache
-    return {"response": {"data": fresh_data}}
+from imperal_sdk import Extension, ActionResult
+
+ext = Extension("myapp", version="1.6.0")
+
+@ext.skeleton("myapp", ttl=300, alert=False,
+              description="Skeleton refresh for myapp")
+async def skeleton_refresh_myapp(ctx) -> ActionResult:
+    # Inside @ext.skeleton you MAY call ctx.skeleton.get(section) to
+    # diff against previous state. Elsewhere, ctx.skeleton raises
+    # SkeletonAccessForbidden.
+    fresh = await _fetch_fresh_state(ctx)
+    return ActionResult.success(data=fresh, summary=f"{len(fresh)} items")
 ```
 
 ### 8. ICNLI Integrity Is Automatic
@@ -700,7 +712,7 @@ Third-party developers earn revenue from paid extension usage. The Developer Por
 The Mail Client extension (`/opt/extensions/mail/`) is the canonical reference for this pattern:
 - 1 entry tool: `tool_mail_client_chat`
 - 30 `@chat.function` handlers (Mail Client v4.3.0, 19 files, 4472 LOC): status, connect, connect_microsoft, connect_yahoo, connect_imap, inbox, read_email, send, reply, forward, search, folder, get_thread, archive, delete, mark_read, mark_unread, star, move, purge, bulk_archive, bulk_delete, bulk_mark_read, bulk_mark_unread, switch_account, disconnect, contacts, add_contact, sync_contacts, delete_contact
-- 2 `@ext.tool` skeleton tools: `skeleton_refresh_mail`, `skeleton_alert_mail`
+- 2 skeleton tools: `@ext.skeleton("mail", ttl=525, alert=True)` (v1.6.0 canonical decorator) plus the `skeleton_alert_mail` sibling produced by `alert=True`
 - All `@chat.function` params use Pydantic `BaseModel` (v4.2+)
 - connect() checks status first -- no repeated OAuth URLs
 - All functions return `ActionResult` with structured data dicts
@@ -837,6 +849,75 @@ I-DOCS-VS-API-1 (phantom-ref linter).
 
 **Module:** `imperal_sdk.chat.narration_guard`  
 **Design:** `docs/superpowers/specs/2026-04-22-chat-ext-inner-truth-gate-design.md` (internal)
+
+---
+
+### Rule 22 — Skeleton is LLM-only; use `ctx.cache` for panel-side runtime data (v1.6.0)
+
+**SDK 1.6.0** splits skeleton from runtime cache along a hard boundary:
+
+- **Skeleton is the AI's view of your extension's state.** Only `@ext.skeleton` tools may read or produce it. The kernel persists returned state via the privileged `skeleton_save_section` activity.
+- **`ctx.cache`** is the runtime cache for panel-side data, API response caching, paginated list snapshots, throttled counters — anything the routing LLM does not need to see.
+
+**As an extension author, you MUST:**
+
+- Use `@ext.skeleton(section, ttl=..., alert=...)` for skeleton refresh tools. The `@ext.tool("skeleton_refresh_*")` naming convention is flagged by validator rule `MANIFEST-SKELETON-1`.
+- NOT call `ctx.skeleton.update(...)` — the method does not exist in v1.6.0. Return new state from your `@ext.skeleton` tool via `ActionResult.success(data=...)`.
+- NOT read `ctx.skeleton_data` — the attribute is removed. Inside an `@ext.skeleton` tool, call `await ctx.skeleton.get(section)` to diff against the previous snapshot.
+- NOT access `ctx.skeleton` from panels, chat functions, regular tools, signals, or schedules — it raises `SkeletonAccessForbidden`.
+- Register every `ctx.cache` value type via `@ext.cache_model("name")`. `get/set` reject unregistered models (validator rule `CACHE-MODEL-1`).
+- Keep `ctx.cache` TTLs in `[5, 300]` seconds (validator rule `CACHE-TTL-1`).
+
+**Correct v1.6.0 pattern:**
+
+```python
+from pydantic import BaseModel
+from imperal_sdk import Extension, ActionResult
+
+ext = Extension("mail", version="1.6.0")
+
+# Skeleton tool — classifier-visible summary state.
+class MailSection(BaseModel):
+    unread: int
+    total: int
+
+@ext.skeleton("mail", ttl=525, alert=True,
+              description="Mail unread/total counts")
+async def skeleton_refresh_mail(ctx) -> ActionResult:
+    prev = await ctx.skeleton.get("mail") or {}  # legal here
+    inbox = await _count_mail(ctx)
+    section = MailSection(unread=inbox["unread"], total=inbox["total"])
+    return ActionResult.success(data=section.model_dump(),
+                                summary=f"{section.unread} unread")
+
+# Panel cache — runtime-only, never seen by classifier.
+class InboxPage(BaseModel):
+    cursor: str
+    items: list[dict]
+
+@ext.cache_model("inbox_page")
+class _InboxPageCache(InboxPage):
+    pass
+
+@ext.panel("inbox", slot="main", title="Inbox")
+async def panel_inbox(ctx, **kwargs):
+    page = await ctx.cache.get_or_fetch(
+        key="page:1",
+        model=InboxPage,
+        ttl_seconds=60,
+        fetcher=lambda: _fetch_inbox(ctx, page=1),
+    )
+    return ui.List(items=[_row(m) for m in page.items])
+```
+
+**Invariants (kernel + SDK):**
+- `I-SKELETON-LLM-ONLY` — `ctx.skeleton` callable only from `@ext.skeleton` tools.
+- `I-SKELETON-PROTOCOL-READ-ONLY` — no `update(...)` / `delete(...)` on `SkeletonProtocol`.
+- `I-NO-CTX-SKELETON-DATA` — `Context` has no `skeleton_data` attribute.
+- `I-CACHE-MODEL-REGISTERED` / `I-CACHE-TTL-RANGE` / `I-CACHE-SIZE-64K` / `I-CACHE-NAMESPACE` — see [docs/context-object.md § ctx.cache](context-object.md#ctxcache).
+- `I-CALL-TOKEN-HMAC` — every `/v1/internal/skeleton` + `/v1/internal/extcache` call is HMAC-signed with jti replay protection.
+
+**Reference:** [`docs/skeleton.md`](skeleton.md) (v1.6.0 canonical guide), [`docs/context-object.md § ctx.cache`](context-object.md#ctxcache), `CHANGELOG.md` v1.6.0.
 
 ---
 
