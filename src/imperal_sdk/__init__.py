@@ -19,7 +19,7 @@ from imperal_sdk.errors import (
     SkeletonAccessForbidden,
 )
 from imperal_sdk.types import (
-    Page, ChatResult, FunctionCall,
+    Page, ChatResult, FunctionCall, TaskStatus,
     Document, CompletionResult, LimitsResult, SubscriptionInfo,
     BalanceInfo, FileInfo, HTTPResponse,
     Event, WebhookRequest, WebhookResponse, HealthStatus,
@@ -49,7 +49,7 @@ __all__ = [
     "ValidationError", "ExtensionError", "QuotaExceededError",
     "SkeletonAccessForbidden",
     # Types
-    "Page", "ChatResult", "FunctionCall",
+    "Page", "ChatResult", "FunctionCall", "TaskStatus",
     "Document", "CompletionResult", "LimitsResult", "SubscriptionInfo",
     "BalanceInfo", "FileInfo", "HTTPResponse",
     "Event", "WebhookRequest", "WebhookResponse", "HealthStatus",
