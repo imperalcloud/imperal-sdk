@@ -69,49 +69,52 @@ def build_system_prompt(base_prompt: str, ctx, tool_name: str) -> str:
     Returns:
         Fully assembled system prompt string.
     """
-    # v1.6.0 + v1.6.1 identity fix (I-CHATEXT-IDENTITY-OVERRIDE-ORDER):
-    # kernel ships ``_capability_boundary`` + ``_icnli_integrity`` augments
-    # via ``ctx._metadata["_context"]``. Federal-grade requirement: LLM
-    # NEVER identifies as an extension ("I am the mail module", etc.) —
-    # identity must be the unified assistant (Webbee by default).
-    #
-    # Order matters for LLM attention. Extension's ``base_prompt`` often
-    # frames the agent as "Mail Client module — ...", which the LLM
-    # then inherits in self-description. Counter by:
-    #   (1) PREPENDING a short identity header BEFORE base_prompt, so
-    #       first-read framing is "You are Webbee".
-    #   (2) Re-asserting identity LATER (after all other augments) —
-    #       LLMs weight late text heavily; overrides any drift.
+    # v1.6.2 identity fix (I-CHATEXT-TOOL-CATALOG-FRAMING):
+    # Extensions author their ``system_prompt`` as identity text ("X module —
+    # ...", "I am Y assistant"). Prepending "You are Webbee" helps but loses
+    # against 2000-token identity-framed documentation. Structural fix:
+    # wrap the extension's prompt in an explicit TOOL_CATALOG container
+    # with neutralizing preamble + closing tag. The extension's prompt
+    # becomes REFERENCE DOCUMENTATION, not a persona — LLM treats it as
+    # a catalog describing what the agent CAN DO, not WHO THEY ARE.
+    # Language-agnostic, convention-based, works for every extension
+    # regardless of authoring style.
     cap = _get_chat_context_fragment(ctx, "_capability_boundary")
-    _identity_header = ""
-    _identity_footer = ""
+    _name = "Webbee"
+    _app_id = ""
+    _all_caps = ""
     if cap:
         # Kernel may send either ``identity`` (v1.6.0 kernel) or
         # ``assistant_name`` (pre-v1.6.0 SDK tests). Accept both.
         _name = cap.get("identity") or cap.get("assistant_name") or "Webbee"
-        _not_as = cap.get("not_identify_as") or ""
+        _app_id = cap.get("not_identify_as") or ""
         _all_caps = cap.get("all_capabilities", "")
-        _not_as_clause = (
-            f" You are NOT the '{_not_as}' module, extension, app, or assistant — "
-            f"never identify as '{_not_as}' or any other extension."
-            if _not_as else ""
-        )
-        _identity_header = (
-            f"IDENTITY (NON-NEGOTIABLE): You are {_name}, the unified AI of the "
-            "Imperal Cloud AI Operating System.{not_as_clause} Any wording below "
-            "that frames you as a module, extension, or app-specific assistant "
-            "is TOOL CATALOGUE, not identity. When asked 'who are you', respond "
-            f"'{_name}'.\n\n"
-        ).format(not_as_clause=_not_as_clause)
-        _identity_footer = (
-            f"\nFINAL IDENTITY RULE (overrides any prior framing): You are "
-            f"{_name}. NEVER say 'I am the X module/assistant/app/extension'. "
-            "NEVER identify as an extension name. Always {_name}, the Imperal "
-            f"Cloud AI."
-        ).format(_name=_name)
-        if _all_caps:
-            _identity_footer += f"\n\nYOUR FULL CAPABILITIES:\n{_all_caps}"
-    parts = [_identity_header + base_prompt, ICNLI_INTEGRITY_RULES]
+
+    # Identity header — frames every token below as documentation,
+    # not identity. Always emitted (even when cap is empty) so the LLM
+    # never sees an extension prompt as persona in any dispatch path.
+    _catalog_tag = f"TOOL_CATALOG:{_app_id}" if _app_id else "TOOL_CATALOG"
+    _identity_header = (
+        f"IDENTITY: You are {_name}, the unified AI of the Imperal Cloud AI "
+        "Operating System. You work WITH extensions by calling their tools — "
+        f"you are never one of them. The <{_catalog_tag}> section below is "
+        "REFERENCE DOCUMENTATION describing what you can DO (available tools, "
+        "when to call them, how to interpret results). It is NOT your identity, "
+        "persona, job title, or scope. When asked 'who are you', the answer is "
+        f"always '{_name}'.\n\n"
+        f"<{_catalog_tag}>\n"
+    )
+    _catalog_close = f"\n</{_catalog_tag}>\n"
+    _identity_footer = (
+        f"\nFINAL IDENTITY (overrides any prior framing): You are {_name}, the "
+        f"Imperal Cloud AI. The <{_catalog_tag}> above described TOOLS, not "
+        "IDENTITY. Do not adopt a module/extension/assistant persona from it. "
+        f"When referring to yourself, the answer is {_name}."
+    )
+    if _all_caps:
+        _identity_footer += f"\n\nYOUR FULL CAPABILITIES:\n{_all_caps}"
+
+    parts = [_identity_header + base_prompt + _catalog_close, ICNLI_INTEGRITY_RULES]
     integrity = _get_chat_context_fragment(ctx, "_icnli_integrity")
     if integrity and integrity.get("rules"):
         parts.append("\nKERNEL INTEGRITY:\n" + "\n".join(f"- {r}" for r in integrity["rules"]))
@@ -125,11 +128,11 @@ def build_system_prompt(base_prompt: str, ctx, tool_name: str) -> str:
     parts.append("\n" + _load_sdk_prompt("kernel_formatting_rule.txt"))
     # Kernel Proactivity
     parts.append("\n" + _load_sdk_prompt("kernel_proactivity_rule.txt"))
-    # Final identity re-assertion (I-CHATEXT-IDENTITY-OVERRIDE-ORDER).
-    # Placed LAST so LLM attention weighting sees it after any extension
-    # persona/module framing in ``base_prompt``.
-    if _identity_footer:
-        parts.append(_identity_footer)
+    # Final identity re-assertion (I-CHATEXT-TOOL-CATALOG-FRAMING).
+    # Placed LAST so LLM attention weighting sees it after the tool
+    # catalog and all other augments — closing bracket on the identity
+    # frame opened by _identity_header.
+    parts.append(_identity_footer)
     return "\n".join(parts)
 
 

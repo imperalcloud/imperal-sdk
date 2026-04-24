@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.6.2 — 2026-04-24
+
+### Fixed
+
+- **`chat/prompt.py` tool-catalog framing (I-CHATEXT-TOOL-CATALOG-FRAMING)** —
+  v1.6.1 identity header/footer was not enough to overcome strong identity
+  framing in extensions' `system_prompt` (e.g. "Mail Client module — …",
+  "Sharelock Intelligence module — …"). At ~2000 tokens of identity-framed
+  documentation vs 150 tokens of `IDENTITY (NON-NEGOTIABLE)`, LLM attention
+  still answered "I'm the X module" when asked "who are you".
+  Structural fix: wrap the extension's `base_prompt` in an explicit
+  `<TOOL_CATALOG:app_id>` container with neutralizing preamble ("this is
+  REFERENCE DOCUMENTATION describing what you can DO, not WHO YOU ARE")
+  and closing tag. The extension's prompt is no longer read as persona —
+  it becomes tool documentation. Language-agnostic, convention-based,
+  works for every extension regardless of authoring style. No regex,
+  no per-extension hardcoded patterns.
+
 ## 1.6.1 — 2026-04-24
 
 ### Fixed
