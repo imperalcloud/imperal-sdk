@@ -85,6 +85,11 @@ class Extension:
         self._exposed: dict[str, ExposedMethod] = {}
         self._panels: dict[str, dict] = {}
         self._tray: dict[str, "TrayDef"] = {}
+        # v1.6.0 ctx.cache — per-extension Pydantic model registry. Scoped to
+        # this Extension instance: the same name in different extensions
+        # refers to different classes. Invariant:
+        # I-CACHE-MODEL-ON-EXTENSION-INSTANCE.
+        self._cache_models: dict[str, type] = {}
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""
@@ -186,6 +191,65 @@ class Extension:
             }
             return func
         return decorator
+
+    def cache_model(self, name: str):
+        """Register a Pydantic model as a ``ctx.cache`` value shape.
+
+        The model name is scoped to this :class:`Extension` instance — the
+        same name in different extensions refers to different classes.
+        ``ctx.cache.set(key, value, ttl_seconds=60)`` will reverse-lookup the
+        class of ``value`` in this registry and refuse to persist anything
+        whose type is not registered.
+
+        Constraints:
+
+        - ``cls`` must subclass ``pydantic.BaseModel`` — raises ``TypeError``.
+        - ``name`` must be unique within the extension — duplicates raise
+          ``ValueError``.
+
+        Example::
+
+            from pydantic import BaseModel
+
+            class InboxSummary(BaseModel):
+                unread: int
+                latest_subject: str
+
+            @ext.cache_model("inbox_summary")
+            class _InboxSummary(InboxSummary):
+                pass
+
+        Invariant: I-CACHE-MODEL-ON-EXTENSION-INSTANCE.
+        """
+        from pydantic import BaseModel
+
+        def decorator(cls):
+            if not isinstance(cls, type) or not issubclass(cls, BaseModel):
+                raise TypeError(
+                    f"@{self.app_id}.cache_model: {getattr(cls, '__name__', cls)!r}"
+                    " must be a Pydantic BaseModel subclass"
+                )
+            if name in self._cache_models:
+                raise ValueError(
+                    f"cache model {name!r} already registered for {self.app_id!r}"
+                )
+            self._cache_models[name] = cls
+            return cls
+
+        return decorator
+
+    def _resolve_cache_model_name(self, cls) -> str | None:
+        """Reverse-lookup the registered name for a Pydantic class.
+
+        Returns the registered name if ``cls`` was registered via
+        :meth:`cache_model`, else ``None``. Used by
+        :class:`imperal_sdk.cache.CacheClient` to compute the Redis key
+        prefix before a set/get round-trip.
+        """
+        for model_name, registered_cls in self._cache_models.items():
+            if registered_cls is cls:
+                return model_name
+        return None
 
     def on_install(self, func: Callable) -> Callable:
         """Register install hook. Called once when user installs extension."""
