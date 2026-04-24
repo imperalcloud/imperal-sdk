@@ -47,6 +47,27 @@ except ImportError:  # pragma: no cover — defensive
 log = logging.getLogger(__name__)
 
 
+def _get_connected_emails(ctx) -> list[str]:
+    """Retrieve connected-email list from ``ctx._metadata``.
+
+    Kernel populates ``ctx._metadata["connected_emails"]`` at tool-dispatch
+    time per the **I-CONNECTED-EMAILS-VIA-METADATA** invariant (see Phase 5
+    kernel work). Returns ``[]`` in legacy/dev contexts where metadata is
+    not yet populated — this is **fail-SAFE** (empty list narrows
+    target-scope authorisation, does not widen; a non-owner caller with
+    an empty connected-email set cannot match foreign addresses and so
+    cross-user writes stay blocked by the target-scope guard).
+    """
+    meta = getattr(ctx, "_metadata", None) or {}
+    if not isinstance(meta, dict):
+        return []
+    val = meta.get("connected_emails", [])
+    if not isinstance(val, list):
+        return []
+    # Keep only string entries, filter empties
+    return [e for e in val if isinstance(e, str) and e]
+
+
 def check_guards(
     chat_ext: ChatExtension,
     ctx,
@@ -216,11 +237,11 @@ def _check_target_scope_guard(
     _caller_email = str(getattr(ctx.user, 'email', '')) if hasattr(ctx, 'user') and ctx.user else ''
     _caller_scopes = getattr(ctx.user, 'scopes', ['*']) if hasattr(ctx, 'user') and ctx.user else ['*']
     # v1.6.0: ``ctx.skeleton_data`` removed. Connected-email enumeration
-    # must flow through ``ctx.cache`` or an explicit ``@ext.skeleton`` tool
-    # running in a skeleton-typed context. The guard downgrades to empty
-    # rather than cross-ext-leaking, which is the safer default for the
-    # target-scope check.
-    _connected_emails: list = []
+    # now flows through ``ctx._metadata["connected_emails"]`` populated by
+    # the kernel at tool-dispatch time (Phase 5 / I-CONNECTED-EMAILS-VIA-
+    # METADATA). Empty list is the fail-SAFE default for legacy/dev
+    # contexts — narrows target-scope authorisation, does not widen.
+    _connected_emails: list = _get_connected_emails(ctx)
 
     _tsg = _check_target_scope(
         tool_use_params=tu.input,
