@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from imperal_sdk.chat.guards import _get_connected_emails
 
 
@@ -75,36 +73,7 @@ def test_connected_emails_not_shared_state():
     assert r2 == ["b@x.com"]
 
 
-# ---------------------------------------------------------------------------
-# check_write_arg_bleed — smoke (belongs to separate P2 track but retained
-# here because the guard lives in the same module)
-# ---------------------------------------------------------------------------
-
-
-def test_check_write_arg_bleed_skips_read_action():
-    from imperal_sdk.chat.guards import check_write_arg_bleed
-    tu = MagicMock()
-    tu.input = {"error_code": "UNKNOWN_TOOL"}
-    # Action is read → bleed guard must allow (return None)
-    assert check_write_arg_bleed(tu, [], "read") is None
-
-
-def test_check_write_arg_bleed_skips_when_no_prior_errors():
-    from imperal_sdk.chat.guards import check_write_arg_bleed
-    tu = MagicMock()
-    tu.input = {"body": "hello"}
-    # Prior calls all succeeded — nothing to bleed from
-    prior = [{"success": True, "result": {"ok": 1}}]
-    assert check_write_arg_bleed(tu, prior, "write") is None
-
-
-def test_check_write_arg_bleed_blocks_on_taxonomy_match():
-    from imperal_sdk.chat.guards import check_write_arg_bleed
-    tu = MagicMock()
-    tu.input = {"body": "oh no VALIDATION_MISSING_FIELD bubbled up"}
-    prior = [
-        {"success": False, "result": {"error_code": "VALIDATION_MISSING_FIELD"}}
-    ]
-    reason = check_write_arg_bleed(tu, prior, "write")
-    assert reason is not None
-    assert "WRITE_ARG_BLEED" in reason
+# check_write_arg_bleed tests live in tests/test_chat_guards_bleed.py —
+# that guard is tracked separately under the P2 federal-chat-integrity
+# track (see docs/superpowers/specs/2026-04-23-federal-grade-chat-
+# integrity-design.md), not Phase 4.
