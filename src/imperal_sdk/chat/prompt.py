@@ -3,6 +3,8 @@
 """Prompt and message building utilities for ChatExtension."""
 from __future__ import annotations
 
+import logging
+import os
 from typing import TYPE_CHECKING
 
 from imperal_sdk.prompts import load_prompt as _load_sdk_prompt
@@ -10,7 +12,50 @@ from imperal_sdk.prompts import load_prompt as _load_sdk_prompt
 if TYPE_CHECKING:
     pass
 
+log = logging.getLogger(__name__)
+
 ICNLI_INTEGRITY_RULES = "\n" + _load_sdk_prompt("icnli_integrity_rules.txt") + "\n"
+
+
+def _prod_mode() -> bool:
+    """Check IMPERAL_PROD env flag at call time (not module load).
+
+    Dynamic lookup is required so tests that set ``monkeypatch.setenv`` (or
+    operators who flip the flag at runtime) see the change without needing
+    to reimport this module.
+    """
+    return os.getenv("IMPERAL_PROD", "false").lower() in ("1", "true", "yes")
+
+
+def _get_chat_context_fragment(ctx, key: str) -> dict:
+    """Retrieve ``_capability_boundary`` / ``_icnli_integrity`` fragment from
+    ``ctx._metadata["_context"]``.
+
+    Kernel populates ``ctx._metadata["_context"][key]`` at tool-dispatch time
+    per the **I-CHATEXT-IDENTITY-INTEGRITY-VIA-METADATA** invariant (Phase 5
+    kernel work). Returns ``{}`` in legacy/dev. In prod mode
+    (``IMPERAL_PROD=true``) emits a loud ``WARNING`` when missing — these
+    fragments are load-bearing security context (identity boundary + kernel
+    integrity rules) and a silent drop is a federal-grade red flag.
+    """
+    meta = getattr(ctx, "_metadata", None) or {}
+    if not isinstance(meta, dict):
+        return {}
+    ctx_bag = meta.get("_context") or {}
+    if not isinstance(ctx_bag, dict):
+        return {}
+    fragment = ctx_bag.get(key) or {}
+    if not isinstance(fragment, dict):
+        fragment = {}
+    if not fragment and _prod_mode():
+        log.warning(
+            "chat.prompt: %s fragment missing from ctx._metadata['_context'] "
+            "in prod — kernel failed to populate load-bearing identity/"
+            "integrity context (Phase 5 / I-CHATEXT-IDENTITY-INTEGRITY-VIA-"
+            "METADATA)",
+            key,
+        )
+    return fragment
 
 
 def build_system_prompt(base_prompt: str, ctx, tool_name: str) -> str:
@@ -27,12 +72,10 @@ def build_system_prompt(base_prompt: str, ctx, tool_name: str) -> str:
     parts = [base_prompt, ICNLI_INTEGRITY_RULES]
     # v1.6.0: ``ctx.skeleton_data`` removed. The kernel now ships the
     # ``_capability_boundary`` + ``_icnli_integrity`` augment as an explicit
-    # ``ctx._metadata`` fragment so chat extensions that were relying on the
-    # passive snapshot still see it, but there is no implicit skeleton
-    # read-through any more.
-    _md = getattr(ctx, "_metadata", {}) or {}
-    _ctx = _md.get("_context", {}) if isinstance(_md, dict) else {}
-    cap = _ctx.get("_capability_boundary", {}) if isinstance(_ctx, dict) else {}
+    # ``ctx._metadata["_context"]`` fragment. Both fragments are load-bearing
+    # security context; ``_get_chat_context_fragment`` warns loudly in prod
+    # if the kernel fails to populate them (see Phase 5 task list).
+    cap = _get_chat_context_fragment(ctx, "_capability_boundary")
     if cap:
         _name = cap.get("assistant_name", "Webbee")
         _all_caps = cap.get("all_capabilities", "")
@@ -45,7 +88,7 @@ def build_system_prompt(base_prompt: str, ctx, tool_name: str) -> str:
         )
         if _all_caps:
             parts.append(f"\nYOUR FULL CAPABILITIES:\n{_all_caps}")
-    integrity = _ctx.get("_icnli_integrity", {}) if isinstance(_ctx, dict) else {}
+    integrity = _get_chat_context_fragment(ctx, "_icnli_integrity")
     if integrity and integrity.get("rules"):
         parts.append("\nKERNEL INTEGRITY:\n" + "\n".join(f"- {r}" for r in integrity["rules"]))
     if hasattr(ctx, "user") and ctx.user:
