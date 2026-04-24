@@ -2,6 +2,29 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.6.1 — 2026-04-24
+
+### Fixed
+
+- **`chat/prompt.py` identity override order (I-CHATEXT-IDENTITY-OVERRIDE-ORDER)** —
+  federal-grade identity leak fix. When a user asked "who are you", Webbee
+  could reply "I'm the mail module" because the extension's `base_prompt`
+  (e.g. "Mail Client module — …") framed the agent as an extension and
+  LLMs weight early-prompt text heavily.
+  - Key mapping: `_capability_boundary` now reads `identity` (v1.6.0 kernel)
+    with fallback to `assistant_name` (pre-v1.6.0 SDK tests). The v1.6.0
+    kernel shipped `identity` but the SDK read `assistant_name` only,
+    silently falling back to the hardcoded `"Webbee"` default.
+  - `not_identify_as`: the kernel's `app_id`-scoped negative-identity hint
+    is now rendered into an explicit clause — "You are NOT the 'X' module,
+    extension, app, or assistant". Previously populated by the kernel but
+    never consumed on the SDK side.
+  - Prompt order: identity header is PREPENDED before the extension's
+    `base_prompt` (frames first read) AND a final identity rule is
+    APPENDED after all other augments (late-text attention weighting
+    overrides any extension persona drift). Identity brackets `base_prompt`
+    instead of sitting in the middle.
+
 ## 1.6.0 — 2026-04-24
 
 ### BREAKING CHANGES
