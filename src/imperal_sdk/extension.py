@@ -11,6 +11,15 @@ class ToolDef:
     func: Callable
     scopes: list[str] = field(default_factory=list)
     description: str = ""
+    # v2.0.0 fields (Webbee Single Voice contract). All have safe defaults so
+    # v1 ``Extension("app").tool(name)`` instance-based registrations remain
+    # valid — only the v2 class-based ``@ext.tool`` decorator enforces them.
+    output_schema: type | None = None          # Pydantic BaseModel subclass (required in v2)
+    long_running: bool = False
+    estimated_duration_s: int | None = None
+    status_tool: str | None = None             # Companion tool name on same Extension
+    llm_backed: bool = False                   # Calls purpose="execution" LLM internally
+    cost_credits: int = 0                      # Pre-ACK confirmation gate
 
 @dataclass
 class SignalDef:
@@ -60,16 +69,87 @@ class TrayDef:
     tooltip: str = ""
 
 class Extension:
-    """Imperal Cloud Extension."""
+    """Imperal Cloud Extension.
+
+    Supports two authoring surfaces:
+
+    * **v1 (instance-based, legacy imperative)** — ``ext = Extension("app"); @ext.tool("name")``.
+      The decorator is an instance method; tools land in ``self._tools`` on
+      that particular object. Backward-compatible, still exercised in tests.
+    * **v2 (class-based, Webbee Single Voice)** — ``class MyExt(Extension): @ext.tool(...)``
+      with ``ext`` imported from ``imperal_sdk``. The class-level decorator
+      stamps ``_tool_meta`` on each method; :meth:`__init_subclass__` collects
+      them into ``cls._tools_registry`` and runs the companion-tool
+      (I-STATUS-TOOL-MUST-EXIST) check. Raises at class-def time on contract
+      violations so the kernel never attempts to load a malformed extension.
+    """
+
+    # v2 class-level registry, populated by __init_subclass__. Each concrete
+    # subclass gets its own dict (shadowed at class-def time) — never shared.
+    _tools_registry: dict[str, Callable] = {}
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Collect v2 ``@ext.tool``-decorated methods into ``cls._tools_registry``.
+
+        Runs once per subclass at class-definition time. Discovery is based on
+        the ``_tool_meta`` attribute stamped by :func:`imperal_sdk.decorators.ext.tool`.
+        After collection, runs the status_tool existence check
+        (I-STATUS-TOOL-MUST-EXIST) so malformed extensions fail loud during
+        module import rather than at first-dispatch.
+        """
+        super().__init_subclass__(**kwargs)
+        registry: dict[str, Callable] = {}
+        # Walk the subclass namespace only. We deliberately skip inherited
+        # members so each subclass declares its own tools explicitly; mixing
+        # tool definitions across MRO is out-of-scope for v2.
+        for attr_name, attr_val in list(cls.__dict__.items()):
+            if callable(attr_val) and hasattr(attr_val, "_tool_meta"):
+                registry[attr_name] = attr_val
+        cls._tools_registry = registry
+        cls._validate_status_tool_pairs()
+
+    @classmethod
+    def _validate_status_tool_pairs(cls) -> None:
+        """Enforce I-STATUS-TOOL-MUST-EXIST on ``cls._tools_registry``.
+
+        For every tool marked ``long_running=True``, verify the declared
+        ``status_tool`` name is itself a registered tool on the same class.
+        Raises :class:`ValueError` at class-def / instantiation time.
+        """
+        registry = getattr(cls, "_tools_registry", {}) or {}
+        for name, tool_fn in registry.items():
+            meta = getattr(tool_fn, "_tool_meta", {}) or {}
+            if not meta.get("long_running"):
+                continue
+            st_name = meta.get("status_tool")
+            if st_name and st_name not in registry:
+                raise ValueError(
+                    f"Tool {cls.__name__}.{name} declares status_tool="
+                    f"{st_name!r} but no such tool exists in this extension. "
+                    f"Declare a companion tool with that name that returns "
+                    f"TaskStatus. Available tools: {sorted(registry.keys())}. "
+                    "(Invariant I-STATUS-TOOL-MUST-EXIST)"
+                )
 
     def __init__(
         self,
-        app_id: str,
+        app_id: str | None = None,
         version: str = "0.1.0",
         capabilities: list[str] | None = None,
         migrations_dir: str | None = None,
         config_defaults: dict | None = None,
     ):
+        # Defense-in-depth: re-run the status_tool pair check on instantiation
+        # in case the registry was mutated post class-def (rare, but covered
+        # by test_long_running_status_tool_must_exist_in_extension which
+        # invokes BrokenExt() inside its pytest.raises block).
+        type(self)._validate_status_tool_pairs()
+
+        # v2 class-based subclasses may omit app_id at construction time and
+        # rely on a class-level attribute; preserve v1 positional shape by
+        # defaulting to the class name.
+        if app_id is None:
+            app_id = getattr(type(self), "app_id", None) or type(self).__name__
         self.app_id = app_id
         self.version = version
         self.capabilities = capabilities or []

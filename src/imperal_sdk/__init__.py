@@ -3,6 +3,7 @@ from imperal_sdk.extension import (
     Extension, ToolDef, SignalDef, ScheduleDef,
     LifecycleHook, HealthCheckDef, WebhookDef, EventHandlerDef, ExposedMethod, TrayDef,
 )
+from imperal_sdk.decorators import ext
 from imperal_sdk.context import Context
 from imperal_sdk.auth import ImperalAuth, AuthError, User
 from imperal_sdk.manifest import generate_manifest, save_manifest
@@ -37,6 +38,7 @@ __all__ = [
     # Core
     "Extension", "ToolDef", "SignalDef", "ScheduleDef",
     "LifecycleHook", "HealthCheckDef", "WebhookDef", "EventHandlerDef", "ExposedMethod", "TrayDef",
+    "ext",  # v2.0 class-based decorator namespace — @ext.tool on subclass methods
     "Context", "ImperalAuth", "AuthError", "User",
     "ActionResult",
     "generate_manifest", "save_manifest",
