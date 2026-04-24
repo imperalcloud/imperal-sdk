@@ -178,3 +178,77 @@ async def test_context_skeleton_allows_skeleton_tool_type():
     ctx = Context(user=user, skeleton=raw, _tool_type="skeleton")
     result = await ctx.skeleton.get("monitors")
     assert result == {"fresh": True, "section": "monitors"}
+
+
+# ---------------------------------------------------------------------------
+# Task 4.5 — ctx.cache wiring
+# ---------------------------------------------------------------------------
+
+
+def test_context_has_cache_property_attribute():
+    """The cache descriptor exists on the class even when no Extension was
+    supplied (attribute access returns a working property that raises on
+    first use if unconfigured)."""
+    from imperal_sdk.context import Context
+    assert "cache" in dir(Context)
+
+
+def test_context_cache_raises_without_extension():
+    """Without an Extension reference the cache property must surface a
+    clear RuntimeError rather than silently returning None."""
+    from imperal_sdk.auth.user import User
+    from imperal_sdk.context import Context
+
+    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+                role="user", scopes=["*"], attributes={})
+    ctx = Context(user=user)
+    with pytest.raises(RuntimeError, match="not available"):
+        _ = ctx.cache
+
+
+def test_context_cache_constructs_with_extension_and_gw():
+    """When _extension + a derivable gateway URL are both present, the
+    Context builds a CacheClient and exposes it on ctx.cache."""
+    from imperal_sdk.auth.user import User
+    from imperal_sdk.cache.client import CacheClient
+    from imperal_sdk.context import Context
+    from imperal_sdk.extension import Extension
+
+    ext = Extension(app_id="mail")
+    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+                role="user", scopes=["*"], attributes={})
+    ctx = Context(
+        user=user,
+        _extension=ext,
+        _gateway_url="http://gw.example.com",
+        _service_token="svc",
+        _call_token="tok",
+        _tool_type="panel",
+    )
+    assert isinstance(ctx.cache, CacheClient)
+    assert ctx.cache._app_id == "mail"
+    assert ctx.cache._user_id == "u-1"
+    assert ctx.cache._call_token == "tok"
+    assert ctx.cache._service_token == "svc"
+
+
+def test_context_cache_gateway_url_derived_from_skeleton_client():
+    """When ``_gateway_url`` is not passed explicitly, it should be derived
+    from the raw skeleton client's ``_gateway_url``."""
+    from imperal_sdk.auth.user import User
+    from imperal_sdk.context import Context
+    from imperal_sdk.extension import Extension
+    from imperal_sdk.skeleton.client import SkeletonClient
+
+    ext = Extension(app_id="mail")
+    raw_sk = SkeletonClient(
+        gateway_url="http://derived.example.com",
+        service_token="svc",
+        extension_id="mail",
+        user_id="u-1",
+    )
+    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+                role="user", scopes=["*"], attributes={})
+    ctx = Context(user=user, skeleton=raw_sk, _extension=ext, _tool_type="tool")
+    assert ctx.cache._gw_url == "http://derived.example.com"
+    assert ctx.cache._service_token == "svc"

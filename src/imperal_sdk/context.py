@@ -187,8 +187,16 @@ class Context:
     _call_token: str = ""
     # Extension instance (for ctx.cache -> cache_model reverse lookup).
     # Populated by the kernel when constructing the Context; ``None`` in
-    # minimal mock contexts. Wired in Task 4.5.
+    # minimal mock contexts.
     _extension: Any = None
+    # Gateway URL for cache HTTP traffic. When ``""`` (the default) the
+    # Context will attempt to derive it from one of the existing clients
+    # (skeleton / store / notify) in ``__post_init__``. Invariant:
+    # I-CACHE-GW-URL-DERIVE.
+    _gateway_url: str = ""
+    # Service token for cache HTTP traffic. Same derivation rules as
+    # ``_gateway_url``.
+    _service_token: str = ""
 
     def __post_init__(self):
         # Wrap the raw skeleton client in the access guard so that only
@@ -198,6 +206,76 @@ class Context:
         self._raw_skeleton = self.skeleton
         if self.skeleton is not None:
             self.skeleton = _SkeletonAccessGuard(self.skeleton, self._tool_type)
+
+        # Build ctx.cache if we have enough signal: an Extension reference +
+        # a derivable gateway URL. In mock contexts (no extension, no clients
+        # with a _gateway_url) we leave ``_cache`` as ``None`` and the cache
+        # property raises a clear error on access.
+        self._cache = None
+        gw = self._gateway_url or self._derive_gateway_url()
+        svc = self._service_token or self._derive_service_token()
+        if self._extension is not None and gw:
+            try:
+                from imperal_sdk.cache.client import CacheClient
+                self._cache = CacheClient(
+                    app_id=getattr(self._extension, "app_id", self._extension_id),
+                    user_id=self.user.id,
+                    gw_url=gw,
+                    service_token=svc,
+                    call_token=self._call_token,
+                    extension=self._extension,
+                )
+            except Exception:
+                # Construction failures (e.g. empty app_id/user_id in exotic
+                # mock contexts) should not blow up Context creation — the
+                # cache property will surface the problem on first use.
+                self._cache = None
+
+    # ------------------------------------------------------------------
+    # Gateway URL / service-token derivation for ctx.cache.
+    # ------------------------------------------------------------------
+
+    def _derive_gateway_url(self) -> str:
+        for candidate in (self._raw_skeleton, self.store, self.notify):
+            url = getattr(candidate, "_gateway_url", "") if candidate else ""
+            if url:
+                return url
+        return ""
+
+    def _derive_service_token(self) -> str:
+        # SkeletonClient stores the token as _token; StoreClient as _auth_token;
+        # NotifyClient as _auth_token. Pick whichever is populated.
+        for candidate, attr in (
+            (self._raw_skeleton, "_token"),
+            (self.store, "_auth_token"),
+            (self.notify, "_auth_token"),
+        ):
+            tok = getattr(candidate, attr, "") if candidate else ""
+            if tok:
+                return tok
+        return ""
+
+    @property
+    def cache(self):
+        """Short-lived Pydantic-typed per-user cache.
+
+        Access ``ctx.cache.get(key, Model)`` / ``.set(key, value, ttl_seconds=N)``
+        inside any tool/panel/chat_fn context. Pydantic model must be
+        registered via ``@ext.cache_model(name)`` on the owning Extension.
+
+        Raises :class:`RuntimeError` if the Context was constructed without
+        enough state to build a :class:`CacheClient` (no ``_extension`` or
+        no derivable ``_gateway_url``) — this happens in minimal mock
+        contexts; use real kernel-built contexts in production.
+        """
+        if self._cache is None:
+            raise RuntimeError(
+                "ctx.cache is not available in this context; the Context "
+                "was constructed without an Extension reference or a "
+                "derivable gateway URL. This is typically a test harness "
+                "issue — use a real kernel-built Context in production."
+            )
+        return self._cache
 
     async def progress(self, percent: float, message: str = "") -> None:
         """Report task progress. May raise TaskCancelled if user cancelled."""
@@ -271,6 +349,8 @@ class Context:
             _tool_type=self._tool_type,
             _call_token=self._call_token,
             _extension=self._extension,
+            _gateway_url=self._gateway_url,
+            _service_token=self._service_token,
         )
 
     def _rebuild_store_for(self, user_id: str):
