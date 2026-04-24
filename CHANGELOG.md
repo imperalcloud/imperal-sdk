@@ -2,6 +2,36 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 1.5.27 — 2026-04-24
+
+Packaging-only release. Bundles the P2 Task 20 hotfix that was applied
+to production site-packages on 2026-04-23 but never committed to git or
+published to PyPI. Without this release, any `pip install
+--force-reinstall imperal-sdk` on a worker venv silently reintroduces
+the `FunctionCall.to_dict()` AttributeError.
+
+### Fix
+
+- **fix(chat/types): `FunctionCall.to_dict()` defensive dispatch.**
+  The 1.5.26 structured error taxonomy (Task 19) causes
+  `_execute_function`'s exception path to store a plain `dict` in
+  `FunctionCall.result` (error_code envelope), not an `ActionResult`.
+  Pre-fix, `to_dict()` unconditionally called `self.result.to_dict()`,
+  raising `AttributeError: 'dict' object has no attribute 'to_dict'`
+  and crashing the Temporal activity whenever an extension tool raised.
+  Now dispatches on `hasattr(result, 'to_dict')` → ActionResult path,
+  `isinstance(result, dict)` → passthrough, else `{'repr': str(x)[:500]}`
+  fallback. Never raises on serialisation.
+
+### Affected path
+
+Any chain step where an `@chat.function` tool raised an exception: the
+structured error envelope now serialises cleanly, the kernel 5-gate
+verifier receives the classified `error_code`, the user sees the i18n
+message from the error taxonomy instead of a generic chain failure.
+
+Commits: working-tree diff on top of `2b3a837`.
+
 ## 1.5.26 — 2026-04-23
 
 Phase P2 of the Federal-Grade Chat Integrity roadmap (spec:

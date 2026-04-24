@@ -34,7 +34,15 @@ class FunctionCall:
             "event": self.event,
         }
         if self.result is not None:
-            d["result"] = self.result.to_dict()
+            # P2 Task 20 hotfix 2026-04-23: accept ActionResult (.to_dict()),
+            # plain dict (structured error_code from _execute_function exception path),
+            # or fall through to str repr. Defensive — NEVER raise on serialisation.
+            if hasattr(self.result, 'to_dict'):
+                d["result"] = self.result.to_dict()
+            elif isinstance(self.result, dict):
+                d["result"] = self.result
+            else:
+                d["result"] = {'repr': str(self.result)[:500]}
         return d
 
     @staticmethod
