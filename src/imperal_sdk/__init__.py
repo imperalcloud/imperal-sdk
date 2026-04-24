@@ -17,6 +17,7 @@ from imperal_sdk.extensions.client import ExtensionsClient, CircularCallError
 from imperal_sdk.errors import (
     ImperalError, APIError, NotFoundError, RateLimitError,
     ValidationError, ExtensionError, QuotaExceededError,
+    SkeletonAccessForbidden,
 )
 from imperal_sdk.types import (
     Page, ChatResult, FunctionCall,
@@ -43,6 +44,7 @@ __all__ = [
     # Errors
     "ImperalError", "APIError", "NotFoundError", "RateLimitError",
     "ValidationError", "ExtensionError", "QuotaExceededError",
+    "SkeletonAccessForbidden",
     # Types
     "Page", "ChatResult", "FunctionCall",
     "Document", "CompletionResult", "LimitsResult", "SubscriptionInfo",

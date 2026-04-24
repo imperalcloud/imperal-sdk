@@ -61,3 +61,14 @@ class QuotaExceededError(ImperalError):
         self.resource = resource
         self.limit = limit
         super().__init__(f"Quota exceeded for {resource} (limit: {limit})", "quota_exceeded")
+
+
+class SkeletonAccessForbidden(PermissionError):
+    """Raised when ctx.skeleton is accessed outside a @ext.skeleton tool.
+
+    Skeleton is the LLM-facts snapshot consumed by the intent classifier.
+    Use ctx.cache for short-lived runtime data (<= 300s) or ctx.store for
+    persistent per-user state.
+
+    I-SKELETON-LLM-ONLY.
+    """

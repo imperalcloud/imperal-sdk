@@ -25,24 +25,29 @@ def build_system_prompt(base_prompt: str, ctx, tool_name: str) -> str:
         Fully assembled system prompt string.
     """
     parts = [base_prompt, ICNLI_INTEGRITY_RULES]
-    if hasattr(ctx, "skeleton_data") and ctx.skeleton_data:
-        _ctx = ctx.skeleton_data.get("_context", {})
-        cap = _ctx.get("_capability_boundary", {})
-        if cap:
-            _name = cap.get("assistant_name", "Webbee")
-            _all_caps = cap.get("all_capabilities", "")
-            parts.append(
-                f"\nIDENTITY: You are {_name} — the AI of Imperal Cloud AI OS. "
-                "You are powerful, intelligent, and capable of handling any task across the entire platform. "
-                "You can ONLY use your available functions. If you cannot handle a request, "
-                "say you'll take care of it — the platform routes automatically. "
-                f"NEVER say 'I am the X assistant' or 'I'm the X app'. You are always {_name}."
-            )
-            if _all_caps:
-                parts.append(f"\nYOUR FULL CAPABILITIES:\n{_all_caps}")
-        integrity = _ctx.get("_icnli_integrity", {})
-        if integrity and integrity.get("rules"):
-            parts.append("\nKERNEL INTEGRITY:\n" + "\n".join(f"- {r}" for r in integrity["rules"]))
+    # v1.6.0: ``ctx.skeleton_data`` removed. The kernel now ships the
+    # ``_capability_boundary`` + ``_icnli_integrity`` augment as an explicit
+    # ``ctx._metadata`` fragment so chat extensions that were relying on the
+    # passive snapshot still see it, but there is no implicit skeleton
+    # read-through any more.
+    _md = getattr(ctx, "_metadata", {}) or {}
+    _ctx = _md.get("_context", {}) if isinstance(_md, dict) else {}
+    cap = _ctx.get("_capability_boundary", {}) if isinstance(_ctx, dict) else {}
+    if cap:
+        _name = cap.get("assistant_name", "Webbee")
+        _all_caps = cap.get("all_capabilities", "")
+        parts.append(
+            f"\nIDENTITY: You are {_name} — the AI of Imperal Cloud AI OS. "
+            "You are powerful, intelligent, and capable of handling any task across the entire platform. "
+            "You can ONLY use your available functions. If you cannot handle a request, "
+            "say you'll take care of it — the platform routes automatically. "
+            f"NEVER say 'I am the X assistant' or 'I'm the X app'. You are always {_name}."
+        )
+        if _all_caps:
+            parts.append(f"\nYOUR FULL CAPABILITIES:\n{_all_caps}")
+    integrity = _ctx.get("_icnli_integrity", {}) if isinstance(_ctx, dict) else {}
+    if integrity and integrity.get("rules"):
+        parts.append("\nKERNEL INTEGRITY:\n" + "\n".join(f"- {r}" for r in integrity["rules"]))
     if hasattr(ctx, "user") and ctx.user:
         parts.append(f"\nCURRENT USER: {getattr(ctx.user, 'email', 'unknown')}")
     # Kernel Language Enforcement

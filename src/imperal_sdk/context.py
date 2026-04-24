@@ -115,6 +115,40 @@ class TimeContext:
     is_business_hours: bool = False
 
 
+class _SkeletonAccessGuard:
+    """Wraps a :class:`SkeletonProtocol` implementation; rejects access outside
+    ``@ext.skeleton`` contexts.
+
+    v1.6.0: ``ctx.skeleton`` is the LLM-facts snapshot consumed by the intent
+    classifier. Only ``@ext.skeleton`` refresh tools are allowed to read it.
+    Panels, regular tools, and chat functions must use ``ctx.cache`` for
+    short-lived runtime data or ``ctx.store`` for persistent per-user state.
+
+    Note the absence of an ``update`` method — consistent with
+    :class:`SkeletonProtocol` v1.6.0 read-only contract; prevents a bypass
+    path being re-introduced.
+
+    Invariant: I-SKELETON-LLM-ONLY.
+    """
+
+    __slots__ = ("_client", "_tool_type")
+
+    def __init__(self, client: Any, tool_type: str):
+        self._client = client
+        self._tool_type = tool_type
+
+    async def get(self, section: str) -> Any:
+        if self._tool_type != "skeleton":
+            # Local import to avoid a cycle; errors depends on nothing,
+            # but keep the indirection minimal for clarity.
+            from imperal_sdk.errors import SkeletonAccessForbidden
+            raise SkeletonAccessForbidden(
+                f"ctx.skeleton.get() called from {self._tool_type!r} context; "
+                "only @ext.skeleton tools may access skeleton."
+            )
+        return await self._client.get(section)
+
+
 @dataclass
 class Context:
     """The context object passed to every extension tool/signal/schedule call."""
@@ -123,6 +157,10 @@ class Context:
     store: StoreProtocol | None = None
     db: DBProtocol | None = None
     ai: AIProtocol | None = None
+    # ``skeleton`` is a raw :class:`SkeletonProtocol` implementation supplied
+    # by the kernel. In v1.6.0 it is wrapped by :class:`_SkeletonAccessGuard`
+    # when surfaced via the :pyattr:`skeleton` property — direct access to
+    # this field is deprecated and reserved for internal construction.
     skeleton: SkeletonProtocol | None = None
     billing: BillingProtocol | None = None
     notify: NotifyProtocol | None = None
@@ -140,6 +178,26 @@ class Context:
     agency_theme: dict | None = None
     _extension_id: str = ""
     _metadata: dict = field(default_factory=dict)
+    # v1.6.0 skeleton + cache HMAC plumbing. ``_tool_type`` discriminates the
+    # dispatch surface (``"skeleton"`` / ``"panel"`` / ``"tool"`` /
+    # ``"chat_fn"``); ``_call_token`` is the per-invocation HMAC call-token
+    # minted by the kernel and verified by the Auth GW on skeleton/cache
+    # endpoints. Invariant: I-SKELETON-LLM-ONLY.
+    _tool_type: str = "tool"
+    _call_token: str = ""
+    # Extension instance (for ctx.cache -> cache_model reverse lookup).
+    # Populated by the kernel when constructing the Context; ``None`` in
+    # minimal mock contexts. Wired in Task 4.5.
+    _extension: Any = None
+
+    def __post_init__(self):
+        # Wrap the raw skeleton client in the access guard so that only
+        # ``@ext.skeleton`` tool invocations (``_tool_type == "skeleton"``)
+        # can read sections. Keep the wrapped client reachable via the
+        # ``_raw_skeleton`` attribute for the as_user() rebuild path.
+        self._raw_skeleton = self.skeleton
+        if self.skeleton is not None:
+            self.skeleton = _SkeletonAccessGuard(self.skeleton, self._tool_type)
 
     async def progress(self, percent: float, message: str = "") -> None:
         """Report task progress. May raise TaskCancelled if user cancelled."""
@@ -210,6 +268,9 @@ class Context:
             agency_theme=self.agency_theme,
             _extension_id=self._extension_id,
             _metadata=dict(self._metadata),
+            _tool_type=self._tool_type,
+            _call_token=self._call_token,
+            _extension=self._extension,
         )
 
     def _rebuild_store_for(self, user_id: str):
@@ -224,13 +285,17 @@ class Context:
 
     def _rebuild_skeleton_for(self, user_id: str):
         from imperal_sdk.skeleton.client import SkeletonClient
-        # SkeletonClient stores its token as `_token` (accepts both
-        # auth_token= and service_token= in __init__, unified at construction).
+        # Use the raw (unwrapped) client so the new Context can wrap it with
+        # its own guard + (possibly different) tool_type. ``_raw_skeleton``
+        # is populated in ``__post_init__``. SkeletonClient stores its token
+        # as ``_token`` (accepts both auth_token= and service_token=).
+        raw = getattr(self, "_raw_skeleton", None) or self.skeleton
         return SkeletonClient(
-            gateway_url=self.skeleton._gateway_url,
-            service_token=self.skeleton._token,
+            gateway_url=raw._gateway_url,
+            service_token=raw._token,
             extension_id=self._extension_id,
             user_id=user_id,
+            call_token=getattr(raw, "_call_token", ""),
         )
 
     def _rebuild_notify_for(self, user_id: str):
