@@ -99,24 +99,22 @@ def check_guards(
         # Do not append to _functions_called; do not return a verdict — fall
         # through to target_scope + confirmation guards below.
     elif _ctx_intent == "read" and action_type == "destructive":
-        log.warning(
-            f"ChatExtension {chat_ext.tool_name}: BLOCKED {tu.name} "
-            f"(action=destructive) — intent is read, destructive requires explicit user intent"
+        # Escalate: classifier returns intent=read for many ambiguous
+        # "delete X" phrasings; trust the extension LLM's destructive tool
+        # choice and let the confirmation_gate below issue the 2-step
+        # intercept. The old BLOCK path produced a prose-loop because the
+        # LLM kept getting "ask user to confirm" feedback and re-asking via
+        # prose without ever reaching confirmation_gate. confirmation_gate
+        # is the authoritative 2-step authority — it must see destructive
+        # calls. Symmetric with the write-escalate branch above.
+        log.info(
+            f"ChatExtension {chat_ext.tool_name}: ESCALATE {tu.name} "
+            f"action=destructive; classifier said read but extension LLM chose "
+            f"destructive — trusting LLM, confirmation_gate handles 2-step"
         )
-        chat_ext._functions_called.append({
-            "name": tu.name, "params": tu.input,
-            "action_type": action_type, "success": False, "intercepted": False,
-            "event": "", "result": None,
-        })
-        return json.dumps({
-            "RESULT": "BLOCKED",
-            "error": (
-                f"Cannot execute destructive action '{tu.name}' — the user's "
-                "request was classified as read-only. Destructive actions require "
-                "explicit user intent. Ask the user to confirm if they want to "
-                "proceed, then re-run."
-            ),
-        })
+        ctx._intent_type = "destructive"
+        # Do not append to _functions_called; do not return a verdict — fall
+        # through to target_scope + confirmation guards below.
 
     # ── Write-arg-bleed guard (I-WRITE-ARG-NO-BLEED) ──────────────
     # Defence-in-depth: reject any write/destructive call whose args contain

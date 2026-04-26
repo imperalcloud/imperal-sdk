@@ -2,6 +2,66 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 2.0.1 — 2026-04-25
+
+### Strategy note
+
+This release **supersedes 2.0.0 without yanking it**. v2.0.0 shipped the
+Webbee Single Voice cutover (deleted `ChatExtension` class, required
+`@sdk_ext.tool` + Pydantic `output_schema`, removed `_system_prompt`).
+That cutover was rolled back same-day; production continued on v1
+ChatExtension architecture. v2.0.1 restores the v1 contract on top of
+v1.6.2 baseline + two production hotfixes from the 2026-04-25 ICNLI
+Action Authority marathon. Anyone installing `imperal-sdk` without a
+pin will now resolve to 2.0.1 and get the working v1 architecture; the
+2.0.0 wheel remains on PyPI as historical record (see GitHub tag
+`archive/v2.0.0-2026-04-25` for source).
+
+For incremental Webbee Single Voice re-roll see `release/v2.0.0` archive
+tag and the kernel `feature/webbee-single-voice` branch.
+
+### Architecture
+
+- **Restored:** `ChatExtension` class, `@chat.function` decorator,
+  `ActionResult.success/.error`, per-extension `system_prompt.txt`,
+  v1.6.0+ `@ext.skeleton` decorator, `ctx.cache`, HMAC call-token,
+  Narration Verifier (audit + narrative modes).
+- **Removed (relative to 2.0.0):** v2 `Extension`-as-base-class with
+  `@sdk_ext.tool` methods, mandatory `output_schema`, V14 validator
+  rejecting v1 patterns.
+- **Validators V1-V13** active. V14 (no-ChatExtension) inactive on this
+  release.
+
+### Fixed
+
+- **`chat/guards.py` destructive ESCALATE (I-CHATEXT-DESTRUCTIVE-ESCALATE)**
+  — when classifier returns `intent=read action=read` but extension LLM
+  picks a destructive tool, we now `ESCALATE` (mirror existing write
+  ESCALATE) so the kernel-side confirmation_gate becomes the federal
+  authority on 2-step. The previous `BLOCK` path produced a prose-loop
+  ("ARE YOU SURE?" repeated forever) because the LLM kept re-asking
+  without ever reaching the confirmation gate. Production observation
+  2026-04-25, repro: "удали 1 любую заметку".
+
+- **`core/intent.action_plan.args` JSON-encoded string**
+  (I-ACTION-PLAN-ARGS-JSON-STRING) — OpenAI strict mode rejects
+  `type=["object","null"]` without `additionalProperties=false` on every
+  nested object. Free-form dicts cannot satisfy the constraint at
+  schema-build time, so `args` is now a JSON-encoded string and the
+  kernel parses with `json.loads`. Fresh installs of imperal-sdk into
+  any tenant using OpenAI strict-mode classifier no longer hard-fail at
+  classifier emit.
+
+### Compatibility
+
+- **API surface** same as 1.6.2. Existing extensions running on 1.6.2
+  upgrade to 2.0.1 by changing only their pin (`imperal-sdk==1.6.2` →
+  `imperal-sdk==2.0.1` or `>=2.0.1,<3.0.0`).
+- **Extensions on 2.0.0** (Single Voice contract — V14 enforced) WILL
+  NOT load on 2.0.1. Roll those extensions back to v1 contract or pin
+  `imperal-sdk==2.0.0` explicitly. The architecture revert is the
+  intentional content of this release.
+
 ## 1.6.2 — 2026-04-24
 
 ### Fixed
