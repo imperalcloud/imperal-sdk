@@ -2,6 +2,66 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.2.0 — 2026-04-28 — Architectural cleanup (Sprint 1.2)
+
+### Changed (BREAKING-internal — public API preserved with shim)
+
+- **Single resolver:** kernel becomes the sole LLM-config resolver.
+  SDK `LLMProvider` is now a thin executor consuming pre-resolved
+  `LLMConfig` from `ctx._llm_configs[purpose]` (kernel
+  `context_factory` populates this via setattr-post-build at
+  ctx-build time).
+- **`create_message` signature:** now accepts `cfg=LLMConfig`
+  (preferred) OR legacy `purpose=`/`user_id=` (DEPRECATED, ENV-only
+  fallback path with one-time WARN per process). Legacy form will
+  be removed in SDK 4.0.0.
+
+### Removed
+
+- SDK provider's own resolution methods: `_load_config_store`,
+  `_resolve`, `_resolve_byollm`, `_fetch_byollm_data`,
+  `_build_byollm_config`, `_resolve_failover`,
+  `_invalidation_listener`, `_ensure_listener`. Caches:
+  `_byollm_cache`, `_config_cache`. ~200 LOC stripped.
+- HTTP fetch from auth-gw `/v1/internal/config/llm` (Sprint 1.1
+  bridge). Kernel resolves directly; SDK never touches gateway
+  for LLM config now.
+
+### Added
+
+- `LLMConfig.failover_config: LLMConfig | None` — pre-resolved
+  failover pair. `create_message` reads this for runtime retry on
+  primary failure (replaces SDK's runtime `_resolve_failover`).
+- `LLMConfig.api_key` is now `field(repr=False)` — never appears
+  in default `__repr__`. Locks against accidental f-string leaks.
+- `LLMConfig` field shape aligned with kernel: adds `thinking_mode`,
+  `byollm_tool_choice` with safe defaults.
+- `LLMProvider._env_default_config_for_purpose(purpose)` — used
+  for standalone-SDK fallback when `ctx._llm_configs` is None
+  (extension developer running outside kernel).
+
+### Federal
+
+- LLM usage telemetry RESTORED. Sprint 1.1 discovered
+  `_track_usage` was silently broken via the same `shared_redis`
+  ImportError; Sprint 1.1 no-op'd it. Sprint 1.2 routes usage via
+  `ctx._llm_usage_callback`; kernel `_track_usage` (uses correct
+  `imperal_kernel.core.redis` path) writes Redis. Closes
+  `SP1.1-USAGE-TRACK`.
+- BYOLLM lookup happens once at ctx-build (single auth-gw HTTP
+  call per chain) instead of N (per LLM call).
+- Federal customers without Redis can deploy SDK standalone with
+  ENV-only fallback (no infrastructure dependencies in SDK).
+
+### Compatibility matrix
+
+| Combo | Status |
+|---|---|
+| New kernel + new SDK 3.2.0 | ✅ Primary path; ctx-injection works |
+| New kernel + old SDK 3.1.1 | ✅ Old SDK ignores ctx._llm_configs; uses its own HTTP path. Functional but inefficient. |
+| Old kernel + new SDK 3.2.0 | ⚠️ ctx._llm_configs is None → SDK ENV fallback. Production must redeploy in lockstep. |
+| Standalone SDK (no kernel) | ✅ ENV-only |
+
 ## 3.1.1 — 2026-04-28 — HOTFIX
 
 ### Fixed
