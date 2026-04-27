@@ -8,7 +8,7 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 
-from imperal_sdk.auth.user import User
+from imperal_sdk.types.identity import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class ImperalAuth:
             self._jwks_last_refresh = now
         return self._jwks_client
 
-    def verify(self, token: str) -> User:
+    def verify(self, token: str) -> UserContext:
         try:
             jwks_client = self._get_jwks_client()
             signing_key = jwks_client.get_signing_key_from_jwt(token)
@@ -40,8 +40,9 @@ class ImperalAuth:
                 token, signing_key.key, algorithms=["RS256"],
                 options={"require": ["sub", "exp", "iat"]},
             )
-            return User(
-                id=payload["sub"],
+            return UserContext(
+                imperal_id=payload["sub"],
+                email=payload.get("email", ""),
                 tenant_id=payload.get("tenant_id", "default"),
                 org_id=payload.get("org_id"),
                 role=payload.get("role", "user"),
@@ -57,8 +58,9 @@ class ImperalAuth:
                 jwks_client = self._get_jwks_client()
                 signing_key = jwks_client.get_signing_key_from_jwt(token)
                 payload = jwt.decode(token, signing_key.key, algorithms=["RS256"])
-                return User(
-                    id=payload["sub"],
+                return UserContext(
+                    imperal_id=payload["sub"],
+                    email=payload.get("email", ""),
                     tenant_id=payload.get("tenant_id", "default"),
                     org_id=payload.get("org_id"),
                     role=payload.get("role", "user"),

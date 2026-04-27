@@ -4,7 +4,8 @@ from imperal_sdk.extension import (
     LifecycleHook, HealthCheckDef, WebhookDef, EventHandlerDef, ExposedMethod, TrayDef,
 )
 from imperal_sdk.context import Context
-from imperal_sdk.auth import ImperalAuth, AuthError, User
+from imperal_sdk.auth import ImperalAuth, AuthError
+from imperal_sdk.types.identity import User, UserContext, Tenant, TenantContext
 from imperal_sdk.manifest import generate_manifest, save_manifest
 from imperal_sdk.chat import ChatExtension
 from imperal_sdk.chat.action_result import ActionResult
@@ -38,7 +39,8 @@ __all__ = [
     # Core
     "Extension", "ToolDef", "SignalDef", "ScheduleDef",
     "LifecycleHook", "HealthCheckDef", "WebhookDef", "EventHandlerDef", "ExposedMethod", "TrayDef",
-    "Context", "ImperalAuth", "AuthError", "User",
+    "Context", "ImperalAuth", "AuthError",
+    "User", "UserContext", "Tenant", "TenantContext",
     "ChatExtension", "ActionResult",
     "generate_manifest", "save_manifest",
     # IPC

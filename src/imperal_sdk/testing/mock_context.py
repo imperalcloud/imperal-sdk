@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from imperal_sdk.auth.user import User
+from imperal_sdk.types.identity import UserContext
 from imperal_sdk.context import Context, TimeContext
 from imperal_sdk.errors import ExtensionError, ValidationError
 from imperal_sdk.types.models import (
@@ -316,8 +316,8 @@ def MockContext(
     Returns:
         A fully populated Context with all mock clients.
     """
-    user = User(
-        id=user_id,
+    user = UserContext(
+        imperal_id=user_id,
         email=email,
         role=role,
         scopes=scopes if scopes is not None else ["*"],

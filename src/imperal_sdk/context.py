@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from imperal_sdk.auth.user import User, Tenant
+from imperal_sdk.types.identity import UserContext, TenantContext
 
 if TYPE_CHECKING:
     from imperal_sdk.types.models import (
@@ -152,8 +152,8 @@ class _SkeletonAccessGuard:
 @dataclass
 class Context:
     """The context object passed to every extension tool/signal/schedule call."""
-    user: User
-    tenant: Tenant | None = None
+    user: "UserContext"
+    tenant: "TenantContext | None" = None
     store: StoreProtocol | None = None
     db: DBProtocol | None = None
     ai: AIProtocol | None = None
@@ -219,7 +219,7 @@ class Context:
                 from imperal_sdk.cache.client import CacheClient
                 self._cache = CacheClient(
                     app_id=getattr(self._extension, "app_id", self._extension_id),
-                    user_id=self.user.id,
+                    user_id=self.user.imperal_id,
                     gw_url=gw,
                     service_token=svc,
                     call_token=self._call_token,
@@ -302,17 +302,17 @@ class Context:
             RuntimeError: caller is not system-context.
             ValueError: user_id is empty or "__system__".
         """
-        if self.user.id != "__system__":
+        if self.user.imperal_id != "__system__":
             raise RuntimeError(
-                f"ctx.as_user() requires system context (got {self.user.id!r})"
+                f"ctx.as_user() requires system context (got {self.user.imperal_id!r})"
             )
         if not user_id or user_id == "__system__":
             raise ValueError(
                 f"target user_id must be non-empty, non-system: {user_id!r}"
             )
 
-        new_user = User(
-            id=user_id,
+        new_user = UserContext(
+            imperal_id=user_id,
             email=self.user.email,
             tenant_id=self.user.tenant_id,
             agency_id=getattr(self.user, "agency_id", None),
