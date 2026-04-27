@@ -2,6 +2,34 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.1.1 — 2026-04-28 — HOTFIX
+
+### Fixed
+- `LLMProvider._load_config_store()` was silently failing with
+  `ModuleNotFoundError: shared_redis` since the kernel refactor that
+  renamed `shared_redis` → `imperal_kernel.core.redis`. The broad
+  `except Exception` swallowed the import error at DEBUG level,
+  causing every extension `purpose=execution` call to fall through to
+  `_PROVIDER_DEFAULTS["anthropic"]["model"]` (claude-haiku) regardless
+  of Admin > LLM Config setting.
+- Replaced the Redis-import path with an HTTP fetch against the
+  auth-gw's existing `GET /v1/internal/config/llm` endpoint.
+  Symmetric with `_fetch_byollm_data` — same gateway URL + service
+  token, same `httpx` client, same caching pattern. **Zero new SDK
+  dependencies** (httpx already core).
+- Per-instance warn-once flags for each failure class
+  (`_config_store_warned_envmissing`, `_config_store_warned_status`,
+  `_config_store_warned_shape`, `_config_store_warned_fetch`) prevent
+  log-spam while preserving visibility on first occurrence.
+
+### Federal
+- All callers (extensions running inside kernel workers) now respect
+  Admin > LLM Config provider/model + per-purpose + per-extension
+  overrides. BYOLLM continues to take precedence (separate code
+  path, unaffected).
+- Federal customers without Redis still work — SDK no longer
+  attempts a Redis connection of any kind.
+
 ## 3.1.0 — 2026-04-27
 
 ### Added
