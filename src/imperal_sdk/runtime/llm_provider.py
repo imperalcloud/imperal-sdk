@@ -806,32 +806,24 @@ class LLMProvider:
     # ------------------------------------------------------------------
 
     async def _track_usage(self, usage: LLMUsage) -> None:
-        """Write usage metrics to Redis. Fire-and-forget — never raises."""
-        try:
-            from datetime import date
-            from shared_redis import get_shared_redis
+        """Write usage metrics to Redis. Fire-and-forget — never raises.
 
-            r = get_shared_redis()
-            day = date.today().isoformat()
-            key = f"imperal:llm_usage:{usage.user_id}:{day}"
-
-            pipe = r.pipeline()
-            pipe.hincrby(key, "input_tokens",  usage.input_tokens)
-            pipe.hincrby(key, "output_tokens", usage.output_tokens)
-            pipe.hincrby(key, "calls", 1)
-            if usage.purpose:
-                pipe.hincrby(key, f"calls:{usage.purpose}", 1)
-            if usage.model:
-                pipe.hincrby(key, f"tokens:{usage.model}", usage.input_tokens + usage.output_tokens)
-            if usage.is_byollm:
-                pipe.hincrby(key, "byollm_calls", 1)
-            if usage.is_failover:
-                pipe.hincrby(key, "failover_calls", 1)
-            pipe.hincrby(key, "total_latency_ms", usage.latency_ms)
-            pipe.expire(key, 90 * 86400)  # 90-day retention
-            await pipe.execute()
-        except Exception as e:
-            log.debug(f"LLMProvider: usage tracking failed: {e}")
+        Sprint 1.1 (2026-04-28): TEMPORARILY no-op'd with WARN-once. The
+        previous body imported `shared_redis` (legacy module renamed to
+        `imperal_kernel.core.redis` during a kernel refactor) which silently
+        ImportError'd on every LLM call since the rename. Telemetry has been
+        broken for unknown duration. Sprint 1.2 architectural cleanup will
+        restore tracking via kernel-side resolution + ctx-injection (or via
+        a dedicated auth-gw `/v1/internal/llm-usage/track` endpoint).
+        Tracked as follow-up SP1.1-USAGE-TRACK.
+        """
+        if not getattr(self, "_track_usage_warned", False):
+            log.warning(
+                "LLMProvider: usage tracking is temporarily disabled (Sprint 1.1 "
+                "deferred SP1.1-USAGE-TRACK; kernel/SDK resolution refactor in "
+                "Sprint 1.2 will restore it). LLMUsage records are dropped."
+            )
+            self._track_usage_warned = True
 
     # ------------------------------------------------------------------
     # Background invalidation listener
@@ -850,32 +842,20 @@ class LLMProvider:
             pass  # No event loop yet
 
     async def _invalidation_listener(self) -> None:
-        """Subscribe to imperal:config:invalidate:* and flush BYOLLM cache entries."""
-        try:
-            from shared_redis import get_shared_redis
-            r = get_shared_redis()
-            pubsub = r.pubsub()
-            await pubsub.psubscribe("imperal:config:invalidate:*")
-            async for message in pubsub.listen():
-                if message["type"] != "pmessage":
-                    continue
-                channel: str = message.get("channel", "")
-                # channel format: imperal:config:invalidate:{user_id}
-                parts = channel.rsplit(":", 1)
-                if len(parts) == 2:
-                    user_id = parts[1]
-                    if user_id in self._byollm_cache:
-                        del self._byollm_cache[user_id]
-                        log.debug(f"LLMProvider: BYOLLM cache invalidated for {user_id}")
-                # Also flush Config Store cache on wildcard system invalidation
-                if "config:invalidate:__system__" in channel:
-                    self._config_cache = None
-                    self._config_cache_ts = 0.0
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            log.debug(f"LLMProvider: invalidation listener error: {e}")
-            self._listener_started = False  # Allow restart
+        """Subscribe to imperal:config:invalidate:* and flush BYOLLM cache entries.
+
+        Sprint 1.1 (2026-04-28): TEMPORARILY no-op. The previous body imported
+        `shared_redis` (legacy module renamed during kernel refactor) which
+        silently ImportError'd. Per spec §13, pubsub-based cache invalidation
+        is out-of-scope for Sprint 1.1; 60s in-memory TTL polling is the
+        documented degraded mode. Sprint 1.2 ctx-injection refactor will
+        eliminate the SDK-side cache + listener entirely (kernel becomes the
+        sole resolver). No-op'd to stop ImportError noise; no behavior change.
+        """
+        # Intentional no-op. _ensure_listener still spawns this task; it
+        # completes immediately. Cache invalidation now relies on the 60s
+        # TTL in _load_config_store and _resolve_byollm.
+        return
 
 
 # ---------------------------------------------------------------------------

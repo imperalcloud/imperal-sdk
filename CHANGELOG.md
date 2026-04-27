@@ -30,6 +30,17 @@ All notable changes to `imperal-sdk` are documented here.
 - Federal customers without Redis still work — SDK no longer
   attempts a Redis connection of any kind.
 
+### Discovered + temporarily disabled
+- `LLMProvider._track_usage()` and `LLMProvider._invalidation_listener()`
+  also imported the broken `shared_redis` module — telemetry and
+  pubsub cache invalidation have been silently broken since the same
+  kernel refactor. Both are now explicit no-ops with WARN-once on
+  first call (telemetry) or silent no-op (listener; pubsub is OOS
+  per spec §13, 60s TTL polling is the degraded mode).
+- Tracked as Sprint 1.2 follow-up `SP1.1-USAGE-TRACK`. Sprint 1.2
+  architectural cleanup will restore both via kernel-side resolution
+  + ctx-injection (or via dedicated auth-gw endpoints).
+
 ## 3.1.0 — 2026-04-27
 
 ### Added
