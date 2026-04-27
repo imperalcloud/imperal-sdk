@@ -62,6 +62,11 @@ def encode_request(req: RpcRequest) -> dict[str, Any]:
 
 
 def encode_reply(reply: RpcReply) -> dict[str, Any]:
+    """Serialise an RpcReply to a JSON-safe dict.
+
+    The returned dict is suitable for ``json.dumps`` and LPUSH onto the
+    ``imperal:rpc:reply:{corr_id}`` reply list.
+    """
     return reply.model_dump(mode="json")
 
 
