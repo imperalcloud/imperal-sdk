@@ -120,10 +120,10 @@ def test_context_class_has_no_skeleton_data_attr_assignment():
 
 def test_context_constructs_with_tool_type_and_call_token():
     """_tool_type + _call_token must be accepted kwargs and round-trip."""
-    from imperal_sdk.auth.user import User
+    from imperal_sdk.types.identity import UserContext
     from imperal_sdk.context import Context
 
-    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+    user = UserContext(imperal_id="u-1", email="u@example.com", tenant_id="t-1",
                 role="user", scopes=["*"], attributes={})
     ctx = Context(user=user, _tool_type="panel", _call_token="tok-abc")
     assert ctx._tool_type == "panel"
@@ -132,10 +132,10 @@ def test_context_constructs_with_tool_type_and_call_token():
 
 def test_context_wraps_skeleton_in_guard_for_non_skeleton_tool_type():
     """When a raw skeleton client is provided, ctx.skeleton must be a guard."""
-    from imperal_sdk.auth.user import User
+    from imperal_sdk.types.identity import UserContext
     from imperal_sdk.context import Context, _SkeletonAccessGuard
 
-    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+    user = UserContext(imperal_id="u-1", email="u@example.com", tenant_id="t-1",
                 role="user", scopes=["*"], attributes={})
     raw = MagicMock()
     ctx = Context(user=user, skeleton=raw, _tool_type="panel", _call_token="tok")
@@ -145,7 +145,7 @@ def test_context_wraps_skeleton_in_guard_for_non_skeleton_tool_type():
 
 @pytest.mark.asyncio
 async def test_context_skeleton_blocks_panel_end_to_end():
-    from imperal_sdk.auth.user import User
+    from imperal_sdk.types.identity import UserContext
     from imperal_sdk.context import Context
     from imperal_sdk.errors import SkeletonAccessForbidden
 
@@ -155,7 +155,7 @@ async def test_context_skeleton_blocks_panel_end_to_end():
         return {"ok": True}
     raw.get = _get
 
-    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+    user = UserContext(imperal_id="u-1", email="u@example.com", tenant_id="t-1",
                 role="user", scopes=["*"], attributes={})
     ctx = Context(user=user, skeleton=raw, _tool_type="panel")
     with pytest.raises(SkeletonAccessForbidden):
@@ -164,7 +164,7 @@ async def test_context_skeleton_blocks_panel_end_to_end():
 
 @pytest.mark.asyncio
 async def test_context_skeleton_allows_skeleton_tool_type():
-    from imperal_sdk.auth.user import User
+    from imperal_sdk.types.identity import UserContext
     from imperal_sdk.context import Context
 
     raw = MagicMock()
@@ -173,7 +173,7 @@ async def test_context_skeleton_allows_skeleton_tool_type():
         return {"fresh": True, "section": section}
     raw.get = _get
 
-    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+    user = UserContext(imperal_id="u-1", email="u@example.com", tenant_id="t-1",
                 role="user", scopes=["*"], attributes={})
     ctx = Context(user=user, skeleton=raw, _tool_type="skeleton")
     result = await ctx.skeleton.get("monitors")
@@ -196,10 +196,10 @@ def test_context_has_cache_property_attribute():
 def test_context_cache_raises_without_extension():
     """Without an Extension reference the cache property must surface a
     clear RuntimeError rather than silently returning None."""
-    from imperal_sdk.auth.user import User
+    from imperal_sdk.types.identity import UserContext
     from imperal_sdk.context import Context
 
-    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+    user = UserContext(imperal_id="u-1", email="u@example.com", tenant_id="t-1",
                 role="user", scopes=["*"], attributes={})
     ctx = Context(user=user)
     with pytest.raises(RuntimeError, match="not available"):
@@ -209,13 +209,13 @@ def test_context_cache_raises_without_extension():
 def test_context_cache_constructs_with_extension_and_gw():
     """When _extension + a derivable gateway URL are both present, the
     Context builds a CacheClient and exposes it on ctx.cache."""
-    from imperal_sdk.auth.user import User
+    from imperal_sdk.types.identity import UserContext
     from imperal_sdk.cache.client import CacheClient
     from imperal_sdk.context import Context
     from imperal_sdk.extension import Extension
 
     ext = Extension(app_id="mail")
-    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+    user = UserContext(imperal_id="u-1", email="u@example.com", tenant_id="t-1",
                 role="user", scopes=["*"], attributes={})
     ctx = Context(
         user=user,
@@ -235,7 +235,7 @@ def test_context_cache_constructs_with_extension_and_gw():
 def test_context_cache_gateway_url_derived_from_skeleton_client():
     """When ``_gateway_url`` is not passed explicitly, it should be derived
     from the raw skeleton client's ``_gateway_url``."""
-    from imperal_sdk.auth.user import User
+    from imperal_sdk.types.identity import UserContext
     from imperal_sdk.context import Context
     from imperal_sdk.extension import Extension
     from imperal_sdk.skeleton.client import SkeletonClient
@@ -247,7 +247,7 @@ def test_context_cache_gateway_url_derived_from_skeleton_client():
         extension_id="mail",
         user_id="u-1",
     )
-    user = User(id="u-1", email="u@example.com", tenant_id="t-1",
+    user = UserContext(imperal_id="u-1", email="u@example.com", tenant_id="t-1",
                 role="user", scopes=["*"], attributes={})
     ctx = Context(user=user, skeleton=raw_sk, _extension=ext, _tool_type="tool")
     assert ctx.cache._gw_url == "http://derived.example.com"

@@ -45,8 +45,12 @@ class User(BaseModel):
         if "*" in self.scopes:
             return True
         for s in self.scopes:
-            if s == scope or (s.endswith(":*") and scope.startswith(s[:-1])):
+            if s == scope:
                 return True
+            if s.endswith(".*"):
+                prefix = s[:-2]
+                if scope.startswith(prefix + ".") or scope == prefix:
+                    return True
         return False
 
     def has_role(self, role: str) -> bool:
@@ -71,8 +75,12 @@ class UserContext(BaseModel):
         if "*" in self.scopes:
             return True
         for s in self.scopes:
-            if s == scope or (s.endswith(":*") and scope.startswith(s[:-1])):
+            if s == scope:
                 return True
+            if s.endswith(".*"):
+                prefix = s[:-2]
+                if scope.startswith(prefix + ".") or scope == prefix:
+                    return True
         return False
 
     def has_role(self, role: str) -> bool:

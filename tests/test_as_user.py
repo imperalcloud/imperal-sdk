@@ -6,12 +6,12 @@ from __future__ import annotations
 import pytest
 
 from imperal_sdk.context import Context
-from imperal_sdk.auth.user import User
+from imperal_sdk.types.identity import UserContext
 
 
 def _make_ctx(user_id: str = "__system__", ext_id: str = "test-ext",
               tenant_id: str = "default") -> Context:
-    user = User(id=user_id, email="", tenant_id=tenant_id, role="system",
+    user = UserContext(imperal_id=user_id, email="", tenant_id=tenant_id, role="system",
                 scopes=["*"], attributes={})
     return Context(user=user, tenant=tenant_id, _extension_id=ext_id)
 
@@ -44,7 +44,7 @@ def test_as_user_preserves_extension_tenant_agency():
 def test_as_user_changes_only_user_id():
     ctx = _make_ctx()
     scoped = ctx.as_user("user-42")
-    assert scoped.user.id == "user-42"
+    assert scoped.user.imperal_id == "user-42"
     assert scoped.user.role == "system"  # preserved
     assert scoped.user.scopes == ["*"]    # preserved
     assert scoped.user.attributes.get("scoped_from") == "__system__"

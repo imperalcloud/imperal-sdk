@@ -19,7 +19,7 @@ from imperal_sdk.testing import (
 class TestMockContext:
     def test_creates_context(self):
         ctx = MockContext()
-        assert ctx.user.id == "test_user"
+        assert ctx.user.imperal_id == "test_user"
         assert ctx.user.email == "test@test.com"
         assert ctx.user.role == "user"
         assert ctx.store is not None
@@ -28,7 +28,7 @@ class TestMockContext:
 
     def test_custom_params(self):
         ctx = MockContext(user_id="u1", role="admin", extension_id="crm")
-        assert ctx.user.id == "u1"
+        assert ctx.user.imperal_id == "u1"
         assert ctx.user.role == "admin"
         assert ctx._extension_id == "crm"
 

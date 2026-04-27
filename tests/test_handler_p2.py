@@ -29,7 +29,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import BaseModel
 
-from imperal_sdk.auth.user import User
+from imperal_sdk.types.identity import UserContext
 from imperal_sdk.chat.handler import _execute_function, handle_message
 from imperal_sdk.chat.narration import EMIT_NARRATION_TOOL
 from imperal_sdk.extension import Extension
@@ -52,7 +52,7 @@ class _NameSpace(SimpleNamespace):
 
 def _make_ctx(skeleton=None) -> _NameSpace:
     """Minimal Context stand-in good enough for handler internal paths."""
-    u = User(id="u1", email="u@example.com")
+    u = UserContext(imperal_id="u1", email="u@example.com", tenant_id="default", role="user")
     ctx = _NameSpace(
         user=u,
         history=[],

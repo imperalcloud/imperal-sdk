@@ -2,7 +2,7 @@
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 import pytest
 
-from imperal_sdk.auth.user import User
+from imperal_sdk.types.identity import UserContext
 
 
 class _MockFactory:
@@ -13,7 +13,7 @@ class _MockFactory:
         store = StoreClient(gateway_url="http://mock", service_token="",
                             extension_id=ext_id, user_id="__system__",
                             tenant_id=tenant_id)
-        user = User(id="__system__", email="", tenant_id=tenant_id,
+        user = UserContext(imperal_id="__system__", email="", tenant_id=tenant_id,
                     role="system", scopes=["*"], attributes={})
         # ai/storage/http/config: bare sentinel objects (identity-tested only)
         return Context(user=user, tenant=tenant_id, store=store,

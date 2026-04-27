@@ -2,13 +2,13 @@
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
 import pytest
 from imperal_sdk.context import Context
-from imperal_sdk.auth.user import User
+from imperal_sdk.types.identity import UserContext
 
 
 def test_context_creation():
-    user = User(id="imp_u_123", email="test@test.com", tenant_id="default")
+    user = UserContext(imperal_id="imp_u_123", email="test@test.com", tenant_id="default", role="user")
     ctx = Context(user=user)
-    assert ctx.user.id == "imp_u_123"
+    assert ctx.user.imperal_id == "imp_u_123"
     assert ctx.store is None
     assert ctx.db is None
     assert ctx.ai is None
@@ -16,7 +16,7 @@ def test_context_creation():
 
 
 def test_context_with_mock_store():
-    user = User(id="imp_u_123")
+    user = UserContext(imperal_id="imp_u_123", email="test@example.com", tenant_id="default", role="user")
 
     class MockStore:
         async def create(self, collection, data): return {"id": "1", **data}
@@ -31,25 +31,25 @@ def test_context_with_mock_store():
 
 
 def test_context_extension_id():
-    ctx = Context(user=User(id="imp_u_123"), _extension_id="sharelock-v2")
+    ctx = Context(user=UserContext(imperal_id="imp_u_123", email="test@example.com", tenant_id="default", role="user"), _extension_id="sharelock-v2")
     assert ctx._extension_id == "sharelock-v2"
 
 
 def test_context_metadata():
-    ctx = Context(user=User(id="imp_u_123"), _metadata={"trace_id": "abc"})
+    ctx = Context(user=UserContext(imperal_id="imp_u_123", email="test@example.com", tenant_id="default", role="user"), _metadata={"trace_id": "abc"})
     assert ctx._metadata["trace_id"] == "abc"
 
 
 class TestContextExtensions:
     def test_extensions_field_exists(self):
-        ctx = Context(user=User(id="u1"))
+        ctx = Context(user=UserContext(imperal_id="u1", email="test@example.com", tenant_id="default", role="user"))
         assert ctx.extensions is None
 
 
 class TestContextProgress:
     @pytest.mark.asyncio
     async def test_progress_no_callback(self):
-        ctx = Context(user=User(id="u1"))
+        ctx = Context(user=UserContext(imperal_id="u1", email="test@example.com", tenant_id="default", role="user"))
         await ctx.progress(50, "halfway")  # should not raise
 
     @pytest.mark.asyncio
@@ -57,7 +57,7 @@ class TestContextProgress:
         calls = []
         async def cb(pct, msg):
             calls.append((pct, msg))
-        ctx = Context(user=User(id="u1"))
+        ctx = Context(user=UserContext(imperal_id="u1", email="test@example.com", tenant_id="default", role="user"))
         ctx._progress_callback = cb
         await ctx.progress(75, "almost done")
         assert calls == [(75, "almost done")]
@@ -66,5 +66,5 @@ class TestContextProgress:
 class TestContextLog:
     @pytest.mark.asyncio
     async def test_log(self):
-        ctx = Context(user=User(id="u1"), _extension_id="test-ext")
+        ctx = Context(user=UserContext(imperal_id="u1", email="test@example.com", tenant_id="default", role="user"), _extension_id="test-ext")
         await ctx.log("test message")  # should not raise
