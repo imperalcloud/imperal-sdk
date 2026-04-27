@@ -551,23 +551,74 @@ class LLMProvider:
         )
 
     async def _load_config_store(self) -> dict | None:
-        """Load LLM config from Redis Config Store. Cached 60s."""
+        """Load LLM config via auth-gw HTTP. Cached 60s in-memory.
+
+        Sprint 1.1 hotfix (2026-04-28): the previous Redis path imported
+        `shared_redis`, a legacy module renamed during a kernel refactor.
+        That import silently raised `ModuleNotFoundError`, the broad
+        `except Exception` swallowed it at DEBUG level, and every
+        `purpose=execution` call fell to `_PROVIDER_DEFAULTS["anthropic"]`.
+
+        New path uses the existing internal endpoint at
+        ``GET /v1/internal/config/llm`` (auth-gw `unified_config/router.py`).
+        Symmetric with `_fetch_byollm_data` — same gateway, same service
+        token, same httpx pattern. Federal: no Redis dependency in SDK.
+        """
+        # Read env at call time (not module-import time) so monkeypatched
+        # tests work, and so worker re-exec picks up env edits without
+        # process restart in dev.
+        gateway_url = os.getenv("IMPERAL_GATEWAY_URL", "")
+        service_token = os.getenv("IMPERAL_SERVICE_TOKEN", "")
+
         now = time.monotonic()
         if self._config_cache is not None and (now - self._config_cache_ts) < _CONFIG_CACHE_TTL:
             return self._config_cache
 
-        try:
-            from shared_redis import get_shared_redis
-            r = get_shared_redis()
-            raw = await r.get("imperal:config:llm")
-            if raw:
-                self._config_cache = json.loads(raw)
-                self._config_cache_ts = now
-                return self._config_cache
-        except Exception as e:
-            log.debug(f"LLMProvider: Config Store load failed: {e}")
+        if not gateway_url or not service_token:
+            if not getattr(self, "_config_store_warned_envmissing", False):
+                log.warning(
+                    "LLMProvider: IMPERAL_GATEWAY_URL or IMPERAL_SERVICE_TOKEN missing — "
+                    "Admin > LLM Config unreachable, falling to ENV defaults"
+                )
+                self._config_store_warned_envmissing = True
+            return None
 
-        return None
+        import httpx
+        url = f"{gateway_url.rstrip('/')}/v1/internal/config/llm"
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(
+                    url,
+                    headers={"X-Service-Token": service_token},
+                )
+            if resp.status_code != 200:
+                if not getattr(self, "_config_store_warned_status", False):
+                    log.warning(
+                        f"LLMProvider: config store fetch returned {resp.status_code} "
+                        f"from {url} — falling to ENV defaults"
+                    )
+                    self._config_store_warned_status = True
+                return None
+            data = resp.json()
+            if not isinstance(data, dict):
+                if not getattr(self, "_config_store_warned_shape", False):
+                    log.warning(
+                        f"LLMProvider: config store returned non-dict shape "
+                        f"{type(data).__name__} — falling to ENV defaults"
+                    )
+                    self._config_store_warned_shape = True
+                return None
+            self._config_cache = data
+            self._config_cache_ts = now
+            return data
+        except Exception as e:
+            if not getattr(self, "_config_store_warned_fetch", False):
+                log.warning(
+                    f"LLMProvider: config store fetch error "
+                    f"{type(e).__name__}: {e} — falling to ENV defaults"
+                )
+                self._config_store_warned_fetch = True
+            return None
 
     def _resolve_failover(self, primary: LLMConfig) -> LLMConfig | None:
         """Return failover config. Respects fallback_enabled from Config Store.
