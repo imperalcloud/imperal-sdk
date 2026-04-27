@@ -1,0 +1,45 @@
+name: Identity Contract Drift Check
+
+# W1 — User/Tenant identity contract drift gate.
+# Runs on every push/PR. Compares SDK Pydantic types in
+# imperal_sdk.types.identity against auth-gw SQLAlchemy User/Tenant
+# DB columns. Blocks merge on drift.
+#
+# Federal: defense in depth — runtime sweeper on monitoring node
+# catches DB hotfixes that bypass this CI gate.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout SDK
+        uses: actions/checkout@v4
+        with:
+          path: sdk
+
+      - name: Checkout auth-gw
+        uses: actions/checkout@v4
+        with:
+          repository: imperal-org/imperal-auth-gateway
+          path: auth-gw
+          token: ${{ secrets.AUTHGW_REPO_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install SDK
+        working-directory: sdk
+        run: pip install -e .
+
+      - name: Validate subset invariants + DB ↔ SDK schema parity
+        run: |
+          cd sdk
+          python -m imperal_sdk.tools.validate_identity_contract \
+            --authgw-path=../auth-gw/app
