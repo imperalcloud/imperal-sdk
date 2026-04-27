@@ -93,8 +93,6 @@ Two enforcement layers were added:
 `signoz:/opt/imperal-monitoring/tools/sweep_identity_contract.py`
 runs hourly via `sweep-identity-contract.timer`, emits
 `imperal_identity_contract_drift_count` gauge to journald → SigNoz.
-Alert fires when drift > 0 sustained ≥ 1h. See runbook in
-`imperal-platform-design/superpowers/runbooks/identity-contract-drift.md`.
 
 ---
 
@@ -234,8 +232,7 @@ tag and the kernel `feature/webbee-single-voice` branch.
 
 ### MIGRATION
 
-See `docs/superpowers/specs/2026-04-24-skeleton-llm-only-sdk-v1.6.0-design.md`
-section 6 for mail-client and sharelock-v2 migration examples. External
+External
 extensions must migrate their own code — kernel v1.6.0 deploy breaks
 `ctx.skeleton_data` / `ctx.skeleton.update()` / cross-context `ctx.skeleton.get()`
 users.
@@ -271,9 +268,6 @@ message from the error taxonomy instead of a generic chain failure.
 Commits: working-tree diff on top of `2b3a837`.
 
 ## 1.5.26 — 2026-04-23
-
-Phase P2 of the Federal-Grade Chat Integrity roadmap (spec:
-`docs/superpowers/specs/2026-04-23-federal-grade-chat-integrity-design.md`).
 
 ### Features
 
@@ -486,8 +480,7 @@ continue to work; they now also satisfy V13 (no warnings).
   classified as read, promote `ctx._intent_type` to "write" and proceed
   rather than BLOCK. LLM tool choice is authoritative over the classifier's
   heuristic. Destructive actions retain the BLOCK path — they require
-  explicit user intent. Closes session-42 bug #2 (Tier 7 in
-  `docs/superpowers/plans/2026-04-21-automation-path-federal-fixes.md`).
+  explicit user intent. Closes session-42 bug #2.
 
   Invariant: **I-GUARDS-ESCALATE-WRITE-ONLY** — see
   `docs/imperal-cloud/conventions.md`.
@@ -767,8 +760,6 @@ Kernel populates both on workflow start. `agency_id: str | None` is the data-iso
 ### Test coverage
 
 13 cases: default fallback for missing ctx / attribute / None / non-dict, full payload parse, malformed colour-pair drop, unknown enum fallback, frozen-instance, slots (no `__dict__`), `_from_dict` helper, public-export surface.
-
-See also: `docs/superpowers/specs/2026-04-19-dui-design-tokens-design.md` and the Panel `src/styles/tokens.css` for the authoritative CSS var definitions.
 
 ## 1.5.14 (2026-04-19)
 
