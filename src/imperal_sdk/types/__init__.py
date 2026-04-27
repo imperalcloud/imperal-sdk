@@ -1,4 +1,5 @@
 """Imperal SDK shared types."""
+from imperal_sdk.types.identity import User, UserContext, Tenant, TenantContext
 from imperal_sdk.types.action_result import ActionResult
 from imperal_sdk.types.chat_result import ChatResult, FunctionCall
 from imperal_sdk.types.models import (
@@ -37,6 +38,7 @@ from imperal_sdk.types.client_contracts import (
 )
 
 __all__ = [
+    "User", "UserContext", "Tenant", "TenantContext",
     "ActionResult", "ChatResult", "FunctionCall", "Page",
     "Document", "CompletionResult", "LimitsResult", "SubscriptionInfo",
     "BalanceInfo", "FileInfo", "HTTPResponse",
