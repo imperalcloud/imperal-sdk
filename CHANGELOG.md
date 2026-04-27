@@ -13,7 +13,6 @@ All notable changes to `imperal-sdk` are documented here.
   - Pure codec: `encode_request/decode_request/encode_reply/decode_reply`
     with loose-mode missing-`v` shim + `strict_version` kwarg.
   - `build_error_reply` helper, `should_cache_reply` idempotency policy.
-- See workspace spec `2026-04-27-w2-pydantic-rpc-design.md` for full design.
 
 ### Backward compatibility
 - Additive only; no SDK 3.0.x callers affected.
