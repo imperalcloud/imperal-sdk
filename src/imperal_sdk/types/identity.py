@@ -41,6 +41,17 @@ class User(BaseModel):
     last_login: str | None = None
     cases_user_id: int | None = None
 
+    def has_scope(self, scope: str) -> bool:
+        if "*" in self.scopes:
+            return True
+        for s in self.scopes:
+            if s == scope or (s.endswith(":*") and scope.startswith(s[:-1])):
+                return True
+        return False
+
+    def has_role(self, role: str) -> bool:
+        return self.role == role
+
 
 class UserContext(BaseModel):
     """Lean User — runtime/extension-facing. Strict subset of `User`."""
@@ -55,6 +66,17 @@ class UserContext(BaseModel):
     scopes: list[str] = []
     attributes: dict = {}
     is_active: bool = True
+
+    def has_scope(self, scope: str) -> bool:
+        if "*" in self.scopes:
+            return True
+        for s in self.scopes:
+            if s == scope or (s.endswith(":*") and scope.startswith(s[:-1])):
+                return True
+        return False
+
+    def has_role(self, role: str) -> bool:
+        return self.role == role
 
 
 class Tenant(BaseModel):
