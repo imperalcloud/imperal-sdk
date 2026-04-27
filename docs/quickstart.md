@@ -21,7 +21,7 @@ When you deploy an extension, its code lives at `/opt/extensions/{app_id}/main.p
 ## 1. Install
 
 ```bash
-pip install imperal-sdk>=1.5.7
+pip install 'imperal-sdk>=3.0.0,<4.0.0'
 imperal --version
 # imperal-sdk 1.5.7
 ```

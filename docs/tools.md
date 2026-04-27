@@ -405,7 +405,7 @@ async def create_case(ctx: Context, title: str, description: str) -> str:
         "title": title,
         "description": description,
         "status": "open",
-        "created_by": ctx.user.id,
+        "created_by": ctx.user.imperal_id,
     })
 
     # v1.6.0: ctx.skeleton.update() is removed. A separate @ext.skeleton
@@ -583,7 +583,7 @@ async def generate_report(ctx: Context, case_id: str) -> str:
     await ctx.store.create("report_jobs", {
         "case_id": case_id,
         "status": "processing",
-        "started_by": ctx.user.id,
+        "started_by": ctx.user.imperal_id,
     })
     return "Report generation started. I will notify you when it is ready."
 ```
@@ -654,7 +654,7 @@ async def block_indicator(ctx: Context, indicator: str, reason: str) -> str:
     await ctx.store.create("blocklist", {
         "indicator": indicator,
         "reason": reason,
-        "blocked_by": ctx.user.id,
+        "blocked_by": ctx.user.imperal_id,
     })
 
     # v1.6.0: skeleton is LLM-only read-only. Define a separate

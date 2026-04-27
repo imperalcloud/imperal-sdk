@@ -29,7 +29,7 @@ from imperal_sdk.auth import ImperalAuth
 auth = ImperalAuth()  # defaults to https://auth.imperal.io
 user = auth.verify(token)
 
-print(user.id, user.email, user.role, user.scopes)
+print(user.imperal_id, user.email, user.role, user.scopes)
 ```
 
 That's it. `verify()` fetches the public key from the JWKS endpoint, validates the RS256 signature, checks expiration, and returns a `User` object. Keys are cached for 1 hour.
@@ -100,7 +100,7 @@ app = FastAPI()
 # Any authenticated user
 @app.get("/profile")
 async def profile(user=Depends(require_auth())):
-    return {"id": user.id, "email": user.email, "role": user.role}
+    return {"id": user.imperal_id, "email": user.email, "role": user.role}
 
 # Requires specific scope
 @app.get("/admin/users")
@@ -128,7 +128,7 @@ auth = ImperalAuth(gateway_url="http://localhost:8085")
 
 @app.get("/protected")
 async def protected(user=Depends(require_auth(auth=auth))):
-    return {"user": user.id}
+    return {"user": user.imperal_id}
 ```
 
 ### Direct Token Verification (No FastAPI)
@@ -140,7 +140,7 @@ auth = ImperalAuth()
 
 try:
     user = auth.verify(token)
-    print(f"Authenticated: {user.id} ({user.role})")
+    print(f"Authenticated: {user.imperal_id} ({user.role})")
     print(f"Scopes: {user.scopes}")
 except AuthError as e:
     print(f"Authentication failed: {e}")

@@ -432,7 +432,7 @@ workflow — no Registry `skeleton_sections` row required. Pairs with the
 ```python
 @ext.skeleton("monitors", alert=True, ttl=60)
 async def refresh_monitors(ctx) -> dict:
-    items = await ctx.store.query("wt_monitors", where={"owner_id": ctx.user.id})
+    items = await ctx.store.query("wt_monitors", where={"owner_id": ctx.user.imperal_id})
     return {"response": {
         "total":    len(items.data),
         "critical": sum(1 for m in items.data if m.data.get("status") == "critical"),

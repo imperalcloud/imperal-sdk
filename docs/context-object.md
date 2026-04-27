@@ -224,7 +224,7 @@ async def create_ticket(ctx: Context, subject: str, body: str) -> str:
         "subject": subject,
         "body": body,
         "status": "open",
-        "created_by": ctx.user.id,
+        "created_by": ctx.user.imperal_id,
     })
     return f"Ticket created: {doc.id}"
 
@@ -391,7 +391,7 @@ async def summarize(ctx: Context, doc_id: str) -> str:
 
 @ext.tool("ask", description="Ask a question about a case")
 async def ask(ctx: Context, question: str) -> str:
-    case = await ctx.store.get("cases", ctx.user.id)
+    case = await ctx.store.get("cases", ctx.user.imperal_id)
     messages = [
         {"role": "system", "content": f"You are analyzing case data:\n{case['summary']}"},
         {"role": "user", "content": question},

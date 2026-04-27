@@ -90,7 +90,7 @@ Every entity in Imperal Cloud has a prefixed identifier:
 
 ### Users
 
-Users are identified by `ctx.user.id` (format: `imp_u_xxxxx`). This ID is:
+Users are identified by `ctx.user.imperal_id` (format: `imp_u_xxxxx`). This ID is:
 
 - **Stable** across sessions, devices, and channels.
 - **Verified** by the Auth Gateway before reaching your extension.
