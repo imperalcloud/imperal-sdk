@@ -2,6 +2,102 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.0.0 — 2026-04-27
+
+**Breaking — Identity Contract Unification (W1)**
+
+Single source of truth for `User` / `Tenant` shapes now lives in
+`imperal_sdk.types.identity`. The legacy `imperal_sdk.auth.user.User`
+dataclass has been **deleted**. AuthGW's `UserResponse` / `TenantResponse`
+now subclass the canonical SDK types so wire shape is identical
+everywhere. Federal-strict `extra="forbid"` blocks accidental field
+leakage (e.g. `password_hash`).
+
+### Migrating
+
+1. **Replace legacy import:**
+   ```python
+   # Before (v2.x):
+   from imperal_sdk.auth.user import User
+   # After (v3.0.0):
+   from imperal_sdk.types.identity import User          # full — admin/API surface
+   from imperal_sdk.types.identity import UserContext   # lean — what `ctx.user` is
+   ```
+2. **Rename `.id` → `.imperal_id` on user objects:**
+   ```python
+   # Before:
+   uid = ctx.user.id
+   # After:
+   uid = ctx.user.imperal_id
+   ```
+3. **Pin SDK in your extension's `requirements.txt`:**
+   ```
+   imperal-sdk>=3.0.0,<4.0.0
+   ```
+
+### What's new
+
+- **`imperal_sdk.types.identity`** module — four canonical Pydantic v2
+  models, all `frozen=True` + `extra="forbid"`:
+  - `User` — full (admin/API). Fields: `imperal_id`, `email`, `tenant_id`,
+    `agency_id`, `org_id`, `role`, `auth_method`, `scopes`, `attributes`,
+    `is_active`, `created_at`, `last_login`, `cases_user_id`.
+  - `UserContext` — lean (runtime, what `ctx.user` is). Strict subset of
+    `User` minus `auth_method` / `created_at` / `last_login` /
+    `cases_user_id`.
+  - `Tenant` — full. Fields: `id`, `tenant_id`, `name`, `db_backend`,
+    `isolation`, `allowed_auth_methods`, `max_connections`, `features`,
+    `is_active`, `created_at`, `updated_at`, `parent_tenant_id`,
+    `can_resell`, `custom_pricing`, `ui_config`.
+  - `TenantContext` — lean (runtime, what `ctx.tenant` is). Subset:
+    `tenant_id`, `name`, `is_active`, `features`, `isolation`.
+- **`has_scope(scope)` / `has_role(role)` helpers** preserved on both
+  `User` and `UserContext`. `has_scope` uses dot-notation —
+  `user.has_scope("cases.read")` returns `True` if user has `"cases.*"`.
+- **Import-time invariant** — `set(UserContext.fields) ⊆ set(User.fields)`
+  (and same for Tenant). Module raises `RuntimeError` on import if
+  someone adds a lean-only field. Federal: drift caught at deploy time.
+- **Drift validator** — `python -m imperal_sdk.tools.validate_identity_contract
+  --authgw-path=<auth-gw app dir>` parses auth-gw SQLAlchemy `Mapped[...]`
+  columns and asserts they match the SDK Pydantic fields (excluding
+  documented allowlist: `User.id`, `User.password_hash`,
+  `Tenant.db_config`). Used by the auth-gw pre-commit hook + GitHub
+  Actions CI gate + hourly SigNoz sweeper.
+
+### Removed
+
+- `imperal_sdk.auth.user.User` dataclass — superseded by
+  `imperal_sdk.types.identity.User`. The `auth/user.py` file no longer
+  exists in the package; `from imperal_sdk.auth.user import User`
+  raises `ModuleNotFoundError` on v3.0.0.
+- `User.id` attribute — renamed to `User.imperal_id` to match the
+  canonical wire field name.
+
+### Federal posture
+
+`extra="forbid"` on all four models means any unexpected field on a
+response (e.g. `password_hash` accidentally serialized) fails Pydantic
+validation BEFORE leaving the auth-gw process. This is the desired
+deny-over-leak posture for CJIS/FedRAMP-high tenants.
+
+### Drift CI gate
+
+Two enforcement layers were added:
+1. **Pre-commit hook** in `imperal-auth-gateway` (`.pre-commit-config.yaml`)
+   — runs the validator on every commit touching `app/models/*.py`.
+2. **GitHub Actions workflow** in `imperal-sdk` (`.github/workflows/identity-contract.yml`)
+   — runs on every push/PR; blocks merge on drift.
+
+### Runtime sweeper
+
+`signoz:/opt/imperal-monitoring/tools/sweep_identity_contract.py`
+runs hourly via `sweep-identity-contract.timer`, emits
+`imperal_identity_contract_drift_count` gauge to journald → SigNoz.
+Alert fires when drift > 0 sustained ≥ 1h. See runbook in
+`imperal-platform-design/superpowers/runbooks/identity-contract-drift.md`.
+
+---
+
 ## 2.0.1 — 2026-04-25
 
 ### Strategy note

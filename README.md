@@ -29,17 +29,35 @@ Think **Shopify for AI agents**. You build it. Users install it. The platform ha
 pip install imperal-sdk
 ```
 
-### What's New in v1.6.0 (breaking)
+### What's New in v3.0.0 (breaking)
 
-- **`ctx.cache`** — Pydantic-typed runtime cache with per-extension namespace, TTL 5–300s, 64 KB value cap. Register value shapes via `@ext.cache_model("name")`. Use this for panel-side runtime data (inbox pages, API responses) that used to live in skeleton.
-- **`@ext.skeleton(section, ttl=..., alert=True)`** — Canonical decorator for skeleton-refresh tools (replaces the `@ext.tool("skeleton_refresh_*")` naming convention). Skeleton is LLM-only — only tools decorated with `@ext.skeleton` can access `ctx.skeleton.get(section)`.
-- **`SkeletonProtocol` is read-only** — `ctx.skeleton.update(...)` is gone. Skeleton tools RETURN new state; the kernel persists via a privileged activity.
-- **`ctx.skeleton_data` removed** — use explicit `await ctx.skeleton.get(section)` inside a `@ext.skeleton` tool when you need the previous snapshot.
-- **`SkeletonAccessForbidden`** — raised when `ctx.skeleton` is accessed from a non-skeleton tool type (panel / chat function / regular tool).
-- **HMAC call-token auth** — kernel ↔ Auth GW calls for `/v1/internal/skeleton` and `/v1/internal/extcache` are signed with `IMPERAL_CALL_TOKEN_HMAC_SECRET`; Auth GW verifies with Redis `SETNX` jti replay protection.
-- **7 new validator rules** — `SKEL-GUARD-1/2/3`, `CACHE-MODEL-1`, `CACHE-TTL-1`, `MANIFEST-SKELETON-1`, `SDK-VERSION-1`.
+**Identity Contract Unification (W1)** — single source of truth for `User`
+/ `Tenant` shapes lives in `imperal_sdk.types.identity`.
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full list and [`docs/skeleton.md`](docs/skeleton.md) + [`docs/context-object.md`](docs/context-object.md) for migration guidance.
+- **Legacy `imperal_sdk.auth.user.User` is gone.** Replace
+  `from imperal_sdk.auth.user import User` with
+  `from imperal_sdk.types.identity import User` (full / API-facing) or
+  `UserContext` (lean / runtime — what `ctx.user` is).
+- **`ctx.user.id` → `ctx.user.imperal_id`.** The attribute was renamed
+  to match the canonical wire field name. Non-cosmetic — the SDK has
+  no `.id` alias on `UserContext`, so old code raises `AttributeError`.
+- **All identity types are `frozen=True` + `extra="forbid"`** — federal-
+  strict deny-over-leak posture. Auth-gw `UserResponse` / `TenantResponse`
+  now subclass the SDK types so wire shape is identical end-to-end.
+- **`has_scope` / `has_role` helpers** preserved on `User` and
+  `UserContext`. Dot-notation: `user.has_scope("cases.read")` returns
+  `True` for `"cases.*"`.
+- **Drift validator** — `python -m imperal_sdk.tools.validate_identity_contract
+  --authgw-path=<dir>` enforced by GitHub Actions CI gate, auth-gw
+  pre-commit hook, and an hourly SigNoz sweeper.
+
+```bash
+pip install 'imperal-sdk>=3.0.0,<4.0.0'
+```
+
+Older v1.6.0+ skeleton/cache/HMAC features remain — see
+[`CHANGELOG.md`](CHANGELOG.md) for the full v3.0.0 migration guide and
+v2.0.1 baseline.
 
 ---
 
