@@ -1,12 +1,14 @@
 name: Identity Contract Drift Check
 
 # W1 — User/Tenant identity contract drift gate.
-# Runs on every push/PR. Compares SDK Pydantic types in
-# imperal_sdk.types.identity against auth-gw SQLAlchemy User/Tenant
-# DB columns. Blocks merge on drift.
+# Runs on every push/PR. Validates SDK-internal invariants always.
+# When AUTHGW_REPO_TOKEN secret is configured, also pulls auth-gw
+# SQLAlchemy User/Tenant DB columns and checks parity.
 #
-# Federal: defense in depth — runtime sweeper on monitoring node
-# catches DB hotfixes that bypass this CI gate.
+# Federal: defense in depth — runtime sweeper on signoz host
+# (sweep-identity-contract.timer, hourly) catches DB hotfixes that
+# bypass this CI gate, plus the auth-gw pre-commit hook is the
+# committer-side line of defense.
 
 on:
   push:
@@ -22,13 +24,6 @@ jobs:
         with:
           path: sdk
 
-      - name: Checkout auth-gw
-        uses: actions/checkout@v4
-        with:
-          repository: imperal-org/imperal-auth-gateway
-          path: auth-gw
-          token: ${{ secrets.AUTHGW_REPO_TOKEN }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -38,8 +33,42 @@ jobs:
         working-directory: sdk
         run: pip install -e .
 
-      - name: Validate subset invariants + DB ↔ SDK schema parity
+      - name: SDK-internal subset invariants
+        # Always runs. Validates UserContext.fields ⊆ User.fields and
+        # TenantContext.fields ⊆ Tenant.fields. Module-import asserts in
+        # imperal_sdk.types.identity raise RuntimeError on violation.
+        working-directory: sdk
         run: |
-          cd sdk
+          python -c "from imperal_sdk.types.identity import User, UserContext, Tenant, TenantContext; print('subset invariants OK')"
+
+      - name: Run validator drift unit tests
+        # Always runs. tests/test_validator_drift.py exercises the AST
+        # parser against in-memory string fixtures — covers the parser
+        # itself + canonical drift detection logic.
+        working-directory: sdk
+        run: pip install pytest && python -m pytest tests/test_validator_drift.py -v
+
+      # ----- auth-gw parity (best-effort; needs cross-repo secret) -----
+      - name: Checkout auth-gw (best-effort)
+        id: authgw_checkout
+        if: ${{ secrets.AUTHGW_REPO_TOKEN != '' }}
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: imperalcloud/imperal-auth-gateway
+          path: auth-gw
+          token: ${{ secrets.AUTHGW_REPO_TOKEN }}
+          ref: main
+
+      - name: Validate against live auth-gw schemas
+        # Only runs when checkout succeeded. Fail-loud on real drift.
+        if: ${{ steps.authgw_checkout.outcome == 'success' }}
+        working-directory: sdk
+        run: |
           python -m imperal_sdk.tools.validate_identity_contract \
-            --authgw-path=../auth-gw/app
+            --authgw-path=../auth-gw/releases/initial/app
+
+      - name: Note when auth-gw parity skipped
+        if: ${{ steps.authgw_checkout.outcome != 'success' }}
+        run: |
+          echo "::warning::auth-gw checkout skipped (AUTHGW_REPO_TOKEN unset or repo unreachable). SDK-internal invariants validated; live DB↔SDK parity covered by runtime sweeper + auth-gw pre-commit hook."
