@@ -95,13 +95,22 @@ _BYOLLM_CACHE_TTL = 60
 
 @dataclass
 class LLMConfig:
-    """Resolved LLM configuration for a single call."""
+    """Resolved LLM configuration for a single call.
+
+    Sprint 1.2 (2026-04-28): aligned field shape with
+    imperal_kernel.llm.provider.LLMConfig so kernel-built configs
+    deserialize cleanly into SDK code via ctx._llm_configs injection.
+    api_key is field(repr=False) — NEVER in default __repr__.
+    """
     provider: str
     model: str
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)
     base_url: str = ""
     is_byollm: bool = False
     byollm_fallback: str = "platform"  # "platform" or "error"
+    thinking_mode: str = "auto"  # "auto", "off", "on"
+    byollm_tool_choice: str = ""  # "", "auto", "required", "none"
+    failover_config: "LLMConfig | None" = None  # Sprint 1.2: pre-resolved pair
 
     @property
     def client_key(self) -> str:
