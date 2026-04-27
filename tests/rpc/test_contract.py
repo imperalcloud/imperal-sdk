@@ -176,3 +176,17 @@ def test_rpc_reply_success_status_forbids_error_field():
     with pytest.raises(ValidationError) as exc:
         RpcReply(**bad)
     assert "status=SUCCESS" in str(exc.value)
+
+
+def test_public_api_surface_complete():
+    """Every symbol the spec lists in §5.1 __init__.py is importable."""
+    import imperal_sdk.rpc as rpc
+    expected = {
+        "ENVELOPE_VERSION", "RpcRequest", "RpcReply", "RpcStatus",
+        "RpcError", "RpcErrorCategory", "DecodeResult",
+        "encode_request", "encode_reply", "decode_request", "decode_reply",
+        "is_legacy_envelope", "build_error_reply", "should_cache_reply",
+    }
+    assert expected.issubset(set(rpc.__all__))
+    for name in expected:
+        assert hasattr(rpc, name), f"{name} missing from public surface"
