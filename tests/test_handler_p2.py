@@ -52,13 +52,20 @@ class _NameSpace(SimpleNamespace):
 
 def _make_ctx(skeleton=None) -> _NameSpace:
     """Minimal Context stand-in good enough for handler internal paths."""
+    from imperal_sdk.runtime.llm_provider import LLMConfig
     u = UserContext(imperal_id="u1", email="u@example.com", tenant_id="default", role="user")
+    # Sprint 1.2: inject ctx._llm_configs to mirror kernel context_factory
+    # behavior. Without this, handler.py falls back to
+    # client._env_default_config_for_purpose() which doesn't exist on
+    # the mock _NameSpace client.
+    _exec_cfg = LLMConfig(provider="anthropic", model="claude-test", api_key="sk-test")
     ctx = _NameSpace(
         user=u,
         history=[],
         config=None,
         skeleton=skeleton,
         _intent_type="read",
+        _llm_configs={"execution": _exec_cfg},
     )
     return ctx
 

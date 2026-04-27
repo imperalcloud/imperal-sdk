@@ -122,11 +122,16 @@ async def _build_factual_response(chat_ext: ChatExtension, ctx, client) -> str:
         _factual_system = augment_system_with_narration_rule(
             _factual_system, chat_ext._functions_called
         )
+        # Sprint 1.2: read pre-resolved cfg from ctx._llm_configs
+        _llm_configs = getattr(ctx, "_llm_configs", None)
+        _exec_cfg = (_llm_configs or {}).get("execution") if _llm_configs else None
+        if _exec_cfg is None:
+            _exec_cfg = client._env_default_config_for_purpose("execution")
         final_resp = await client.create_message(
             max_tokens=_response_tokens,
             system=_factual_system,
             messages=[{"role": "user", "content": f"Action results:\n{_factual_summary}"}],
-            purpose="execution", user_id=_uid,
+            cfg=_exec_cfg,
         )
         return next((b.text for b in final_resp.content if hasattr(b, "text")), _factual_summary)
     except Exception:
@@ -346,11 +351,37 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
             _system_for_round = augment_system_with_narration_rule(
                 system, chat_ext._functions_called
             )
+            # Sprint 1.2: read pre-resolved cfg from ctx._llm_configs
+            # (kernel-injected). Fallback to ENV-only when ctx absent
+            # (standalone SDK use case).
+            _llm_configs = getattr(ctx, "_llm_configs", None)
+            _exec_cfg = (_llm_configs or {}).get("execution") if _llm_configs else None
+            if _exec_cfg is None:
+                _exec_cfg = client._env_default_config_for_purpose("execution")
             resp = await client.create_message(
                 max_tokens=2048, system=_system_for_round, messages=messages,
                 tools=_tools_for_llm,
-                purpose="execution", user_id=_uid, **_api_kwargs,
+                cfg=_exec_cfg,
+                **_api_kwargs,
             )
+
+            # Telemetry callback (no-op for standalone SDK)
+            _usage_cb = getattr(ctx, "_llm_usage_callback", None)
+            if _usage_cb and hasattr(resp, "usage") and resp.usage is not None:
+                try:
+                    from imperal_sdk.runtime.llm_provider import LLMUsage
+                    _usage = LLMUsage(
+                        provider=_exec_cfg.provider,
+                        model=_exec_cfg.model,
+                        input_tokens=getattr(resp.usage, "input_tokens", 0) or 0,
+                        output_tokens=getattr(resp.usage, "output_tokens", 0) or 0,
+                        is_byollm=_exec_cfg.is_byollm,
+                        purpose="execution",
+                        user_id=_uid,
+                    )
+                    await _usage_cb(_usage)
+                except Exception as _e:
+                    log.debug(f"usage callback failed: {_e}")  # NEVER raise
 
             tool_uses = [b for b in resp.content if b.type == "tool_use"]
             if not tool_uses:

@@ -42,3 +42,33 @@ def test_llm_config_api_key_not_in_repr():
     # Provider+model SHOULD appear (used in legitimate logging)
     assert "openai" in repr_text
     assert "gpt-4" in repr_text
+
+
+def test_llm_provider_resolution_methods_stripped():
+    """Sprint 1.2 contract: LLMProvider has NO resolution methods.
+
+    These were removed because resolution moved to kernel side. Their
+    presence on the class indicates incomplete refactor — fail-loud.
+    """
+    forbidden = (
+        "_load_config_store",
+        "_resolve",
+        "_resolve_byollm",
+        "_fetch_byollm_data",
+        "_build_byollm_config",
+        "_resolve_failover",
+        "_invalidation_listener",
+        "_ensure_listener",
+    )
+    for name in forbidden:
+        assert not hasattr(LLMProvider, name), (
+            f"LLMProvider.{name} still present — Sprint 1.2 refactor incomplete"
+        )
+
+
+def test_llm_provider_env_fallback_method_exists():
+    """Sprint 1.2 fallback path for standalone-SDK use cases."""
+    assert hasattr(LLMProvider, "_env_default_config_for_purpose"), (
+        "LLMProvider._env_default_config_for_purpose is required for "
+        "standalone-SDK ENV-only fallback"
+    )

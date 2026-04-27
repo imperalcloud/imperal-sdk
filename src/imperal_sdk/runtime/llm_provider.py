@@ -194,17 +194,6 @@ class LLMProvider:
         # Client pool: client_key -> client instance
         self._client_pool: dict[str, Any] = {}
 
-        # Config Store cache: { "config": {...}, "ts": float }
-        self._config_cache: dict[str, Any] | None = None
-        self._config_cache_ts: float = 0.0
-
-        # BYOLLM cache: user_id -> { "config": LLMConfig|None, "ts": float }
-        self._byollm_cache: dict[str, dict] = {}
-
-        # Background Redis pubsub listener handle
-        self._listener_task: asyncio.Task | None = None
-        self._listener_started: bool = False
-
         # Per-action call log for LLM step tracking
         self._call_log: list[dict] = []
 
@@ -219,6 +208,53 @@ class LLMProvider:
         return list(self._call_log)
 
     # ------------------------------------------------------------------
+    # Standalone-SDK fallback — Sprint 1.2 contract
+    # ------------------------------------------------------------------
+
+    def _env_default_config_for_purpose(self, purpose: str) -> "LLMConfig":
+        """Build an ENV-only LLMConfig for a given purpose. Sprint 1.2.
+
+        Used as standalone-SDK fallback when ``ctx._llm_configs`` is None
+        (extension developer running outside kernel, or kernel resolution
+        failed). Reads:
+          - LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, LLM_API_KEY (global)
+          - LLM_<PURPOSE>_MODEL (per-purpose override; e.g.
+            LLM_EXECUTION_MODEL, LLM_ROUTING_MODEL, LLM_NAVIGATE_MODEL)
+          - ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY
+            (provider-specific keys when LLM_API_KEY is empty)
+        """
+        provider = os.getenv("LLM_PROVIDER", "anthropic")
+        defaults = _PROVIDER_DEFAULTS.get(provider, _PROVIDER_DEFAULTS["anthropic"])
+        # Per-purpose model override
+        purpose_env_map = {
+            "routing": os.getenv("LLM_ROUTING_MODEL", ""),
+            "execution": os.getenv("LLM_EXECUTION_MODEL", ""),
+            "navigate": os.getenv("LLM_NAVIGATE_MODEL", ""),
+        }
+        model = (
+            purpose_env_map.get(purpose, "")
+            or os.getenv("LLM_MODEL", "")
+            or defaults["model"]
+        )
+        # API key — explicit LLM_API_KEY first, then provider-specific
+        api_key = os.getenv("LLM_API_KEY", "")
+        if not api_key:
+            api_key = {
+                "anthropic": os.getenv("ANTHROPIC_API_KEY", ""),
+                "openai": os.getenv("OPENAI_API_KEY", ""),
+                "google": os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", ""),
+                "openai_compatible": os.getenv("LLM_API_KEY", ""),
+            }.get(provider, "")
+        return LLMConfig(
+            provider=provider,
+            model=model,
+            api_key=api_key,
+            base_url=os.getenv("LLM_BASE_URL", ""),
+            is_byollm=False,
+            byollm_fallback="platform",
+        )
+
+    # ------------------------------------------------------------------
     # Public API — preserved for all call sites
     # ------------------------------------------------------------------
 
@@ -227,37 +263,42 @@ class LLMProvider:
         messages: list,
         system: str = "",
         max_tokens: int = 1024,
-        model: Optional[str] = None,
-        tools: Optional[list] = None,
-        tool_choice: Optional[dict] = None,
-        temperature: float = 0.0,
-        # New optional context params (ignored by old callers)
+        *,
+        cfg: "LLMConfig | None" = None,
         purpose: str = "",
         extension_id: str = "",
         user_id: str = "",
+        tools: Optional[list] = None,
+        tool_choice: Optional[dict] = None,
+        temperature: float = 0.0,
     ) -> Any:
-        """Create a chat completion.
+        """Create a chat completion. Sprint 1.2 contract.
 
-        Returns native Anthropic response object (or AnthropicCompat for non-Anthropic).
-        Explicit `model` param overrides resolved model (backwards compat).
+        Preferred: pass pre-resolved ``cfg=LLMConfig``. Kernel
+        ``context_factory`` injects ``ctx._llm_configs[purpose]`` at
+        ctx-build time; the SDK chat handler reads from there.
+
+        Legacy: pass ``purpose=``+``user_id=`` (no ``cfg=``). Falls back
+        to ENV-only resolution (no Redis, no gateway HTTP) and emits a
+        DEPRECATION warn once per process. Will be removed in SDK 4.0.0.
+
+        Failover: when the primary call fails AND ``cfg.failover_config``
+        is set, retry once with the pre-resolved failover config.
         """
         start_ms = int(time.monotonic() * 1000)
 
-        # Resolve config
-        cfg = await self._resolve(purpose=purpose, extension_id=extension_id, user_id=user_id)
-
-        # Explicit model override (legacy callers pass model= directly)
-        if model:
-            cfg = LLMConfig(
-                provider=cfg.provider,
-                model=model,
-                api_key=cfg.api_key,
-                base_url=cfg.base_url,
-                is_byollm=cfg.is_byollm,
-            )
-
-        # Ensure background invalidation listener is running
-        self._ensure_listener()
+        # Legacy compat shim
+        if cfg is None:
+            if not getattr(self, "_legacy_create_warned", False):
+                log.warning(
+                    "create_message(purpose=, user_id=) is deprecated "
+                    "(Sprint 1.2). Kernel-side ctx-injection is the "
+                    "supported path; SDK chat handler reads cfg from "
+                    "ctx._llm_configs. Legacy callers fall back to "
+                    "ENV-only resolution. Will be removed in SDK 4.0.0."
+                )
+                self._legacy_create_warned = True
+            cfg = self._env_default_config_for_purpose(purpose or "execution")
 
         # Log resolved config for visibility
         _byollm_tag = " [BYOLLM]" if cfg.is_byollm else ""
@@ -273,21 +314,27 @@ class LLMProvider:
         _call_error = None
         resp = None
         try:
-            resp = await self._call(cfg, messages, system, max_tokens, tools, tool_choice, temperature)
-        except Exception as primary_err:
-            log.warning(f"LLMProvider primary call failed ({cfg.provider}/{cfg.model}): {primary_err}, trying failover")
-            failover_cfg = self._resolve_failover(cfg)
-            if failover_cfg is None:
-                _call_error = str(primary_err)[:200]
-                raise
             try:
-                resp = await self._call(failover_cfg, messages, system, max_tokens, tools, tool_choice, temperature)
-                cfg = failover_cfg
-                is_failover = True
-            except Exception as fb_err:
-                log.error(f"LLMProvider failover also failed ({failover_cfg.provider}/{failover_cfg.model}): {fb_err}")
-                _call_error = str(fb_err)[:200]
-                raise fb_err
+                resp = await self._call(cfg, messages, system, max_tokens, tools, tool_choice, temperature)
+            except Exception as primary_err:
+                if cfg.failover_config is None:
+                    _call_error = str(primary_err)[:200]
+                    raise
+                log.warning(
+                    f"primary {cfg.provider}/{cfg.model} failed "
+                    f"({type(primary_err).__name__}); failover to "
+                    f"{cfg.failover_config.provider}/{cfg.failover_config.model}"
+                )
+                try:
+                    resp = await self._call(cfg.failover_config, messages, system, max_tokens, tools, tool_choice, temperature)
+                    cfg = cfg.failover_config
+                    is_failover = True
+                except Exception as fb_err:
+                    log.error(
+                        f"failover {cfg.failover_config.provider}/{cfg.failover_config.model} also failed: {fb_err}"
+                    )
+                    _call_error = str(fb_err)[:200]
+                    raise fb_err
         finally:
             # ALWAYS append to call log — even on failure (for Activity visibility)
             _call_ms = int((_t.time() - _call_start) * 1000)
@@ -303,104 +350,11 @@ class LLMProvider:
                 "error": _call_error,
             })
 
-        latency_ms = int(time.monotonic() * 1000) - start_ms
-
-        # Fire-and-forget usage tracking
-        if user_id:
-            usage = LLMUsage(
-                provider=cfg.provider,
-                model=cfg.model,
-                input_tokens=getattr(getattr(resp, "usage", None), "input_tokens", 0) or 0,
-                output_tokens=getattr(getattr(resp, "usage", None), "output_tokens", 0) or 0,
-                is_byollm=cfg.is_byollm,
-                is_failover=is_failover,
-                purpose=purpose,
-                extension_id=extension_id,
-                user_id=user_id,
-                latency_ms=latency_ms,
-            )
-            asyncio.ensure_future(self._track_usage(usage))
-
         return resp
 
     # ------------------------------------------------------------------
     # Config resolution
     # ------------------------------------------------------------------
-
-    async def _resolve(self, purpose: str = "", extension_id: str = "", user_id: str = "") -> LLMConfig:
-        """Resolve LLM config. Hierarchy: BYOLLM → ext override → purpose override → global default."""
-
-        # 1. User BYOLLM
-        if user_id:
-            byollm = await self._resolve_byollm(user_id, purpose=purpose)
-            if byollm is not None:
-                return byollm
-
-        # Load Config Store (cached)
-        config_store = await self._load_config_store()
-
-        # 2. Extension override
-        if extension_id and config_store:
-            ext_cfg = (config_store.get("extensions", {}).get(extension_id)
-                      or config_store.get("extension_overrides", {}).get(extension_id))
-            if ext_cfg:
-                resolved = self._config_from_store(ext_cfg)
-                if resolved:
-                    return resolved
-                log.info(f"LLMProvider: extension override for '{extension_id}' has no valid key, falling through")
-
-        # 3. Purpose override
-        if purpose and config_store:
-            _purpose_key = "navigate" if purpose == "navigation" else purpose
-            purpose_cfg = config_store.get("purpose", {}).get(purpose) or config_store.get("purpose", {}).get(_purpose_key)
-            # Nested format: {"purpose_overrides": {"execution": {"provider": ..., "model": ...}}}
-            if not purpose_cfg:
-                overrides = config_store.get("purpose_overrides", {})
-                purpose_cfg = overrides.get(purpose) or overrides.get(_purpose_key)
-            # Flat format from Panel: {"execution_model": "...", "execution_provider": "..."}
-            # Handle alias: Hub sends purpose="navigation" but Panel saves "navigate_model"
-            _purpose_key = "navigate" if purpose == "navigation" else purpose
-            if not purpose_cfg:
-                _flat_model = config_store.get(f"{_purpose_key}_model")
-                if _flat_model:
-                    _flat_provider = config_store.get(f"{_purpose_key}_provider", config_store.get("provider", ""))
-                    purpose_cfg = {"provider": _flat_provider, "model": _flat_model}
-            if purpose_cfg:
-                resolved = self._config_from_store(purpose_cfg)
-                if resolved:
-                    return resolved
-                log.info(f"LLMProvider: purpose override '{purpose}' has no valid key, falling through")
-
-        # 3b. ENV purpose override (LLM_ROUTING_MODEL etc.)
-        if purpose:
-            env_purpose_model = {
-                "routing": _ENV_ROUTING_MODEL,
-                "execution": _ENV_EXEC_MODEL,
-                "navigate": _ENV_NAV_MODEL,
-            }.get(purpose, "")
-            if env_purpose_model:
-                return LLMConfig(
-                    provider=_ENV_PROVIDER,
-                    model=env_purpose_model,
-                    api_key=_ENV_API_KEY,
-                    base_url=_ENV_BASE_URL,
-                )
-
-        # 4. Global default from Config Store
-        if config_store:
-            # Nested format: {"default": {"provider": "openai", "model": "..."}}
-            default_cfg = config_store.get("default")
-            if not default_cfg and config_store.get("provider"):
-                # Flat format from Panel: {"provider": "openai", "model": "...", "extension_overrides": {}}
-                default_cfg = config_store
-            if default_cfg:
-                resolved = self._config_from_store(default_cfg)
-                if resolved:
-                    return resolved
-                log.info("LLMProvider: config store default has no valid key, falling through to ENV")
-
-        # 5. ENV fallback
-        return self._env_default_config()
 
     def _env_default_config(self) -> LLMConfig:
         """Build LLMConfig from ENV vars."""
@@ -460,228 +414,6 @@ class LLMProvider:
         if provider == "google" and not base_url:
             base_url = _GOOGLE_BASE_URL
         return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base_url)
-
-    async def _resolve_byollm(self, user_id: str, purpose: str = "") -> LLMConfig | None:
-        """Lookup user's BYOLLM config from ext_store. Cached 60s.
-
-        Supports per-purpose model overrides from user's Settings > AI Provider.
-        """
-        now = time.monotonic()
-
-        # Cache stores the raw data dict (not LLMConfig) so we can resolve per-purpose
-        cached = self._byollm_cache.get(user_id)
-        if cached and (now - cached["ts"]) < _BYOLLM_CACHE_TTL:
-            raw_data = cached.get("raw_data")
-        else:
-            raw_data = None
-            try:
-                raw_data = await self._fetch_byollm_data(user_id)
-            except Exception as e:
-                log.debug(f"LLMProvider: BYOLLM fetch failed for {user_id}: {e}")
-            self._byollm_cache[user_id] = {"raw_data": raw_data, "ts": now}
-
-        if raw_data is None:
-            return None
-
-        return self._build_byollm_config(raw_data, purpose)
-
-    async def _fetch_byollm_data(self, user_id: str) -> dict | None:
-        """Fetch raw BYOLLM config dict from Auth Gateway ext_store.
-
-        Returns the raw data dict (not LLMConfig) so per-purpose resolution
-        can happen at resolve time, not fetch time.
-        """
-        if not _GATEWAY_URL or not _SERVICE_TOKEN:
-            return None
-
-        import httpx
-        url = f"{_GATEWAY_URL.rstrip('/')}/v1/internal/store/user_llm_config/query"
-        payload = {
-            "user_id": user_id,
-            "extension_id": "__llm__",
-            "tenant_id": "default",
-            "limit": 1,
-        }
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.post(
-                    url, json=payload,
-                    headers={"X-Service-Token": _SERVICE_TOKEN},
-                )
-                if resp.status_code != 200:
-                    log.debug(f"LLMProvider: BYOLLM query failed status={resp.status_code} for {user_id}")
-                    return None
-                results = resp.json()
-        except Exception as fetch_err:
-            log.info(f"LLMProvider: BYOLLM fetch error for {user_id}: {fetch_err}")
-            return None
-
-        if not results:
-            log.debug(f"LLMProvider: BYOLLM not configured for {user_id}")
-            return None
-        doc = results[0] if isinstance(results, list) else results
-        data = doc.get("data", {})
-
-        if not data.get("enabled"):
-            return None
-
-        provider = data.get("provider", "")
-        if not provider:
-            return None
-
-        log.info(f"LLMProvider: BYOLLM found for {user_id}: enabled=True provider={provider} fallback={data.get('fallback')}")
-        return data
-
-    def _build_byollm_config(self, data: dict, purpose: str = "") -> LLMConfig:
-        """Build LLMConfig from raw BYOLLM data, respecting per-purpose model overrides."""
-        provider = data.get("provider", "")
-        provider_key = "openai_compatible" if provider == "custom" else provider
-        model = data.get("model", "") or _PROVIDER_DEFAULTS.get(provider_key, {}).get("model", "")
-        api_key = _decrypt(data.get("api_key", ""))
-        base_url = data.get("base_url", "")
-        fallback = data.get("fallback", "platform")
-
-        # Per-purpose model override (user configured in Settings > AI Provider > Per Purpose)
-        if purpose and data.get("purpose"):
-            purpose_cfg = data["purpose"].get(purpose)
-            if purpose_cfg and purpose_cfg.get("model"):
-                model = purpose_cfg["model"]
-
-        if provider_key == "google" and not base_url:
-            base_url = _GOOGLE_BASE_URL
-
-        return LLMConfig(
-            provider=provider_key,
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            is_byollm=True,
-            byollm_fallback=fallback,
-        )
-
-    async def _load_config_store(self) -> dict | None:
-        """Load LLM config via auth-gw HTTP. Cached 60s in-memory.
-
-        Sprint 1.1 hotfix (2026-04-28): the previous Redis path imported
-        `shared_redis`, a legacy module renamed during a kernel refactor.
-        That import silently raised `ModuleNotFoundError`, the broad
-        `except Exception` swallowed it at DEBUG level, and every
-        `purpose=execution` call fell to `_PROVIDER_DEFAULTS["anthropic"]`.
-
-        New path uses the existing internal endpoint at
-        ``GET /v1/internal/config/llm`` (auth-gw `unified_config/router.py`).
-        Symmetric with `_fetch_byollm_data` — same gateway, same service
-        token, same httpx pattern. Federal: no Redis dependency in SDK.
-        """
-        # Read env at call time (not module-import time) so monkeypatched
-        # tests work, and so worker re-exec picks up env edits without
-        # process restart in dev.
-        gateway_url = os.getenv("IMPERAL_GATEWAY_URL", "")
-        service_token = os.getenv("IMPERAL_SERVICE_TOKEN", "")
-
-        now = time.monotonic()
-        if self._config_cache is not None and (now - self._config_cache_ts) < _CONFIG_CACHE_TTL:
-            return self._config_cache
-
-        if not gateway_url or not service_token:
-            if not getattr(self, "_config_store_warned_envmissing", False):
-                log.warning(
-                    "LLMProvider: IMPERAL_GATEWAY_URL or IMPERAL_SERVICE_TOKEN missing — "
-                    "Admin > LLM Config unreachable, falling to ENV defaults"
-                )
-                self._config_store_warned_envmissing = True
-            return None
-
-        import httpx
-        url = f"{gateway_url.rstrip('/')}/v1/internal/config/llm"
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(
-                    url,
-                    headers={"X-Service-Token": service_token},
-                )
-            if resp.status_code != 200:
-                if not getattr(self, "_config_store_warned_status", False):
-                    log.warning(
-                        f"LLMProvider: config store fetch returned {resp.status_code} "
-                        f"from {url} — falling to ENV defaults"
-                    )
-                    self._config_store_warned_status = True
-                return None
-            data = resp.json()
-            if not isinstance(data, dict):
-                if not getattr(self, "_config_store_warned_shape", False):
-                    log.warning(
-                        f"LLMProvider: config store returned non-dict shape "
-                        f"{type(data).__name__} — falling to ENV defaults"
-                    )
-                    self._config_store_warned_shape = True
-                return None
-            self._config_cache = data
-            self._config_cache_ts = now
-            return data
-        except Exception as e:
-            if not getattr(self, "_config_store_warned_fetch", False):
-                log.warning(
-                    f"LLMProvider: config store fetch error "
-                    f"{type(e).__name__}: {e} — falling to ENV defaults"
-                )
-                self._config_store_warned_fetch = True
-            return None
-
-    def _resolve_failover(self, primary: LLMConfig) -> LLMConfig | None:
-        """Return failover config. Respects fallback_enabled from Config Store.
-
-        BYOLLM fails → platform default (always, regardless of flag).
-        System fails → check fallback_enabled flag, then try ENV fallback.
-        """
-        if primary.is_byollm:
-            if primary.byollm_fallback == "error":
-                log.info("LLMProvider: BYOLLM failed, user chose 'error' — no failover")
-                return None
-            # User chose 'platform' fallback (default)
-            return self._env_default_config()
-
-        # Check fallback_enabled from Config Store (Panel toggle)
-        _fb_enabled = True  # default: enabled
-        if self._config_cache and isinstance(self._config_cache, dict):
-            _fb_flag = self._config_cache.get("fallback_enabled") if self._config_cache.get("fallback_enabled") is not None else self._config_cache.get("failover_enabled")
-            if _fb_flag is not None:
-                _fb_enabled = bool(_fb_flag)
-
-        if not _fb_enabled:
-            log.info("LLMProvider: failover disabled by config (fallback_enabled=false)")
-            return None
-
-        # System config failed — try ENV fallback provider
-        if _ENV_FB_PROVIDER:
-            fb_base = _ENV_FB_BASE_URL
-            if _ENV_FB_PROVIDER == "google" and not fb_base:
-                fb_base = _GOOGLE_BASE_URL
-            fb_defaults = _PROVIDER_DEFAULTS.get(_ENV_FB_PROVIDER, _PROVIDER_DEFAULTS["anthropic"])
-            return LLMConfig(
-                provider=_ENV_FB_PROVIDER,
-                model=_ENV_FB_MODEL or fb_defaults["model"],
-                api_key=_ENV_FB_API_KEY or _ENV_API_KEY,
-                base_url=fb_base,
-            )
-
-        # No explicit fallback provider — try Anthropic as implicit fallback
-        # (only if primary was NOT anthropic and Anthropic key exists)
-        _anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
-        if primary.provider != "anthropic" and _anthropic_key:
-            log.info(f"LLMProvider: implicit failover from {primary.provider} to anthropic")
-            return LLMConfig(
-                provider="anthropic",
-                model=_PROVIDER_DEFAULTS["anthropic"]["model"],
-                api_key=_anthropic_key,
-            )
-
-        return None
-
-    # ------------------------------------------------------------------
-    # Provider dispatch
-    # ------------------------------------------------------------------
 
     async def _call(self, cfg: LLMConfig, messages, system, max_tokens, tools, tool_choice, temperature) -> Any:
         """Dispatch to the correct provider backend."""
@@ -837,35 +569,6 @@ class LLMProvider:
     # ------------------------------------------------------------------
     # Background invalidation listener
     # ------------------------------------------------------------------
-
-    def _ensure_listener(self) -> None:
-        """Start background Redis pubsub listener if not already running."""
-        if self._listener_started:
-            return
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                self._listener_task = loop.create_task(self._invalidation_listener())
-                self._listener_started = True
-        except RuntimeError:
-            pass  # No event loop yet
-
-    async def _invalidation_listener(self) -> None:
-        """Subscribe to imperal:config:invalidate:* and flush BYOLLM cache entries.
-
-        Sprint 1.1 (2026-04-28): TEMPORARILY no-op. The previous body imported
-        `shared_redis` (legacy module renamed during kernel refactor) which
-        silently ImportError'd. Per spec §13, pubsub-based cache invalidation
-        is out-of-scope for Sprint 1.1; 60s in-memory TTL polling is the
-        documented degraded mode. Sprint 1.2 ctx-injection refactor will
-        eliminate the SDK-side cache + listener entirely (kernel becomes the
-        sole resolver). No-op'd to stop ImportError noise; no behavior change.
-        """
-        # Intentional no-op. _ensure_listener still spawns this task; it
-        # completes immediately. Cache invalidation now relies on the 60s
-        # TTL in _load_config_store and _resolve_byollm.
-        return
-
 
 # ---------------------------------------------------------------------------
 # Singleton
