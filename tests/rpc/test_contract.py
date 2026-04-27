@@ -148,3 +148,31 @@ def test_discriminator_evolution_path_works():
     v2 = {"v": 2, "payload": {"x": 1}}
     parsed_v2 = Adapter.validate_python(v2)
     assert isinstance(parsed_v2, _RpcReqV2)
+
+
+def test_rpc_request_model_copy_does_not_mutate_original():
+    """frozen=True provides value semantics: model_copy(update=...) returns a new
+    instance and leaves the original unchanged. Without this guarantee, callers
+    that hold a request reference could be silently affected by downstream copies."""
+    req = RpcRequest(**_valid_request_kwargs())
+    original_corr_id = req.corr_id
+    new_corr_id = "ffffffffffffffff"  # 16 chars
+    copied = req.model_copy(update={"corr_id": new_corr_id})
+    assert copied.corr_id == new_corr_id
+    assert req.corr_id == original_corr_id  # original untouched
+    assert copied is not req                  # different instance
+
+
+def test_rpc_reply_error_status_requires_error_field():
+    bad = _valid_reply_kwargs() | {"status": RpcStatus.ERROR, "result": None, "error": None}
+    with pytest.raises(ValidationError) as exc:
+        RpcReply(**bad)
+    assert "status=ERROR" in str(exc.value)
+
+
+def test_rpc_reply_success_status_forbids_error_field():
+    err = RpcError(category=RpcErrorCategory.APPLICATION, message="x", retryable=False)
+    bad = _valid_reply_kwargs() | {"status": RpcStatus.SUCCESS, "error": err}
+    with pytest.raises(ValidationError) as exc:
+        RpcReply(**bad)
+    assert "status=SUCCESS" in str(exc.value)

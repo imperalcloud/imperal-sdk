@@ -11,7 +11,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 ENVELOPE_VERSION: Literal[1] = 1
@@ -88,3 +88,11 @@ class RpcReply(BaseModel):
     started_at_ns: int
     finished_at_ns: int
     error: RpcError | None = None
+
+    @model_validator(mode="after")
+    def _check_status_error_consistency(self) -> "RpcReply":
+        if self.status == RpcStatus.ERROR and self.error is None:
+            raise ValueError("RpcReply with status=ERROR must include an error")
+        if self.status == RpcStatus.SUCCESS and self.error is not None:
+            raise ValueError("RpcReply with status=SUCCESS must not include an error")
+        return self
