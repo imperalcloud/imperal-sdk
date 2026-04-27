@@ -2,6 +2,25 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.1.0 — 2026-04-27
+
+### Added
+- New `imperal_sdk.rpc` sub-package: typed envelope contract for Fast-RPC
+  between auth-gw and kernel via Redis Streams.
+  - `RpcRequest`, `RpcReply` Pydantic v2 models, frozen, `extra="ignore"`.
+  - `v: Literal[1]` envelope discriminator (discriminated-union ready).
+  - `RpcStatus`, `RpcErrorCategory` enums; typed `RpcError`.
+  - Pure codec: `encode_request/decode_request/encode_reply/decode_reply`
+    with loose-mode missing-`v` shim + `strict_version` kwarg.
+  - `build_error_reply` helper, `should_cache_reply` idempotency policy.
+- See workspace spec `2026-04-27-w2-pydantic-rpc-design.md` for full design.
+
+### Backward compatibility
+- Additive only; no SDK 3.0.x callers affected.
+- Required runtime env on consumers: `IMPERAL_RPC_STRICT_VERSION` (default
+  unset = loose mode = accept missing `v`); flip to `true` after the W2 D1
+  soak window (≥24h with `legacy_envelope_total = 0`).
+
 ## 3.0.0 — 2026-04-27
 
 **Breaking — Identity Contract Unification (W1)**
