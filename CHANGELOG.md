@@ -2,6 +2,34 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.3.0 — 2026-04-28 — UI extensions + deprecation (Sprint 2)
+
+### Deprecated
+
+- `ChatExtension(model=...)` constructor parameter is now deprecated.
+  Default changes from `"claude-haiku-4-5-20251001"` → `None`. When
+  explicitly passed, emits a class-level WARN-once log:
+  > `ChatExtension(tool_name=...): the model= parameter is deprecated
+  > since SDK 3.3.0. LLM model resolution moved to kernel ctx-injection
+  > (see ctx._llm_configs). Will be removed in SDK 4.0.0.`
+- Backward compat preserved until SDK 4.0.0 — out-of-tree extensions
+  passing `model=` continue to work; in-tree extensions cleaned of the
+  parameter as part of this sprint.
+
+### Federal
+
+- `_model_deprecation_warned` flag is class-level (not instance-level)
+  so 11 in-tree extensions don't each warn at boot during transition
+  state. After they migrate, the warn fires only for external
+  out-of-tree extensions until they update.
+- Companion: Admin > LLM Config UI gains `chain_narrative_model` +
+  `judge_model` Select rows (admin extension change shipped in
+  `/opt/extensions` monorepo + 7 inner-git extensions per Developer
+  Portal convention).
+- Documentation: SDK docs `extension-guidelines.md` + `tools.md`
+  ChatExtension examples updated to omit `model=`. External
+  developers reading docs do not propagate the deprecated pattern.
+
 ## 3.2.0 — 2026-04-28 — Architectural cleanup (Sprint 1.2)
 
 ### Changed (BREAKING-internal — public API preserved with shim)
