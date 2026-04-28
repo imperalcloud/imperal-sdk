@@ -39,12 +39,31 @@ class FunctionDef:
 
 class ChatExtension:
     def __init__(self, ext, tool_name: str, description: str, system_prompt: str = "",
-                 model: str = "claude-haiku-4-5-20251001", max_rounds: int = 10):
+                 model: "str | None" = None, max_rounds: int = 10):
         self.ext = ext
         self.tool_name = tool_name
         self.description = description
         self.system_prompt = system_prompt
-        self.model = model
+        # Sprint 2 (2026-04-28): the `model=` parameter is deprecated.
+        # LLM resolution moved to kernel ctx-injection (see ctx._llm_configs)
+        # in Sprint 1.2. Removing the constructor argument entirely is
+        # scheduled for SDK 4.0.0 — until then we keep it for backward
+        # compat but emit a class-level WARN-once when it's explicitly
+        # passed. The flag is on the CLASS (not instance) so 11
+        # extensions don't each warn at boot.
+        if model is not None:
+            if not getattr(ChatExtension, "_model_deprecation_warned", False):
+                log.warning(
+                    f"ChatExtension(tool_name={tool_name!r}, model=...): "
+                    "the `model=` parameter is deprecated since SDK 3.3.0. "
+                    "LLM model resolution moved to kernel ctx-injection (see "
+                    "ctx._llm_configs). Will be removed in SDK 4.0.0. "
+                    "Remove `model=` from extension app.py."
+                )
+                ChatExtension._model_deprecation_warned = True
+            self.model = model
+        else:
+            self.model = ""  # historical default no longer meaningful
         self.max_rounds = max_rounds
         self._functions: dict[str, FunctionDef] = {}
         _self = self
