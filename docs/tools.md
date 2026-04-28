@@ -153,8 +153,11 @@ chat_ext = ChatExtension(
     tool_name="tool_notes_chat",
     description="Notes management — create, list, update, delete notes",
     system_prompt="You manage the user's notes. Call functions for all note operations.",
-    model="claude-haiku-4-5-20251001",
 )
+# SDK 3.3.0+: do not pass `model=` — it's deprecated.
+# LLM resolution happens via kernel ctx-injection
+# (ctx._llm_configs[purpose]). Admin > LLM Config controls
+# the model centrally for all extensions.
 
 @chat_ext.function("list_notes", action_type="read",
     description="List all notes", params={"folder": {"type": "string", "description": "Filter by folder", "default": None}})

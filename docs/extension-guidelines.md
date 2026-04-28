@@ -50,8 +50,13 @@ chat = ChatExtension(
     tool_name="tool_myapp_chat",
     description="Clear description of ALL capabilities for embedding search",
     system_prompt="You are the My App assistant. You handle X, Y, Z.",
-    model="claude-haiku-4-5-20251001",
 )
+# NOTE (SDK 3.3.0+): the `model=` constructor parameter is DEPRECATED
+# and will be removed in SDK 4.0.0. LLM model resolution moved to
+# kernel ctx-injection (Sprint 1.2): ctx._llm_configs[purpose] is
+# pre-resolved by kernel context_factory based on Admin > LLM Config.
+# Out-of-tree extensions still passing `model=` continue to work but
+# emit a class-level WARN-once at boot.
 
 class DoXParams(BaseModel):
     input: str
