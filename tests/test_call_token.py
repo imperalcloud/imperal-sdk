@@ -51,7 +51,10 @@ async def test_verify_accepts_correct_token():
 async def test_verify_rejects_tampered_signature():
     token = mint_call_token("skeleton", "mail", "u-123", 120, SECRET)
     payload, sig = token.split(".")
-    tampered = payload + "." + "X" + sig[1:]
+    # Pick a tamper char that is GUARANTEED to differ from sig[0] —
+    # avoids 1/64 flake where sig[0] happens to equal hardcoded "X".
+    tamper_char = "Y" if sig[0] != "Y" else "Z"
+    tampered = payload + "." + tamper_char + sig[1:]
     r = FakeRedis()
     with pytest.raises(CallTokenError, match="signature"):
         await verify_call_token(
