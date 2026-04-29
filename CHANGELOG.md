@@ -2,6 +2,42 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.4.0 — 2026-04-29 — BREAKING: panel slot validation + `main` removal
+
+### Breaking
+
+- `@ext.panel(slot="main")` and `Panel(slot="main")` now raise `ValueError`
+  at decoration / instantiation time. The `main` value was the SDK default
+  but was never rendered as a middle panel by any host — the runtime
+  middle-content slot has always been `"center"`. Use `slot="center"`.
+- The default value of `slot` on `@ext.panel(...)` and `Panel(...)` is now
+  `"center"` (was `"main"`). Extensions that omitted `slot=` now register
+  in the centre slot instead of the dead `main` slot.
+- Unknown slot values (typos, deprecated names, future placeholders) now
+  raise `ValueError` instead of silently registering. Whitelist:
+  `{center, left, right, overlay, bottom, chat-sidebar}`.
+
+### Added
+
+- `imperal_sdk.types.contributions.ALLOWED_PANEL_SLOTS` — public frozenset
+  constant; single source of truth for the slot whitelist. Imported by
+  the decorator, the dataclass `__post_init__`, and the validator.
+- Validator rule `PANEL-SLOT-1` — AST check that flags
+  `@ext.panel(slot=<unknown literal>)` at CI and Developer Portal upload
+  time, before the extension imports.
+- `docs/extension-ui.md` gains a "Panel slots" section with a 6-row table
+  of valid slots, deprecation note for `main`, and a copy-paste
+  master-detail layout snippet.
+
+### Migration
+
+If your extension declares `@ext.panel(..., slot="main")`, change it to
+`slot="center"`. If you relied on the old default by omitting `slot=`,
+audit whether you wanted the centre panel (most likely yes) or a sidebar
+(in which case add `slot="left"` or `slot="right"` explicitly). All
+in-tree Imperal extensions were already using explicit
+`center`/`left`/`right` and require no migration.
+
 ## 3.3.1 — 2026-04-29 — LLM-FU-1: gpt-5 / o-series max_completion_tokens
 
 ### Fixed
