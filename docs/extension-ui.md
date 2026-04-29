@@ -4,6 +4,58 @@ Every Imperal Cloud extension renders in a standardized **3-column layout** in t
 
 ---
 
+## Panel slots
+
+Extensions declare UI panels with `@ext.panel(panel_id, slot=..., title=...)`.
+The `slot` argument selects which region of the host the panel renders in.
+There are six valid values; three are commonly used.
+
+| Slot | When to use | Reference implementations |
+|------|-------------|---------------------------|
+| `"center"` (default) | Main content area — editor, viewer, master–detail right pane, multi-step form. The slot most extensions reach for. | `notes` (editor), `mail` (email viewer + compose), `sql-db` (editor), `tasks` (board + task), `whiteboard` (canvas) |
+| `"left"` | Left sidebar — navigation, list of items, filter tree. Driven by `default_width` / `min_width` / `max_width`. | `notes` (folder + note list), `mail` (inbox), most other extensions |
+| `"right"` | Right sidebar — detail pane, secondary navigation, settings drawer. | `mail` (accounts), `microsoft-ads` (campaign detail), `sharelock-v2` (case dashboard) |
+| `"overlay"` | Modal-style overlay (uncommon today; reserved for future host work). | — |
+| `"bottom"` | Bottom strip / bar (uncommon today). | — |
+| `"chat-sidebar"` | Chat-context sidebar (uncommon today). | — |
+
+Slot values are validated at decoration time — passing anything outside
+this list raises `ValueError` immediately when the extension module is
+imported. The `"main"` value was the SDK default through 3.3.x but was
+never actually rendered as a middle panel by any host; it was removed
+in 3.4.0. If you used `slot="main"`, change it to `slot="center"`.
+
+### Master–detail pattern
+
+The most common multi-panel layout is master–detail — a list on the left,
+detail/editor in the centre. Two decorators register the two halves; the
+left panel triggers the centre panel via a `ui.Call("__panel__<id>", ...)`
+on a list item:
+
+```python
+@ext.panel("sidebar", slot="left", title="My Items", icon="List")
+async def sidebar(ctx, **kwargs):
+    return ui.List(items=[
+        ui.ListItem(
+            id=item["id"], title=item["name"],
+            on_click=ui.Call("__panel__editor", item_id=item["id"]),
+        )
+        for item in await fetch_items(ctx)
+    ])
+
+
+@ext.panel("editor", slot="center", title="Editor", icon="Edit")
+async def editor(ctx, item_id: str = "", **kwargs):
+    if not item_id:
+        return ui.Empty(message="Select an item")
+    item = await fetch_item(ctx, item_id)
+    return ui.RichEditor(value=item["body"], on_change=ui.Call("save_item", item_id=item_id))
+```
+
+See the `notes` and `mail` extensions for full reference implementations.
+
+---
+
 ## The Layout
 
 ```
