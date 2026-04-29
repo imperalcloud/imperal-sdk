@@ -98,3 +98,36 @@ class TestPanelWrapper:
         await wrapper(None, section="users", extra="val")
         assert received["section"] == "users"
         assert received["kwargs"]["extra"] == "val"
+
+
+# --- LLM-FU follow-up: slot whitelist validation (3.4.0) ---
+
+from imperal_sdk.types.contributions import Panel, ALLOWED_PANEL_SLOTS
+
+
+class TestPanelDataclassSlotValidation:
+    def test_default_slot_is_center(self):
+        p = Panel(id="p1", title="P")
+        assert p.slot == "center"
+
+    def test_known_slots_accepted(self):
+        for s in ("center", "left", "right", "overlay", "bottom", "chat-sidebar"):
+            Panel(id="p", title="P", slot=s)  # must not raise
+
+    def test_main_rejected(self):
+        with pytest.raises(ValueError) as exc:
+            Panel(id="inbox", title="Inbox", slot="main")
+        msg = str(exc.value)
+        assert "main" in msg
+        assert "center" in msg
+        assert "3.4.0" in msg
+
+    def test_garbage_rejected(self):
+        with pytest.raises(ValueError) as exc:
+            Panel(id="p", title="P", slot="middle")
+        assert "middle" in str(exc.value)
+
+    def test_allowed_panel_slots_is_frozenset(self):
+        assert isinstance(ALLOWED_PANEL_SLOTS, frozenset)
+        assert "center" in ALLOWED_PANEL_SLOTS
+        assert "main" not in ALLOWED_PANEL_SLOTS

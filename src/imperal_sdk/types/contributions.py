@@ -8,13 +8,24 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+ALLOWED_PANEL_SLOTS: frozenset[str] = frozenset({
+    "center", "left", "right", "overlay", "bottom", "chat-sidebar",
+})
+
+
 @dataclass
 class Panel:
-    """A movable UI panel contributed by an extension."""
+    """A movable UI panel contributed by an extension.
+
+    `slot` selects which region of the host the panel renders in. The
+    canonical middle-content slot is `"center"` (used by notes, mail,
+    sql-db, tasks, whiteboard). `"main"` was the SDK default through
+    3.3.x but was never rendered by any host — removed in 3.4.0.
+    """
     id: str
     title: str
     icon: str = ""
-    slot: str = "main"  # main, left, right, overlay, chat-sidebar, bottom
+    slot: str = "center"  # center, left, right, overlay, chat-sidebar, bottom
     component: str = ""
     default_position: int = 0
     movable: bool = True
@@ -24,6 +35,14 @@ class Panel:
     permissions: list[str] = field(default_factory=list)
     context_trigger: str | None = None
     badge: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.slot not in ALLOWED_PANEL_SLOTS:
+            raise ValueError(
+                f"Panel(id={self.id!r}, slot={self.slot!r}): unknown slot. "
+                f"Must be one of {sorted(ALLOWED_PANEL_SLOTS)}. "
+                "Note: 'main' was removed in SDK 3.4.0; use 'center' instead."
+            )
 
 
 @dataclass
