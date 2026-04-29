@@ -339,3 +339,63 @@ async def refresh_monitors(ctx):
     assert len(hits) == 1
     assert hits[0].level == "WARN"
     assert "1.5.22" in hits[0].message
+
+
+# ---------------------------------------------------------------------------
+# PANEL-SLOT-1 — @ext.panel(slot=...) must be in ALLOWED_PANEL_SLOTS
+# ---------------------------------------------------------------------------
+
+
+class TestPanelSlot1Rule:
+    """PANEL-SLOT-1 — @ext.panel(slot=...) must be in ALLOWED_PANEL_SLOTS."""
+
+    def _check(self, source: str, tmp_path):
+        f = tmp_path / "panels.py"
+        f.write_text(source)
+        return validate_source_tree(str(tmp_path))
+
+    def test_main_flagged(self, tmp_path):
+        src = (
+            "from app import ext\n"
+            "@ext.panel('inbox', slot='main', title='Inbox')\n"
+            "async def inbox(ctx): pass\n"
+        )
+        issues = self._check(src, tmp_path)
+        rules = [i.rule for i in issues]
+        assert "PANEL-SLOT-1" in rules
+        msg = next(i.message for i in issues if i.rule == "PANEL-SLOT-1")
+        assert "main" in msg
+        assert "center" in msg
+
+    def test_garbage_flagged(self, tmp_path):
+        src = (
+            "from app import ext\n"
+            "@ext.panel('p', slot='middle')\n"
+            "async def p(ctx): pass\n"
+        )
+        issues = self._check(src, tmp_path)
+        assert any(i.rule == "PANEL-SLOT-1" and "middle" in i.message for i in issues)
+
+    def test_center_left_right_pass(self, tmp_path):
+        src = (
+            "from app import ext\n"
+            "@ext.panel('a', slot='center')\n"
+            "async def a(ctx): pass\n"
+            "@ext.panel('b', slot='left')\n"
+            "async def b(ctx): pass\n"
+            "@ext.panel('c', slot='right')\n"
+            "async def c(ctx): pass\n"
+        )
+        issues = self._check(src, tmp_path)
+        assert not any(i.rule == "PANEL-SLOT-1" for i in issues)
+
+    def test_default_slot_omitted_passes(self, tmp_path):
+        # Decorator without slot= falls back to default "center" — validator
+        # has no opinion (it only flags explicit literal strings).
+        src = (
+            "from app import ext\n"
+            "@ext.panel('x', title='X')\n"
+            "async def x(ctx): pass\n"
+        )
+        issues = self._check(src, tmp_path)
+        assert not any(i.rule == "PANEL-SLOT-1" for i in issues)

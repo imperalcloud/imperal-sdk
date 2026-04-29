@@ -38,6 +38,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from imperal_sdk.types.contributions import ALLOWED_PANEL_SLOTS
 from imperal_sdk.validator import ValidationIssue
 
 # TTL bounds mirror imperal_sdk/cache/client.py (_TTL_MIN / _TTL_MAX).
@@ -365,7 +366,31 @@ def _visit_module(
                 ))
             self.generic_visit(node)
 
+        def _check_panel_slot(self, node: ast.Call) -> None:
+            """PANEL-SLOT-1 — flag @ext.panel(slot=<unknown literal>)."""
+            func = node.func
+            if not (isinstance(func, ast.Attribute) and func.attr == "panel"):
+                return
+            for kw in node.keywords:
+                if kw.arg == "slot" and isinstance(kw.value, ast.Constant):
+                    val = kw.value.value
+                    if isinstance(val, str) and val not in ALLOWED_PANEL_SLOTS:
+                        issues.append(ValidationIssue(
+                            rule="PANEL-SLOT-1",
+                            level="ERROR",
+                            message=(
+                                f"@ext.panel(..., slot={val!r}) is not a valid slot. "
+                                f"Must be one of {sorted(ALLOWED_PANEL_SLOTS)}. "
+                                "Note: 'main' was removed in SDK 3.4.0; use 'center' instead."
+                            ),
+                            file=file_path,
+                            line=node.lineno,
+                            fix="Replace slot=... with slot='center'",
+                        ))
+                    return
+
         def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+            self._check_panel_slot(node)
             func = node.func
 
             # SKEL-GUARD-3: ctx.skeleton.update(...)
