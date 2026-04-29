@@ -447,7 +447,7 @@ async def skeleton_refresh_mail(ctx) -> ActionResult:
 ```python
 from imperal_sdk.errors import SkeletonAccessForbidden
 
-@ext.panel("inbox", slot="main", title="Inbox")
+@ext.panel("inbox", slot="center", title="Inbox")  # middle content area (master-detail)
 async def panel_inbox(ctx, **kwargs):
     # BAD — raises SkeletonAccessForbidden.
     mail = await ctx.skeleton.get("mail")
@@ -542,7 +542,7 @@ async def _fetch_inbox(ctx, page: int) -> InboxPage:
     return InboxPage(cursor=data["cursor"], items=data["items"])
 
 
-@ext.panel("inbox", slot="main", title="Inbox")
+@ext.panel("inbox", slot="center", title="Inbox")  # middle content area (master-detail)
 async def panel_inbox(ctx, **kwargs):
     page = await ctx.cache.get_or_fetch(
         key="page:1",

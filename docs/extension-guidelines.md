@@ -904,7 +904,7 @@ class InboxPage(BaseModel):
 class _InboxPageCache(InboxPage):
     pass
 
-@ext.panel("inbox", slot="main", title="Inbox")
+@ext.panel("inbox", slot="center", title="Inbox")  # middle content area (master-detail)
 async def panel_inbox(ctx, **kwargs):
     page = await ctx.cache.get_or_fetch(
         key="page:1",

@@ -146,7 +146,7 @@ async def skeleton_refresh_cases(ctx) -> ActionResult:
 ### From a panel / chat function / regular tool — forbidden
 
 ```python
-@ext.panel("inbox", slot="main", title="Inbox")
+@ext.panel("inbox", slot="center", title="Inbox")  # middle content area (master-detail)
 async def panel_inbox(ctx, **kwargs):
     # BAD — raises SkeletonAccessForbidden in v1.6.0.
     mail = await ctx.skeleton.get("mail")

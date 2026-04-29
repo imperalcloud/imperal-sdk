@@ -402,7 +402,7 @@ class _InboxPageCacheModel(InboxPage):
     pass
 
 
-@ext.panel("inbox", slot="main", title="Inbox")
+@ext.panel("inbox", slot="center", title="Inbox")  # middle content area (master-detail)
 async def panel_inbox(ctx, **kwargs):
     # TTL 5-300s, 64 KB value cap, per-extension namespace, Pydantic-validated.
     page = await ctx.cache.get_or_fetch(
