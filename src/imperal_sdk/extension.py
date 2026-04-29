@@ -5,6 +5,8 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from imperal_sdk.types.contributions import ALLOWED_PANEL_SLOTS
+
 @dataclass
 class ToolDef:
     name: str
@@ -356,10 +358,23 @@ class Extension:
             return func
         return decorator
 
-    def panel(self, panel_id: str, slot: str = "main", title: str = "",
+    def panel(self, panel_id: str, slot: str = "center", title: str = "",
               icon: str = "", refresh: str = "manual", **kwargs):
         """Declare a UI panel. Handler returns UINode tree.
-        Panel fetched via /call endpoint with function __panel__{panel_id}."""
+        Panel fetched via /call endpoint with function __panel__{panel_id}.
+
+        `slot` must be one of ALLOWED_PANEL_SLOTS — `"center"` (default,
+        middle content area), `"left"` / `"right"` (sidebars), or one of
+        the less-common `"overlay"` / `"bottom"` / `"chat-sidebar"`.
+        Unknown values raise ValueError at decoration time. The `"main"`
+        value was removed in SDK 3.4.0 — use `"center"` instead.
+        """
+        if slot not in ALLOWED_PANEL_SLOTS:
+            raise ValueError(
+                f"@ext.panel({panel_id!r}, slot={slot!r}): unknown slot. "
+                f"Must be one of {sorted(ALLOWED_PANEL_SLOTS)}. "
+                "Note: 'main' was removed in SDK 3.4.0; use 'center' instead."
+            )
         def decorator(func: Callable) -> Callable:
             async def wrapper(ctx, **params):
                 result = await func(ctx, **params)

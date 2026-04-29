@@ -42,7 +42,7 @@ class TestPanelDecorator:
         ext = Extension("test-app")
         @ext.panel("main_view")
         async def view(ctx): pass
-        assert ext.panels["main_view"]["slot"] == "main"
+        assert ext.panels["main_view"]["slot"] == "center"
 
     def test_default_refresh(self):
         ext = Extension("test-app")
@@ -131,3 +131,28 @@ class TestPanelDataclassSlotValidation:
         assert isinstance(ALLOWED_PANEL_SLOTS, frozenset)
         assert "center" in ALLOWED_PANEL_SLOTS
         assert "main" not in ALLOWED_PANEL_SLOTS
+
+
+class TestPanelDecoratorSlotValidation:
+    def test_default_slot_is_center(self):
+        ext = Extension("test-app")
+        @ext.panel("dashboard", title="Dashboard")
+        async def dashboard(ctx): pass
+        assert ext.panels["dashboard"]["slot"] == "center"
+
+    def test_main_rejected_at_decoration_time(self):
+        ext = Extension("test-app")
+        with pytest.raises(ValueError) as exc:
+            @ext.panel("inbox", slot="main", title="Inbox")
+            async def inbox(ctx): pass
+        msg = str(exc.value)
+        assert "inbox" in msg
+        assert "main" in msg
+        assert "center" in msg
+        assert "3.4.0" in msg
+
+    def test_garbage_rejected_at_decoration_time(self):
+        ext = Extension("test-app")
+        with pytest.raises(ValueError):
+            @ext.panel("p", slot="middle", title="P")
+            async def p(ctx): pass
