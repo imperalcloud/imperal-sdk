@@ -2,6 +2,28 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.4.1 — 2026-04-29 — LLM-FU-2: gpt-5 / o-series temperature drop
+
+### Fixed
+
+- `LLMProvider._call_openai` now omits the `temperature` kwarg entirely
+  for OpenAI reasoning models (`gpt-5`, `gpt-5-mini`, `gpt-5-nano`,
+  `o1*`, `o3*`, `o4*`), letting OpenAI use its mandatory default of 1.0.
+  Sending any custom value (including the kernel default `0.0`) raised
+  400 `'temperature' does not support 0.0 with this model. Only the
+  default (1) value is supported.`, which started flooding production
+  logs once the 2026-04-29 admin LLM dropdown began routing chains
+  through `gpt-5`. Every chain hitting the model failed over to
+  `anthropic/haiku`. Mirror of the LLM-FU-1 `max_completion_tokens`
+  rename — same prefix list, same gating shape.
+
+### Added
+
+- `imperal_sdk.runtime.llm_provider._openai_supports_custom_temperature(
+  provider, model)` — returns `False` for OpenAI gpt-5 / o-series and
+  `True` everywhere else. Reuses `_OPENAI_MCT_MODEL_PREFIXES` so the
+  two helpers always agree on which models are reasoning models.
+
 ## 3.4.0 — 2026-04-29 — BREAKING: panel slot validation + `main` removal
 
 ### Breaking

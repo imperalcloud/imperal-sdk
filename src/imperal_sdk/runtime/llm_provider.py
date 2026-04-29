@@ -64,6 +64,11 @@ _ENV_FB_BASE_URL   = os.getenv("LLM_FALLBACK_BASE_URL", "")
 # model. Use 'max_completion_tokens' instead." Other providers (Anthropic,
 # Gemini via OpenAI-compat, Ollama/vLLM via openai_compatible) keep
 # `max_tokens` — sending `max_completion_tokens` to them is unsafe.
+#
+# The same family also rejects any custom `temperature`: only the default
+# (1.0) is supported, and sending e.g. `temperature=0.0` raises 400
+# "'temperature' does not support 0.0 with this model. Only the default (1)
+# value is supported." `_openai_supports_custom_temperature` gates that.
 _OPENAI_MCT_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
 
 
@@ -71,6 +76,22 @@ def _openai_uses_max_completion_tokens(provider: str, model: str) -> bool:
     if provider != "openai" or not model:
         return False
     return model.lower().startswith(_OPENAI_MCT_MODEL_PREFIXES)
+
+
+def _openai_supports_custom_temperature(provider: str, model: str) -> bool:
+    """OpenAI gpt-5 + o-series reasoning models accept ONLY the default
+    temperature (1.0). Sending `temperature=0.0` (or any other value)
+    raises 400 'Unsupported value: temperature does not support X with
+    this model. Only the default (1) value is supported.' Returns False
+    for those models so callers know to omit the kwarg entirely.
+
+    For all other provider/model combinations (other OpenAI models,
+    Anthropic, Gemini, Ollama/vLLM via openai_compatible) custom
+    temperature is supported and the helper returns True.
+    """
+    if provider != "openai" or not model:
+        return True
+    return not model.lower().startswith(_OPENAI_MCT_MODEL_PREFIXES)
 
 _GATEWAY_URL       = os.getenv("IMPERAL_GATEWAY_URL", "")
 _SERVICE_TOKEN     = os.getenv("IMPERAL_SERVICE_TOKEN", "")
@@ -469,8 +490,9 @@ class LLMProvider:
             "model": cfg.model,
             _token_kwarg: max_tokens,
             "messages": oai_messages,
-            "temperature": temperature,
         }
+        if _openai_supports_custom_temperature(cfg.provider, cfg.model):
+            kwargs["temperature"] = temperature
         if tools:
             kwargs["tools"] = MessageAdapter.to_openai_tools(tools)
         if tool_choice:
