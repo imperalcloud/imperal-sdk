@@ -10,7 +10,7 @@ class TestPanel:
         p = Panel(id="deals", title="Deal Pipeline")
         assert p.id == "deals"
         assert p.title == "Deal Pipeline"
-        assert p.slot == "main"
+        assert p.slot == "center"
         assert p.movable is True
 
     def test_full(self):
