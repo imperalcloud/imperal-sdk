@@ -2,6 +2,29 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 3.3.1 — 2026-04-29 — LLM-FU-1: gpt-5 / o-series max_completion_tokens
+
+### Fixed
+
+- `LLMProvider._call_openai` now sends `max_completion_tokens` instead of
+  the legacy `max_tokens` kwarg when the resolved config matches OpenAI
+  reasoning models — `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `o1*`, `o3*`,
+  `o4*`. OpenAI rejects `max_tokens` for these families with
+  `'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`,
+  which surfaced after the 2026-04-29 admin LLM dropdown expansion added
+  these models. Anthropic, Gemini (OpenAI-compat), and Ollama/vLLM
+  (`openai_compatible`) keep `max_tokens` — sending the new kwarg to
+  those providers is unsafe.
+- Helper `_openai_uses_max_completion_tokens(provider, model)` gates the
+  rename; matches by model-name prefix (`gpt-5`, `o1`, `o3`, `o4`)
+  case-insensitively, scoped to `provider == "openai"` only.
+
+### Tests
+
+- `tests/test_openai_max_completion_tokens.py` — 24 parametrized cases
+  covering reasoning models, legacy OpenAI, cross-provider safety, and
+  edge cases (empty model, empty provider).
+
 ## 3.3.0 — 2026-04-28 — UI extensions + deprecation (Sprint 2)
 
 ### Deprecated

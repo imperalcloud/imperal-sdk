@@ -58,6 +58,20 @@ _ENV_FB_API_KEY    = os.getenv("LLM_FALLBACK_API_KEY", "")
 _ENV_FB_MODEL      = os.getenv("LLM_FALLBACK_MODEL", "")
 _ENV_FB_BASE_URL   = os.getenv("LLM_FALLBACK_BASE_URL", "")
 
+
+# OpenAI gpt-5 family + o-series reasoning models (o1/o3/o4) reject the
+# legacy `max_tokens` kwarg with "'max_tokens' is not supported with this
+# model. Use 'max_completion_tokens' instead." Other providers (Anthropic,
+# Gemini via OpenAI-compat, Ollama/vLLM via openai_compatible) keep
+# `max_tokens` — sending `max_completion_tokens` to them is unsafe.
+_OPENAI_MCT_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def _openai_uses_max_completion_tokens(provider: str, model: str) -> bool:
+    if provider != "openai" or not model:
+        return False
+    return model.lower().startswith(_OPENAI_MCT_MODEL_PREFIXES)
+
 _GATEWAY_URL       = os.getenv("IMPERAL_GATEWAY_URL", "")
 _SERVICE_TOKEN     = os.getenv("IMPERAL_SERVICE_TOKEN", "")
 
@@ -446,9 +460,14 @@ class LLMProvider:
 
         client = self._get_client(cfg)
         oai_messages = MessageAdapter.to_openai_messages(messages, system)
+        _token_kwarg = (
+            "max_completion_tokens"
+            if _openai_uses_max_completion_tokens(cfg.provider, cfg.model)
+            else "max_tokens"
+        )
         kwargs: dict[str, Any] = {
             "model": cfg.model,
-            "max_tokens": max_tokens,
+            _token_kwarg: max_tokens,
             "messages": oai_messages,
             "temperature": temperature,
         }
