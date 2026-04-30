@@ -47,6 +47,7 @@ class EventHandlerDef:
     event_type: str
     func: Callable
 
+
 @dataclass
 class EmitsDef:
     event_type: str
@@ -54,7 +55,7 @@ class EmitsDef:
 
     def to_manifest(self) -> dict:
         out: dict = {"type": self.event_type}
-        if self.schema_ref:
+        if self.schema_ref is not None:
             out["schema_ref"] = self.schema_ref
         return out
 
