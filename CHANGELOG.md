@@ -2,6 +2,47 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v3.5.1 — 2026-04-30 — LCU Phase 3: LLMConfig AI params + tool-use cap fix
+
+### LLM config unification (LCU-7)
+
+- `LLMConfig` extended with 6 admin-tunable AI param fields:
+  `temperature`, `max_tokens`, `top_p`, `presence_penalty`,
+  `frequency_penalty`, `stop_sequences`. All default to `None` ("no
+  override; provider's own default applies"). Mirrors kernel-side LCU
+  Phase 1 schema so kernel-built configs deserialize cleanly into SDK.
+- New `LLMConfig.api_kwargs()` method returns provider-filtered kwargs
+  via `_supported_params_for(provider, model)`. Drops unsupported fields
+  (e.g. `presence_penalty` for Anthropic, all but `max_tokens` for
+  OpenAI gpt-5/o-series reasoning models) silently — no more 400s when
+  admin sets a slot the provider doesn't accept.
+- `_call_anthropic` and `_call_openai` now apply `cfg.api_kwargs()` for
+  the non-overlapping params (top_p, penalties, stop_sequences) so admin
+  per-purpose / per-extension slots reach the upstream API. `max_tokens`
+  and `temperature` continue to use caller-explicit precedence (TBC-FULL
+  invariant from spec).
+
+### Fixed
+
+- `chat/handler.py:362` tool-use loop `max_tokens` no longer hardcoded
+  to `2048`. Now reads from a federal-grade cascade:
+  1. `cfg.max_tokens` (admin per-purpose / per-extension)
+  2. `ctx.config.tool_use_max_tokens` (TBC-FULL slot, future)
+  3. `ctx.config.max_response_tokens` (general response cap)
+  4. `2048` (absolute backstop)
+
+  Until LCU-7, the hardcoded `2048` silently capped admin's carefully-
+  chosen TBC-FULL settings. With the cascade alive, admins can lift the
+  cap per-extension or per-purpose without touching SDK code.
+
+### Backward compat
+
+- All new `LLMConfig` fields default to `None`. Existing call sites that
+  build `LLMConfig` without the new kwargs continue to work unchanged.
+- `api_kwargs()` returns `{}` for a freshly-default `LLMConfig`, so
+  `_call_*` paths that loop over it become no-ops in the absence of
+  admin overrides — pre-LCU behaviour.
+
 ## v3.5.0 — 2026-04-30
 
 ### Federal closure

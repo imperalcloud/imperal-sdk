@@ -358,8 +358,26 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
             _exec_cfg = (_llm_configs or {}).get("execution") if _llm_configs else None
             if _exec_cfg is None:
                 _exec_cfg = client._env_default_config_for_purpose("execution")
+            # LCU-7 (2026-04-30): tool-use loop max_tokens cascade
+            #   1. cfg.max_tokens         (admin per-purpose / per-extension)
+            #   2. ctx.config.tool_use_max_tokens   (TBC-FULL slot, future)
+            #   3. ctx.config.max_response_tokens   (general response cap)
+            #   4. 2048                   (absolute backstop, pre-LCU value)
+            #
+            # Until LCU-7, the hardcoded 2048 silently capped admin's
+            # carefully-chosen TBC-FULL settings. 2048 is far too low for
+            # extensions like notes that loop through 10+ tool rounds with
+            # large contexts (6K+ tokens system prompt + skeleton). With the
+            # cascade alive, admins can lift the cap per-extension or
+            # per-purpose without touching kernel/SDK code.
+            _tool_use_mt = (
+                _exec_cfg.max_tokens
+                or _cfg_get(ctx, "tool_use_max_tokens")
+                or _cfg_get(ctx, "max_response_tokens")
+                or 2048
+            )
             resp = await client.create_message(
-                max_tokens=2048, system=_system_for_round, messages=messages,
+                max_tokens=_tool_use_mt, system=_system_for_round, messages=messages,
                 tools=_tools_for_llm,
                 cfg=_exec_cfg,
                 **_api_kwargs,

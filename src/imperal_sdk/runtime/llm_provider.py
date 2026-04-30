@@ -128,6 +128,49 @@ _BYOLLM_CACHE_TTL = 60
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+# LCU-7 (2026-04-30): provider-aware AI param filter, mirrors kernel.
+# Each provider only accepts a subset of (temperature, max_tokens, top_p,
+# presence_penalty, frequency_penalty, stop_sequences). Sending an
+# unsupported param raises 400 from the upstream API. The filter ensures
+# admin-set params silently drop on incompatible providers instead of
+# breaking the call.
+_PROVIDER_PARAM_SUPPORT: dict[str, set[str]] = {
+    "anthropic": {"temperature", "max_tokens", "top_p", "stop_sequences"},
+    "openai": {
+        "temperature", "max_tokens", "top_p",
+        "presence_penalty", "frequency_penalty", "stop_sequences",
+    },
+    "openai_compatible": {
+        "temperature", "max_tokens", "top_p",
+        "presence_penalty", "frequency_penalty", "stop_sequences",
+    },
+    "google": {"temperature", "max_tokens", "top_p", "stop_sequences"},
+    "_default": {"temperature", "max_tokens"},
+}
+
+# OpenAI gpt-5 + o1/o3/o4 reasoning family rejects temperature/top_p/
+# penalty params; only max_tokens (translated to max_completion_tokens by
+# the existing adapter) is accepted.
+_OPENAI_REASONING_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def _is_openai_reasoning_model(model: str) -> bool:
+    if not model:
+        return False
+    m = model.lower()
+    for prefix in _OPENAI_REASONING_MODEL_PREFIXES:
+        if m.startswith(prefix):
+            return True
+    return False
+
+
+def _supported_params_for(provider: str, model: str) -> set[str]:
+    """Return the set of AI param names this provider/model accepts."""
+    if provider == "openai" and _is_openai_reasoning_model(model):
+        return {"max_tokens"}
+    return _PROVIDER_PARAM_SUPPORT.get(provider, _PROVIDER_PARAM_SUPPORT["_default"])
+
+
 @dataclass
 class LLMConfig:
     """Resolved LLM configuration for a single call.
@@ -136,6 +179,13 @@ class LLMConfig:
     imperal_kernel.llm.provider.LLMConfig so kernel-built configs
     deserialize cleanly into SDK code via ctx._llm_configs injection.
     api_key is field(repr=False) — NEVER in default __repr__.
+
+    LCU-7 (2026-04-30): added 6 AI param fields (temperature, max_tokens,
+    top_p, presence_penalty, frequency_penalty, stop_sequences). All
+    default to None which means "no admin override — let the provider
+    apply its own default". The ``api_kwargs()`` method filters by
+    provider via ``_supported_params_for`` so unsupported fields are
+    silently dropped instead of triggering a 400.
     """
     provider: str
     model: str
@@ -146,12 +196,48 @@ class LLMConfig:
     thinking_mode: str = "auto"  # "auto", "off", "on"
     byollm_tool_choice: str = ""  # "", "auto", "required", "none"
     failover_config: "LLMConfig | None" = None  # Sprint 1.2: pre-resolved pair
+    # LCU-7 (2026-04-30): AI params from admin slots (per-extension,
+    # per-purpose, global cascade — kernel resolves and ctx-injects). None
+    # = "no override; provider's own default applies". ``api_kwargs()``
+    # filters by provider.
+    temperature: "float | None" = None
+    max_tokens: "int | None" = None
+    top_p: "float | None" = None
+    presence_penalty: "float | None" = None
+    frequency_penalty: "float | None" = None
+    stop_sequences: "list[str] | None" = None
 
     @property
     def client_key(self) -> str:
         """Stable key for client pool hashing."""
         key_hash = hashlib.sha256(self.api_key.encode()).hexdigest()[:12]
         return f"{self.provider}:{self.base_url or 'default'}:{key_hash}"
+
+    def api_kwargs(self) -> dict:
+        """Return provider-filtered kwargs dict for create_message().
+
+        LCU-7 (2026-04-30). Drops params not supported by current
+        provider/model (e.g. ``presence_penalty`` for Anthropic). Drops
+        ``None`` values — those mean "caller hasn't overridden + no admin
+        slot — use provider's own default".
+        """
+        supported = _supported_params_for(self.provider, self.model)
+        out: dict = {}
+        candidates = {
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "top_p": self.top_p,
+            "presence_penalty": self.presence_penalty,
+            "frequency_penalty": self.frequency_penalty,
+            "stop_sequences": self.stop_sequences,
+        }
+        for name, value in candidates.items():
+            if value is None:
+                continue
+            if name not in supported:
+                continue
+            out[name] = value
+        return out
 
 
 @dataclass
@@ -473,6 +559,15 @@ class LLMProvider:
             kwargs["tool_choice"] = tool_choice
         if temperature > 0:
             kwargs["temperature"] = temperature
+        # LCU-7 (2026-04-30): apply admin-cascaded top_p / stop_sequences
+        # via cfg.api_kwargs() (provider-filtered, drops unsupported fields
+        # like presence/frequency_penalty for Anthropic). max_tokens and
+        # temperature already resolved by the call_message caller with
+        # caller-explicit precedence; setdefault preserves that.
+        for _k, _v in cfg.api_kwargs().items():
+            if _k in ("max_tokens", "temperature"):
+                continue
+            kwargs.setdefault(_k, _v)
         return await client.messages.create(**kwargs)
 
     async def _call_openai(self, cfg: LLMConfig, messages, system, max_tokens, tools, tool_choice, temperature) -> Any:
@@ -499,6 +594,15 @@ class LLMProvider:
             oai_tc = MessageAdapter.to_openai_tool_choice(tool_choice)
             if oai_tc is not None:
                 kwargs["tool_choice"] = oai_tc
+        # LCU-7 (2026-04-30): apply admin-cascaded top_p / penalty /
+        # stop_sequences via cfg.api_kwargs() (provider-filtered; for
+        # gpt-5/o-series the filter returns {"max_tokens"} only, so this
+        # is a no-op for those models). max_tokens / temperature already
+        # resolved with caller-explicit precedence above.
+        for _k, _v in cfg.api_kwargs().items():
+            if _k in ("max_tokens", "temperature"):
+                continue
+            kwargs.setdefault(_k, _v)
 
         if cfg.provider == "openai_compatible":
             # See kernel llm/provider.py — dual-param thinking disable for Ollama.
