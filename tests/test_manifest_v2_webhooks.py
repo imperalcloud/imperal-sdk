@@ -50,7 +50,7 @@ def test_manifest_excludes_dunder_internal_tools_from_tools_list():
 
 
 def test_manifest_validates_with_validate_manifest_dict():
-    """Federal smoke: full round-trip — generate manifest, validate it, no errors."""
+    """Federal smoke: full round-trip — generate manifest, validate it, assert no issues."""
     from imperal_sdk.manifest_schema import validate_manifest_dict
 
     ext = Extension("billing", version="2.1.0")
@@ -60,5 +60,5 @@ def test_manifest_validates_with_validate_manifest_dict():
         return {"ok": True}
 
     manifest = generate_manifest(ext)
-    # Should NOT raise
-    validate_manifest_dict(manifest)
+    issues = validate_manifest_dict(manifest)
+    assert issues == [], f"Manifest round-trip validation failed: {issues}"
