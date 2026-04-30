@@ -20,11 +20,14 @@ Covered (as of v1.5.10)
 
 Public API
 ----------
-- `ActionResultModel`, `EventModel`          — Pydantic mirrors
-- `validate_action_result_dict(data)`        — -> list[ValidationIssue]
-- `validate_event_dict(data)`                -> list[ValidationIssue]
+- `ActionResultModel`, `EventModel`, `Event`  — Pydantic mirrors
+- `validate_action_result_dict(data)`         — -> list[ValidationIssue]
+- `validate_event_dict(data)`                 -> list[ValidationIssue]
 - `get_action_result_schema()`, `ACTION_RESULT_SCHEMA`
 - `get_event_schema()`,         `EVENT_SCHEMA`
+
+Note: this is distinct from the public `Event` dataclass in `types.events`
+— both names coexist in different submodules.
 
 Rule codes (mirrors manifest_schema M1..M5 shape):
   `AR1..AR5`  — ActionResult payload issues
@@ -151,9 +154,10 @@ class EventModel(BaseModel):
         return v
 
     # EV6..EV8 — UEB Phase 1 envelope fields (all optional; v1 payloads unaffected)
-    event_id: Optional[str] = None        # EV6: UUIDv7 idempotency/dedup key
-    schema_version: Optional[int] = None  # EV7: monotone breaking-change marker
-    source: Optional[Literal["user", "system", "automation", "rbac", "mcp", "webhook"]] = None  # EV8: AuditSource enum value
+    event_id: Optional[str] = None                              # EV6: UUIDv7 idempotency/dedup key
+    schema_version: Optional[int] = Field(None, ge=1)          # EV7: monotone breaking-change marker
+    # EV8: AuditSource enum value
+    source: Optional[Literal["user", "system", "automation", "rbac", "mcp", "webhook"]] = None
 
 
 # === UEB Event (v2 envelope) =========================================
@@ -193,9 +197,10 @@ class Event(BaseModel):
     data: Dict[str, Any] = Field(default_factory=dict)
 
     # EV6..EV8 — optional; v1 payloads that omit them remain valid
-    event_id: Optional[str] = None        # EV6: UUIDv7 idempotency/dedup key
-    schema_version: Optional[int] = None  # EV7: monotone breaking-change marker
-    source: Optional[Literal["user", "system", "automation", "rbac", "mcp", "webhook"]] = None  # EV8: AuditSource enum value
+    event_id: Optional[str] = None                              # EV6: UUIDv7 idempotency/dedup key
+    schema_version: Optional[int] = Field(None, ge=1)          # EV7: monotone breaking-change marker
+    # EV8: AuditSource enum value
+    source: Optional[Literal["user", "system", "automation", "rbac", "mcp", "webhook"]] = None
 
 
 # === FunctionCall mirror =============================================

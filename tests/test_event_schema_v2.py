@@ -44,7 +44,7 @@ def test_event_v1_backward_compat():
 
 
 def test_event_schema_json_includes_v2_fields():
-    """JSON Schema file declares EV6..EV8 properties."""
+    """JSON Schema file declares EV6..EV8 properties — and live get_event_schema() matches."""
     schema_path = Path(__file__).parent.parent / "src/imperal_sdk/schemas/event.schema.json"
     schema = json.loads(schema_path.read_text())
     props = schema["properties"]
@@ -52,3 +52,28 @@ def test_event_schema_json_includes_v2_fields():
     assert "schema_version" in props
     assert "source" in props
     assert props["source"]["enum"] == ["user", "system", "automation", "rbac", "mcp", "webhook"]
+
+    # Drift check: live generator must produce the same shape
+    from imperal_sdk.types.contracts import get_event_schema
+    live = get_event_schema()
+    live_props = live["properties"]
+    assert "event_id" in live_props
+    assert "schema_version" in live_props
+    assert "source" in live_props
+    assert live_props["source"]["enum"] == ["user", "system", "automation", "rbac", "mcp", "webhook"]
+
+
+def test_event_model_accepts_v2_fields():
+    """EventModel (v1 Redis-stream contract) also accepts EV6..EV8 fields backward-compat."""
+    from imperal_sdk.types.contracts import EventModel
+    e = EventModel(
+        event_type="email.state_changed",
+        timestamp="2026-05-01T10:23:45.123Z",
+        user_id="",
+        tenant_id="default",
+        data={},
+        event_id="01927a3f-a0d1-7b42-9c5e-d8a3e4f2c1b9",
+        schema_version=1,
+        source="system",
+    )
+    assert e.event_id == "01927a3f-a0d1-7b42-9c5e-d8a3e4f2c1b9"
