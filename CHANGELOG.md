@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v3.5.2 — 2026-04-30 — Hotfix: federal determinism restored
+
+### Fixed (latent bug)
+
+- `LLMProvider._call_anthropic` had a guard `if temperature > 0:` that
+  silently dropped explicit `temperature=0.0` from the kwargs sent to
+  the Anthropic API. Anthropic's default is `1.0` (non-deterministic),
+  so callers passing `0.0` for federal determinism were actually being
+  served by a `1.0` temperature provider for an unknown duration.
+- Fix: `if temperature is not None:` — explicit `0.0` now reaches the
+  provider. `None` continues to be dropped (provider default applies).
+- `_call_openai` was not affected — it uses
+  `_openai_supports_custom_temperature(provider, model)` which is
+  model-aware (filters reasoning models) and passes `temperature`
+  unconditionally for non-reasoning models. OpenAI gpt-5/o-series still
+  receive no `temperature` kwarg (filtered both at call site and via
+  `_supported_params_for` in `cfg.api_kwargs()`).
+
 ## v3.5.1 — 2026-04-30 — LCU Phase 3: LLMConfig AI params + tool-use cap fix
 
 ### LLM config unification (LCU-7)

@@ -557,7 +557,7 @@ class LLMProvider:
             kwargs["tools"] = tools
         if tool_choice:
             kwargs["tool_choice"] = tool_choice
-        if temperature > 0:
+        if temperature is not None:
             kwargs["temperature"] = temperature
         # LCU-7 (2026-04-30): apply admin-cascaded top_p / stop_sequences
         # via cfg.api_kwargs() (provider-filtered, drops unsupported fields
