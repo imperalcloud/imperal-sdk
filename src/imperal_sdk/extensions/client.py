@@ -98,24 +98,72 @@ class ExtensionsClient:
         return await exposed.func(child_ctx, **params)
 
     async def emit(self, event_type: str, data: dict) -> None:
-        """Publish event to platform event bus (Redis pub/sub).
+        """Publish event via federal audit chokepoint.
 
-        Fire-and-forget — errors are logged but not raised.
+        SDK 3.5.0+: extension emits route through ``imperal_kernel.audit.record_action``
+        which enforces user_id integrity, writes the audit_ledger row, and fires the
+        Redis pub/sub event in one atomic chokepoint call. This closes the SDK-side
+        bypass of the federal chokepoint that allowed empty user_id propagation.
+
+        Fire-and-forget — errors are logged but not raised. If ``imperal_kernel.audit``
+        is unavailable (e.g., extension running outside the kernel context, or in a
+        unit-test rig), falls back to legacy direct Redis publish with a warning.
         """
         try:
-            from imperal_kernel.core.redis import get_shared_redis
-
-            r = get_shared_redis()
+            from imperal_kernel.audit import (
+                record_action, AuditStatus, AuditSource,
+            )
+            # Synthesize plan/kctx/result from _kctx_dict so record_action's
+            # _maybe_publish_domain_event picks up the event payload.
             tenant_id = self._kctx_dict.get("tenant_id", "default")
             user_id = self._kctx_dict.get("user_id", "")
-            event = json.dumps({
-                "event_type": event_type,
-                "data": data,
-                "source_app": self._current,
-                "user_id": user_id,
+            kctx = type("_SDKEmitKctx", (), {
+                "user": type("_SDKEmitUser", (), {
+                    "imperal_id": user_id,
+                    "tenant_id": tenant_id,
+                    "email": self._kctx_dict.get("email", ""),
+                })(),
+            })()
+            plan = type("_SDKEmitPlan", (), {
+                "app_id": self._current,
+                "tool": "<emit>",
                 "tenant_id": tenant_id,
-            })
-            await r.publish(f"imperal:events:{tenant_id}", event)
-            log.info("Event emitted: %s from %s", event_type, self._current)
+                "is_destructive": False,
+            })()
+            result = type("_SDKEmitResult", (), {
+                "status": "success",
+                "data": data,
+                "event": event_type,
+            })()
+            await record_action(
+                plan=plan, kctx=kctx, result=result,
+                status=AuditStatus.completed,
+                source=AuditSource.user,
+                action_meta={
+                    "action_type": "write",
+                    "intent_type": "write",
+                    "event_type": f"{self._current}.{event_type}",
+                    "extension_emit": True,
+                },
+            )
+            log.info("Event emitted via chokepoint: %s from %s", event_type, self._current)
+        except ImportError:
+            # Fallback for environments where imperal_kernel is not loaded (e.g.,
+            # extension unit tests outside the kernel). Use legacy direct publish —
+            # the federal invariant only matters in production kernel context.
+            log.warning("imperal_kernel.audit unavailable — falling back to direct Redis publish")
+            try:
+                from imperal_kernel.core.redis import get_shared_redis
+                r = get_shared_redis()
+                tenant_id = self._kctx_dict.get("tenant_id", "default")
+                user_id = self._kctx_dict.get("user_id", "")
+                event = json.dumps({
+                    "event_type": event_type, "data": data,
+                    "source_app": self._current,
+                    "user_id": user_id, "tenant_id": tenant_id,
+                })
+                await r.publish(f"imperal:events:{tenant_id}", event)
+            except Exception as e:
+                log.error("Fallback emit failed: %s", e)
         except Exception as e:
-            log.error("Failed to emit %s: %s", event_type, e)
+            log.error("Federal chokepoint emit failed: %s", e)

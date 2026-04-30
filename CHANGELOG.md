@@ -2,6 +2,21 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v3.5.0 — 2026-04-30
+
+### Federal closure
+- `ExtensionsClient.emit()` now routes through `imperal_kernel.audit.record_action`
+  chokepoint instead of direct Redis pub/sub. Federal user_id propagation closed at SDK level.
+- Every extension emit now produces an `action_ledger` row in addition to firing the
+  Redis pub/sub event, enabling forensics on extension-emitted events.
+- Backward compatible: emit signature unchanged; behavior is identical for callers
+  except that audit rows are now created (federal-grade observability).
+
+### Backward compat
+- If `imperal_kernel.audit` is not importable (extension running outside kernel
+  context, e.g., in unit tests), falls back to legacy direct Redis publish with
+  log warning. No breaking change for extension developer ergonomics.
+
 ## 3.4.1 — 2026-04-29 — LLM-FU-2: gpt-5 / o-series temperature drop
 
 ### Fixed
