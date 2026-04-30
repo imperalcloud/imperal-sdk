@@ -29,6 +29,34 @@ Think **Shopify for AI agents**. You build it. Users install it. The platform ha
 pip install imperal-sdk
 ```
 
+### What's New in v3.5.x (2026-04-30)
+
+**Federal Audit Closure + LLM Config Unification (LCU).**
+
+- **v3.5.0 — `ExtensionsClient.emit()` routes through kernel audit chokepoint**
+  (`imperal_kernel.audit.record_action`). Every cross-extension emit now
+  produces an `action_ledger` row in addition to firing the Redis pub/sub
+  event — federal-grade forensics on every extension-emitted event.
+  Backward compatible: emit signature unchanged; falls back to legacy direct
+  Redis publish when the SDK runs outside a kernel (unit tests).
+- **v3.5.1 — `LLMConfig` extended with 6 admin-tunable AI param fields**
+  (`temperature`, `max_tokens`, `top_p`, `presence_penalty`,
+  `frequency_penalty`, `stop_sequences`). New `LLMConfig.api_kwargs()`
+  returns provider-filtered kwargs (e.g. drops `presence_penalty` for
+  Anthropic, all but `max_tokens` for OpenAI gpt-5/o-series). Mirrors the
+  kernel-side LCU schema so admin per-purpose / per-extension slots reach
+  the upstream API uniformly. Chat handler `tool_use` loop `max_tokens` is
+  no longer hardcoded — reads via federal cascade
+  (`cfg.max_tokens` → `ctx.config.tool_use_max_tokens` → 2048 backstop).
+
+```bash
+pip install 'imperal-sdk>=3.5.1,<4.0.0'
+```
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full v3.5.x notes and the kernel-
+side reference docs `audit-chokepoint.md` / `llm-config-cascade.md` (in the
+Imperal kernel `docs/` tree).
+
 ### What's New in v3.0.0 (breaking)
 
 **Identity Contract Unification (W1)** — single source of truth for `User`

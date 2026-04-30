@@ -723,6 +723,8 @@ async def emit(event_type: str, data: dict) -> None
 
 Emit an event to other extensions that listen via `@ext.signal`. Format: `extension_id.event_name` (e.g. `"notes.created"`). This is the programmatic equivalent of the `event=` decorator on `@chat.function`.
 
+> **SDK 3.5.0 — federal audit closure.** `emit()` now routes through the kernel audit chokepoint (`imperal_kernel.audit.record_action`) before the legacy Redis pub/sub fan-out. Every emit produces an `action_ledger` row in addition to firing the event — federal-grade forensics on extension-emitted events. Extension developer ergonomics are unchanged (signature stable). When run outside a kernel (unit tests), falls back to direct Redis publish with a log warning.
+
 ### Example
 
 ```python
