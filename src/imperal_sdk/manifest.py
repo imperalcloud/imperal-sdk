@@ -35,6 +35,10 @@ def generate_manifest(ext: Extension) -> dict:
     """Auto-generate extension manifest from Extension object."""
     tools = []
     for name, tool_def in ext.tools.items():
+        if name.startswith("__"):
+            # Synthetic entries (__webhook__*, __panel__*, __widget__*, __tray__*)
+            # belong to their own declarative sections — skip from user-facing tools list.
+            continue
         sig = inspect.signature(tool_def.func)
         params = {}
         for pname, param in sig.parameters.items():
@@ -119,6 +123,8 @@ def _python_type_to_str(t) -> str:
 
 def _collect_scopes(ext: Extension) -> list[str]:
     scopes = set()
-    for tool_def in ext.tools.values():
+    for name, tool_def in ext.tools.items():
+        if name.startswith("__"):
+            continue
         scopes.update(tool_def.scopes)
     return sorted(scopes)
