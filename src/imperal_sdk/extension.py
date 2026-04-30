@@ -42,6 +42,13 @@ class WebhookDef:
     method: str = "POST"
     secret_header: str = ""
 
+    def to_manifest(self) -> dict:
+        return {
+            "path": self.path,
+            "method": self.method,
+            "secret_header": self.secret_header,
+        }
+
 @dataclass
 class EventHandlerDef:
     event_type: str

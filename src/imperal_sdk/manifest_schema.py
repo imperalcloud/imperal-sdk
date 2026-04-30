@@ -141,6 +141,16 @@ class Schedule(BaseModel):
         return v
 
 
+class Webhook(BaseModel):
+    """One entry in `manifest['webhooks']` (M6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = Field(..., min_length=1)
+    method: str = "POST"
+    secret_header: str = ""
+
+
 # === Root model =======================================================
 
 class Manifest(BaseModel):
@@ -155,6 +165,7 @@ class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # --- Base (always present) ---
+    manifest_schema_version: Optional[int] = None
     app_id: str
     version: str
     capabilities: List[str] = Field(default_factory=list)
@@ -166,6 +177,7 @@ class Manifest(BaseModel):
     # --- SDK-optional ---
     migrations_dir: Optional[str] = None
     config_defaults: Optional[Dict[str, Any]] = None
+    webhooks: Optional[List[Webhook]] = None
 
     # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
     name: Optional[str] = None
@@ -299,6 +311,7 @@ __all__ = [
     "ToolParam",
     "Signal",
     "Schedule",
+    "Webhook",
     "validate_manifest_dict",
     "get_schema",
     "MANIFEST_SCHEMA",

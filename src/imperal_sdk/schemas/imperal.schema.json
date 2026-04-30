@@ -115,11 +115,49 @@
       ],
       "title": "ToolParam",
       "type": "object"
+    },
+    "Webhook": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['webhooks']` (M6).",
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "method": {
+          "default": "POST",
+          "title": "Method",
+          "type": "string"
+        },
+        "secret_header": {
+          "default": "",
+          "title": "Secret Header",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "Webhook",
+      "type": "object"
     }
   },
   "additionalProperties": false,
   "description": "Shape of the `imperal.json` file produced by `imperal_sdk.manifest.generate_manifest()` and consumed by the Imperal Cloud Registry. Validated at deploy-time by `imperal_sdk.manifest_schema.validate_manifest_dict`.",
   "properties": {
+    "manifest_schema_version": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Manifest Schema Version"
+    },
     "app_id": {
       "title": "App Id",
       "type": "string"
@@ -187,6 +225,21 @@
       ],
       "default": null,
       "title": "Config Defaults"
+    },
+    "webhooks": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/Webhook"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Webhooks"
     },
     "name": {
       "anyOf": [

@@ -61,6 +61,7 @@ def generate_manifest(ext: Extension) -> dict:
     ]
 
     manifest = {
+        "manifest_schema_version": 2,
         "app_id": ext.app_id,
         "version": ext.version,
         "capabilities": ext.capabilities,
@@ -69,6 +70,9 @@ def generate_manifest(ext: Extension) -> dict:
         "schedules": schedules,
         "required_scopes": _collect_scopes(ext),
     }
+
+    if ext.webhooks:
+        manifest["webhooks"] = [wh.to_manifest() for wh in ext.webhooks.values()]
 
     if ext.migrations_dir:
         manifest["migrations_dir"] = ext.migrations_dir
