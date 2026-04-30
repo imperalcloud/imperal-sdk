@@ -150,6 +150,53 @@ class EventModel(BaseModel):
             )
         return v
 
+    # EV6..EV8 — UEB Phase 1 envelope fields (all optional; v1 payloads unaffected)
+    event_id: Optional[str] = None        # EV6: UUIDv7 idempotency/dedup key
+    schema_version: Optional[int] = None  # EV7: monotone breaking-change marker
+    source: Optional[Literal["user", "system", "automation", "rbac", "mcp", "webhook"]] = None  # EV8: AuditSource enum value
+
+
+# === UEB Event (v2 envelope) =========================================
+
+
+class Event(BaseModel):
+    """UEB v2 canonical Event envelope.
+
+    Full structured envelope used by the Universal Event Bus (UEB).
+    All three EV6..EV8 fields are optional so that v1 callers that
+    omit them continue to work without modification.
+
+    Fields
+    ------
+    type            — domain noun  (e.g. "state_changed", "invoice_paid")
+    scope           — bounded context (e.g. "email", "billing")
+    action          — verb  (e.g. "received", "updated")
+    actor           — identity that caused the event (user_id or system id)
+    tenant_id       — tenant namespace (Imperal canonical or "default")
+    user_id         — owning user identity
+    timestamp       — ISO-8601 UTC wall-clock
+    data            — free-form payload dict
+    event_id        — EV6: UUIDv7 idempotency/dedup key (optional)
+    schema_version  — EV7: monotone breaking-change marker (optional)
+    source          — EV8: AuditSource enum value (optional)
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    scope: str
+    action: str
+    actor: str
+    tenant_id: str = ""
+    user_id: str = ""
+    timestamp: str = ""
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+    # EV6..EV8 — optional; v1 payloads that omit them remain valid
+    event_id: Optional[str] = None        # EV6: UUIDv7 idempotency/dedup key
+    schema_version: Optional[int] = None  # EV7: monotone breaking-change marker
+    source: Optional[Literal["user", "system", "automation", "rbac", "mcp", "webhook"]] = None  # EV8: AuditSource enum value
+
 
 # === FunctionCall mirror =============================================
 
@@ -335,9 +382,43 @@ def get_action_result_schema() -> Dict[str, Any]:
 
 
 def get_event_schema() -> Dict[str, Any]:
-    """JSON Schema (Draft 2020-12) for platform Event envelopes."""
+    """JSON Schema (Draft 2020-12) for platform Event envelopes.
+
+    EV6..EV8 optional fields are normalised: the `source` property is
+    flattened from Pydantic's anyOf(Literal, null) form to a clean
+    ``{"type": "string", "enum": [...], "description": "..."}`` entry so
+    that JSON Schema consumers can read the enum list directly without
+    unwrapping anyOf.  The other EV6/EV7 optional fields (event_id,
+    schema_version) are similarly flattened to their scalar types.
+    """
+    schema = EventModel.model_json_schema()
+    props = schema.setdefault("properties", {})
+
+    # Flatten EV6: event_id  Optional[str] → {type: string, description: ...}
+    if "event_id" in props:
+        props["event_id"] = {
+            "type": "string",
+            "description": "EV6 UUIDv7 idempotency/dedup key",
+        }
+
+    # Flatten EV7: schema_version  Optional[int] → {type: integer, minimum: 1, description: ...}
+    if "schema_version" in props:
+        props["schema_version"] = {
+            "type": "integer",
+            "minimum": 1,
+            "description": "EV7 monotone breaking-change marker",
+        }
+
+    # Flatten EV8: source  Optional[Literal[...]] → {type: string, enum: [...], description: ...}
+    if "source" in props:
+        props["source"] = {
+            "type": "string",
+            "enum": ["user", "system", "automation", "rbac", "mcp", "webhook"],
+            "description": "EV8 AuditSource value",
+        }
+
     return _shape_schema(
-        EventModel.model_json_schema(),
+        schema,
         id_slug="event",
         title="Imperal Platform Event Envelope",
         description=(

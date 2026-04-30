@@ -25,6 +25,27 @@
       "additionalProperties": true,
       "title": "Data",
       "type": "object"
+    },
+    "event_id": {
+      "type": "string",
+      "description": "EV6 UUIDv7 idempotency/dedup key"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "EV7 monotone breaking-change marker"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "user",
+        "system",
+        "automation",
+        "rbac",
+        "mcp",
+        "webhook"
+      ],
+      "description": "EV8 AuditSource value"
     }
   },
   "required": [
