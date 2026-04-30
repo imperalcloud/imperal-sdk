@@ -48,6 +48,17 @@ class EventHandlerDef:
     func: Callable
 
 @dataclass
+class EmitsDef:
+    event_type: str
+    schema_ref: str | None = None
+
+    def to_manifest(self) -> dict:
+        out: dict = {"type": self.event_type}
+        if self.schema_ref:
+            out["schema_ref"] = self.schema_ref
+        return out
+
+@dataclass
 class ExposedMethod:
     name: str
     func: Callable
@@ -84,6 +95,7 @@ class Extension:
         self._health_check: HealthCheckDef | None = None
         self._webhooks: dict[str, WebhookDef] = {}
         self._event_handlers: list[EventHandlerDef] = []
+        self._declared_emits: list[EmitsDef] = []
         self._exposed: dict[str, ExposedMethod] = {}
         self._panels: dict[str, dict] = {}
         self._tray: dict[str, "TrayDef"] = {}
@@ -320,6 +332,27 @@ class Extension:
             return func
         return decorator
 
+    def emits(self, event_type: str, *, schema_ref: str | None = None):
+        """Declare an event this extension emits. Powers manifest emits[] section.
+
+        Enforces federal cross-namespace block: event_type MUST be prefixed with
+        this extension's app_id (e.g. ``"billing.topup_completed"`` for app_id
+        ``"billing"``). Cross-namespace declarations raise ValueError immediately.
+        """
+        if "." not in event_type:
+            raise ValueError(
+                f"@ext.emits: event_type must be dotted, got {event_type!r}"
+            )
+        if not event_type.startswith(self.app_id + "."):
+            raise ValueError(
+                f"@ext.emits: event_type {event_type!r} must be prefixed by app_id "
+                f"{self.app_id!r} (federal cross-namespace block)"
+            )
+        def decorator(func: Callable) -> Callable:
+            self._declared_emits.append(EmitsDef(event_type=event_type, schema_ref=schema_ref))
+            return func
+        return decorator
+
     def expose(self, name: str, action_type: str = "read"):
         """Expose a method for inter-extension calls via ctx.extensions.call()."""
         def decorator(func: Callable) -> Callable:
@@ -428,6 +461,10 @@ class Extension:
     @property
     def event_handlers(self) -> list[EventHandlerDef]:
         return self._event_handlers
+
+    @property
+    def declared_emits(self) -> list[EmitsDef]:
+        return self._declared_emits
 
     @property
     def exposed(self) -> dict[str, ExposedMethod]:
