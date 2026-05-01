@@ -10,6 +10,7 @@ execution.
 from __future__ import annotations
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any, Iterable
 
 if TYPE_CHECKING:
@@ -30,8 +31,9 @@ except ImportError:
 # Import with fallback mirroring the exact 9 keys — so a missing/broken
 # Task 19 module still leaves the bleed guard operational on the canonical set.
 try:
-    from imperal_sdk.chat.error_codes import ERROR_TAXONOMY  # type: ignore
+    from imperal_sdk.chat.error_codes import ERROR_TAXONOMY, FABRICATED_ID_SHAPE  # type: ignore
 except ImportError:  # pragma: no cover — defensive
+    FABRICATED_ID_SHAPE = "FABRICATED_ID_SHAPE"  # type: ignore[assignment]
     ERROR_TAXONOMY = frozenset({
         "VALIDATION_MISSING_FIELD",
         "VALIDATION_TYPE_ERROR",
@@ -324,3 +326,46 @@ def _check_confirmation_guard(
         "params": tu.input,
         "action_type": action_type,
     })
+
+
+# ── I-AH-1 L3: empirically observed fabricated id shape rejection ─────────
+# Federal anti-hallucination invariant. Closes Bug-1 from prod chat test
+# 2026-05-01 02:25 UTC where LLM emitted message_id="webhostmost-outlook-1"
+# / "ivalik-gmail-4" — slug shapes that don't exist in any provider's ID
+# format and aren't anywhere in the codebase. Real Outlook IDs are ~150-char
+# base64; real Gmail IDs are 16-char hex; UUIDs and other long opaque IDs
+# pass through unchanged.
+
+_FABRICATED_SLUG_RE = re.compile(r"^[a-z][a-z0-9]*-[a-z][a-z0-9]*-\d+$")
+
+# Fields whose values must be provider-native IDs, never invented.
+_ID_SHAPE_FIELDS = ("message_id", "thread_id", "email_id", "msg_id")
+
+
+def check_id_shape_fabrication(params: dict) -> dict | None:
+    """Reject empirically observed fabricated message_id slug shapes.
+
+    Returns ``None`` when no fabrication is detected; otherwise a dict
+    matching the standard SDK error envelope:
+
+        {"error_code": "FABRICATED_ID_SHAPE", "field": <name>,
+         "value": <bad>, "hint": <self-correction guidance>}
+
+    Federal invariant: I-AH-1.
+    """
+    if not isinstance(params, dict):
+        return None
+    for field in _ID_SHAPE_FIELDS:
+        val = params.get(field)
+        if isinstance(val, str) and _FABRICATED_SLUG_RE.match(val):
+            return {
+                "error_code": FABRICATED_ID_SHAPE,
+                "field": field,
+                "value": val,
+                "hint": (
+                    "The supplied id matches a fabrication pattern. "
+                    "Real IDs come ONLY from inbox(), search(), folder(), or "
+                    "the mail_inbox_summary skeleton. Call one of those first."
+                ),
+            }
+    return None
