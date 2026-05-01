@@ -55,3 +55,21 @@ def test_M8_2_exposed_name_unique():
     ]
     with pytest.raises(ValueError, match="M8.2"):
         validate_manifest_dict(m)
+
+
+def test_M7_3_empty_emit_type_rejected_by_pydantic():
+    """Empty emit type fails Pydantic min_length=1 (federal no-silent-drop)."""
+    m = _base()
+    m["events"] = {"subscribes": [], "emits": [{"type": "", "schema_ref": "#/x"}]}
+    issues = validate_manifest_dict(m)
+    assert any("type" in str(i).lower() for i in issues), \
+        f"Expected Pydantic to reject empty emit type, got issues: {issues}"
+
+
+def test_M7_3_empty_subscribe_type_rejected_by_pydantic():
+    """Empty subscribe type fails Pydantic min_length=1."""
+    m = _base()
+    m["events"] = {"subscribes": [{"type": "", "handler": "h"}], "emits": []}
+    issues = validate_manifest_dict(m)
+    assert any("type" in str(i).lower() for i in issues), \
+        f"Expected Pydantic to reject empty subscribe type, got issues: {issues}"

@@ -156,7 +156,7 @@ class EventSubscription(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str
+    type: str = Field(..., min_length=1)
     handler: str
 
 
@@ -165,7 +165,7 @@ class EventEmit(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str
+    type: str = Field(..., min_length=1)
     schema_ref: Optional[str] = None
 
 
@@ -351,6 +351,11 @@ def validate_manifest_dict(data: Any) -> List["ValidationIssue"]:
             ))
 
     # --- Post-Pydantic semantic rules (raising) ---
+    # Only run when Pydantic found no issues — semantic rules operate on
+    # structurally valid data; running them on invalid data (e.g. empty type
+    # that Pydantic already caught) produces confusing double-errors.
+    if issues:
+        return issues
 
     # M6.3: webhook path uniqueness
     if "webhooks" in data and isinstance(data["webhooks"], list):
@@ -375,7 +380,9 @@ def validate_manifest_dict(data: Any) -> List["ValidationIssue"]:
             if not isinstance(emit, dict):
                 continue
             etype = emit.get("type", "")
-            if etype and not etype.startswith(app_id + "."):
+            # min_length=1 on EventEmit.type guarantees non-empty if Pydantic
+            # validation passed; the truthy guard is dropped (federal no-silent-drop).
+            if not etype.startswith(app_id + "."):
                 raise ValueError(
                     f"M7.3 events.emits[].type {etype!r} must be prefixed by "
                     f"app_id {app_id!r} (cross-namespace block)"
