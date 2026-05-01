@@ -758,3 +758,58 @@ async def test_had_successful_action_invariant_after_retry(allow_target_scope):
 
     # _make_chat_result computes had_successful_action from fcs
     assert result.get("_had_successful_action") is True
+
+
+# ---------------------------------------------------------------------------
+# Task 8: I-PYDANTIC-WIRE-FROZEN — schema snapshot + FunctionCallModel validates
+# ---------------------------------------------------------------------------
+
+
+def test_chat_result_schema_unchanged():
+    """chat_result.schema.json file content must be byte-identical to pre-feature snapshot.
+
+    Wire contract is FROZEN per I-PYDANTIC-WIRE-FROZEN. If a schema change
+    snuck in, this test fails — engineer must justify in CHANGELOG and bump
+    schema version explicitly.
+    """
+    import hashlib
+    from pathlib import Path
+    schema_path = Path(__file__).parent.parent / "src" / "imperal_sdk" / "schemas" / "chat_result.schema.json"
+    actual_hash = hashlib.sha256(schema_path.read_bytes()).hexdigest()
+    # Snapshot recorded at v4.0.1 (pinned during Task 8 implementation 2026-05-02).
+    EXPECTED_HASH = "8f930069edf38195027e93338da73913d358cb75256abaa7074585be5e4929c5"
+    assert actual_hash == EXPECTED_HASH, (
+        f"chat_result.schema.json drifted from frozen v4.0.1 snapshot. "
+        f"actual={actual_hash}, expected={EXPECTED_HASH}. "
+        f"If this is intentional, update EXPECTED_HASH and document in CHANGELOG."
+    )
+
+
+@pytest.mark.asyncio
+async def test_function_call_model_validates_post_retry_dict(allow_target_scope):
+    """Both retry-success and retry-exhausted fc dicts validate against FunctionCallModel."""
+    from imperal_sdk.types.contracts import FunctionCallModel
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+    from imperal_sdk.chat.handler import handle_message
+
+    # Retry-success scenario
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        [_MockToolUseBlock(id="tu_2", name="create_task",
+            input={"title": "T", "project_id": "p"})],
+        [_MockTextBlock(text="ok")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        result_dict = await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # Validate every functions_called entry against the wire model
+    for fc_dict in result_dict.get("_functions_called", []):
+        # FunctionCallModel.extra="forbid" — this raises if ANY extra field
+        # snuck through (e.g. retry_count, retry_history)
+        FunctionCallModel.model_validate(fc_dict)
