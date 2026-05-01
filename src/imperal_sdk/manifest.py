@@ -84,6 +84,15 @@ def generate_manifest(ext: Extension) -> dict:
             "emits":      [e.to_manifest() for e in ext.declared_emits],
         }
 
+    if ext.exposed:
+        manifest["exposed"] = [e.to_manifest() for e in ext.exposed.values()]
+
+    if ext.lifecycle or ext._health_check:
+        manifest["lifecycle"] = ext._build_lifecycle_section()
+
+    if ext.tray_items:
+        manifest["tray"] = [t.to_manifest() for t in ext.tray_items.values()]
+
     if ext.migrations_dir:
         manifest["migrations_dir"] = ext.migrations_dir
 

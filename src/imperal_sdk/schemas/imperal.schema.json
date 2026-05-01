@@ -69,6 +69,121 @@
       "title": "Events",
       "type": "object"
     },
+    "ExposedDecl": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['exposed']` (M8).",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "action_type"
+      ],
+      "title": "ExposedDecl",
+      "type": "object"
+    },
+    "HealthCheckDecl": {
+      "additionalProperties": false,
+      "description": "The `health_check` sub-object in `manifest['lifecycle']` (M9).",
+      "properties": {
+        "interval_sec": {
+          "default": 60,
+          "title": "Interval Sec",
+          "type": "integer"
+        }
+      },
+      "title": "HealthCheckDecl",
+      "type": "object"
+    },
+    "LifecycleDecl": {
+      "additionalProperties": false,
+      "description": "The `manifest['lifecycle']` section (M9).",
+      "properties": {
+        "on_install": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "On Install"
+        },
+        "on_uninstall": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "On Uninstall"
+        },
+        "on_enable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "On Enable"
+        },
+        "on_disable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "On Disable"
+        },
+        "on_upgrade": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "On Upgrade"
+        },
+        "health_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HealthCheckDecl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "LifecycleDecl",
+      "type": "object"
+    },
     "Schedule": {
       "additionalProperties": false,
       "description": "One entry in `manifest['schedules']`.",
@@ -183,6 +298,45 @@
         "required"
       ],
       "title": "ToolParam",
+      "type": "object"
+    },
+    "TrayDecl": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['tray']` (M10).",
+      "properties": {
+        "tray_id": {
+          "title": "Tray Id",
+          "type": "string"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "tooltip": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tooltip"
+        }
+      },
+      "required": [
+        "tray_id"
+      ],
+      "title": "TrayDecl",
       "type": "object"
     },
     "Webhook": {
@@ -320,6 +474,47 @@
         }
       ],
       "default": null
+    },
+    "exposed": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ExposedDecl"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exposed"
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LifecycleDecl"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "tray": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/TrayDecl"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tray"
     },
     "name": {
       "anyOf": [

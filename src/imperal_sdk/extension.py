@@ -75,6 +75,9 @@ class ExposedMethod:
     func: Callable
     action_type: str = "read"
 
+    def to_manifest(self) -> dict:
+        return {"name": self.name, "action_type": self.action_type}
+
 @dataclass
 class TrayDef:
     """System tray item — icon + badge + optional dropdown panel in the OS top bar."""
@@ -82,6 +85,9 @@ class TrayDef:
     func: Callable
     icon: str = "Circle"
     tooltip: str = ""
+
+    def to_manifest(self) -> dict:
+        return {"tray_id": self.tray_id, "icon": self.icon, "tooltip": self.tooltip}
 
 class Extension:
     """Imperal Cloud Extension."""
@@ -309,6 +315,26 @@ class Extension:
         """Register health check. Called every 60s by kernel."""
         self._health_check = HealthCheckDef(func=func)
         return func
+
+    def _build_lifecycle_section(self) -> dict:
+        """Aggregate _lifecycle hooks + health_check into the manifest lifecycle dict."""
+        lc: dict = {}
+        # Simple boolean hooks
+        for simple_key in ("on_install", "on_uninstall", "on_enable", "on_disable"):
+            if simple_key in self._lifecycle:
+                lc[simple_key] = True
+        # on_upgrade: extract versions from keys like "on_upgrade:2.0.0"
+        upgrade_versions = sorted(
+            hook.version
+            for key, hook in self._lifecycle.items()
+            if key.startswith("on_upgrade:")
+        )
+        if upgrade_versions:
+            lc["on_upgrade"] = upgrade_versions
+        # health_check
+        if self._health_check is not None:
+            lc["health_check"] = {"interval_sec": 60}
+        return lc
 
     def webhook(self, path: str, method: str = "POST", secret_header: str = ""):
         """Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.

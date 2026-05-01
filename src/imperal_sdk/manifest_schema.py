@@ -178,6 +178,46 @@ class Events(BaseModel):
     emits: List[EventEmit] = Field(default_factory=list)
 
 
+class ExposedDecl(BaseModel):
+    """One entry in `manifest['exposed']` (M8)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    action_type: str
+
+
+class HealthCheckDecl(BaseModel):
+    """The `health_check` sub-object in `manifest['lifecycle']` (M9)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    interval_sec: int = 60
+
+
+class LifecycleDecl(BaseModel):
+    """The `manifest['lifecycle']` section (M9)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    on_install: Optional[bool] = None
+    on_uninstall: Optional[bool] = None
+    on_enable: Optional[bool] = None
+    on_disable: Optional[bool] = None
+    on_upgrade: Optional[List[str]] = None  # semver list
+    health_check: Optional[HealthCheckDecl] = None
+
+
+class TrayDecl(BaseModel):
+    """One entry in `manifest['tray']` (M10)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tray_id: str
+    icon: Optional[str] = None
+    tooltip: Optional[str] = None
+
+
 # === Root model =======================================================
 
 class Manifest(BaseModel):
@@ -206,6 +246,9 @@ class Manifest(BaseModel):
     config_defaults: Optional[Dict[str, Any]] = None
     webhooks: Optional[List[Webhook]] = None
     events: Optional[Events] = None
+    exposed: Optional[List[ExposedDecl]] = None
+    lifecycle: Optional[LifecycleDecl] = None
+    tray: Optional[List[TrayDecl]] = None
 
     # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
     name: Optional[str] = None
@@ -343,6 +386,10 @@ __all__ = [
     "EventSubscription",
     "EventEmit",
     "Events",
+    "ExposedDecl",
+    "HealthCheckDecl",
+    "LifecycleDecl",
+    "TrayDecl",
     "validate_manifest_dict",
     "get_schema",
     "MANIFEST_SCHEMA",
