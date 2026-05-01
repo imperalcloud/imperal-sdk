@@ -654,3 +654,107 @@ async def test_generic_exception_does_not_retry(allow_target_scope):
     assert client.call_count == 2
     assert len(ext._functions_called) == 1
     assert ext._functions_called[0]["result"]["error_code"] == "INTERNAL"
+
+
+# ---------------------------------------------------------------------------
+# Task 7: I-PYDANTIC-FC-SINGLE-APPEND — one fc per logical tool call
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_successful_retry_produces_single_fc_entry(allow_target_scope):
+    """Retry success → exactly one fc entry (the success row), no garbage."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        [_MockToolUseBlock(id="tu_2", name="create_task",
+            input={"title": "T", "project_id": "p"})],
+        [_MockTextBlock(text="ok")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_exhausted_retry_produces_single_fc_entry(allow_target_scope):
+    """Retry exhausted → exactly one fc entry (the failure row), no partial entries."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        [_MockToolUseBlock(id="tu_2", name="create_task", input={"title": "T"})],  # missing project_id
+        [_MockToolUseBlock(id="tu_3", name="create_task", input={"description": "y"})],  # 3rd attempt to exhaust
+        [_MockTextBlock(text="failed")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_llm_gave_up_produces_single_fc_entry(allow_target_scope):
+    """LLM gives up in retry → exactly one fc entry (failure row)."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        [_MockTextBlock(text="giving up")],
+        [_MockTextBlock(text="...")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_had_successful_action_invariant_after_retry(allow_target_scope):
+    """ChatResult.had_successful_action == True only when final fc has success=True + write/destructive."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        [_MockToolUseBlock(id="tu_2", name="create_task",
+            input={"title": "T", "project_id": "p"})],
+        [_MockTextBlock(text="ok")],
+    ])
+    ext = _build_test_chat_ext(client)  # create_task is action_type=write
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        result = await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # _make_chat_result computes had_successful_action from fcs
+    assert result.get("_had_successful_action") is True
