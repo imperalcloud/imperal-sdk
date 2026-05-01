@@ -726,7 +726,18 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
                     tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": guard_content})
                     continue
 
-                content = await _execute_function(chat_ext, ctx, tu, action_type, cfg)
+                content = await _execute_function(
+                    chat_ext, ctx, tu, action_type, cfg,
+                    retry_ctx={
+                        "client": client,
+                        "messages": messages,
+                        "_system": _system_for_round,
+                        "_exec_cfg": _exec_cfg,
+                        "_tools_for_llm": _tools_for_llm,
+                        "_tool_use_mt": _tool_use_mt,
+                        "_api_kwargs": _api_kwargs,
+                    },
+                )
                 tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": content})
 
             if any(fc["intercepted"] for fc in chat_ext._functions_called):
