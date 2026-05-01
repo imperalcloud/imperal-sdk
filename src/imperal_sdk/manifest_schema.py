@@ -350,6 +350,48 @@ def validate_manifest_dict(data: Any) -> List["ValidationIssue"]:
                 fix=fix,
             ))
 
+    # --- Post-Pydantic semantic rules (raising) ---
+
+    # M6.3: webhook path uniqueness
+    if "webhooks" in data and isinstance(data["webhooks"], list):
+        paths = [
+            w["path"] for w in data["webhooks"]
+            if isinstance(w, dict) and "path" in w
+        ]
+        if len(paths) != len(set(paths)):
+            raise ValueError(
+                f"M6.3 webhooks[].path duplicate — paths must be unique: {paths}"
+            )
+
+    # M7.3: events.emits[].type must be prefixed by app_id (cross-namespace block)
+    if (
+        "events" in data
+        and isinstance(data["events"], dict)
+        and "emits" in data["events"]
+        and isinstance(data["events"]["emits"], list)
+    ):
+        app_id = data.get("app_id", "")
+        for emit in data["events"]["emits"]:
+            if not isinstance(emit, dict):
+                continue
+            etype = emit.get("type", "")
+            if etype and not etype.startswith(app_id + "."):
+                raise ValueError(
+                    f"M7.3 events.emits[].type {etype!r} must be prefixed by "
+                    f"app_id {app_id!r} (cross-namespace block)"
+                )
+
+    # M8.2: exposed name uniqueness
+    if "exposed" in data and isinstance(data["exposed"], list):
+        names = [
+            e["name"] for e in data["exposed"]
+            if isinstance(e, dict) and "name" in e
+        ]
+        if len(names) != len(set(names)):
+            raise ValueError(
+                f"M8.2 exposed[].name duplicate — names must be unique: {names}"
+            )
+
     return issues
 
 
