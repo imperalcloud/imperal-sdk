@@ -21,7 +21,7 @@ that file rather than importing the SDK.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -146,8 +146,8 @@ class Webhook(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    path: str = Field(..., min_length=1)
-    method: str = "POST"
+    path: str = Field(..., pattern=r"^/[a-z0-9_/-]+$")
+    method: Literal["POST", "GET", "PUT", "DELETE"] = "POST"
     secret_header: str = ""
 
 
@@ -184,7 +184,7 @@ class ExposedDecl(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    action_type: str
+    action_type: Literal["read", "write"]
 
 
 class HealthCheckDecl(BaseModel):
@@ -192,7 +192,7 @@ class HealthCheckDecl(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    interval_sec: int = 60
+    interval_sec: int = Field(default=60, ge=30)
 
 
 class LifecycleDecl(BaseModel):
@@ -213,7 +213,7 @@ class TrayDecl(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    tray_id: str
+    tray_id: str = Field(..., pattern=r"^[a-z][a-z0-9_-]+$")
     icon: Optional[str] = None
     tooltip: Optional[str] = None
 
@@ -232,7 +232,7 @@ class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # --- Base (always present) ---
-    manifest_schema_version: Optional[int] = None
+    manifest_schema_version: Optional[Literal[1, 2]] = None
     app_id: str
     version: str
     capabilities: List[str] = Field(default_factory=list)

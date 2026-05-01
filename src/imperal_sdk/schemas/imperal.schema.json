@@ -78,6 +78,10 @@
           "type": "string"
         },
         "action_type": {
+          "enum": [
+            "read",
+            "write"
+          ],
           "title": "Action Type",
           "type": "string"
         }
@@ -95,6 +99,7 @@
       "properties": {
         "interval_sec": {
           "default": 60,
+          "minimum": 30,
           "title": "Interval Sec",
           "type": "integer"
         }
@@ -305,6 +310,7 @@
       "description": "One entry in `manifest['tray']` (M10).",
       "properties": {
         "tray_id": {
+          "pattern": "^[a-z][a-z0-9_-]+$",
           "title": "Tray Id",
           "type": "string"
         },
@@ -344,12 +350,18 @@
       "description": "One entry in `manifest['webhooks']` (M6).",
       "properties": {
         "path": {
-          "minLength": 1,
+          "pattern": "^/[a-z0-9_/-]+$",
           "title": "Path",
           "type": "string"
         },
         "method": {
           "default": "POST",
+          "enum": [
+            "POST",
+            "GET",
+            "PUT",
+            "DELETE"
+          ],
           "title": "Method",
           "type": "string"
         },
@@ -372,6 +384,10 @@
     "manifest_schema_version": {
       "anyOf": [
         {
+          "enum": [
+            1,
+            2
+          ],
           "type": "integer"
         },
         {
