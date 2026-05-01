@@ -2,6 +2,34 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v4.0.1 — 2026-05-01 — Federal validator polish: V18 ActionResult, V21 XML parser, V23 dropped, V24 AST walk
+
+Patch release that swaps regex / substring anti-patterns in V14-V24 for proper structural validation, and drops V23 as redundant.
+
+### Changed
+
+- **V18 — typed return annotation.** Now accepts the Generic-based ``ActionResult`` class (and its subclasses) in addition to Pydantic ``BaseModel`` subclasses. Previously V18 only checked the auto-detected ``_return_model`` field, which the decorator only populates for BaseModel returns; ``-> ActionResult`` annotations were rejected falsely. Uses the existing ``_resolve_hints`` + ``_looks_like_action_result`` helpers.
+- **V21 — SVG icon validation.** Replaced lowercase substring scan (``"<svg" in head``, ``"viewbox" in head``, ``"data:image" in head``) with proper ``xml.etree.ElementTree`` parsing. Now correctly: (a) ignores XML namespaces when checking the root tag, (b) reads the ``viewBox`` attribute via ``root.attrib`` lookup, (c) walks every ``<image>`` element and inspects its ``href`` / ``xlink:href`` attributes for embedded base64 raster, (d) returns a precise ``ParseError`` message when the SVG is malformed.
+- **V24 — ``ctx.skeleton`` access scan.** Replaced the regex ``\bctx\s*\.\s*skeleton\b`` with an ``ast.NodeVisitor`` that walks ``Attribute(value=Name('ctx'), attr='skeleton')`` nodes. The AST walk ignores incidental matches inside string literals, comments, and unrelated identifiers, and reports the precise line numbers of offending accesses.
+
+### Removed
+
+- **V23 — capability shape validator.** Dropped as redundant. ``manifest_schema.SCOPE_PATTERN`` already enforces capability/scope shape via the existing Pydantic field validator, and the federal capability registry check is a kernel-side concern (scope chokepoint), not the SDK's job. The previous V23 regex was also too strict (rejected real production patterns like ``events:subscribe`` and ``admin:users:read``).
+
+### Fixed
+
+- **Backward-compat ``_ext_functions`` accessor** — validator now reads from either ``chat_ext.functions`` (real ``ChatExtension`` property) or ``chat_ext._functions`` (older test fixtures), so unit tests using ``FakeChatExt`` mocks continue to work without breaking changes.
+- **Synthetic tools restored to their declarative sections** — ``__webhook__/__panel__/__widget__/__tray__`` entries skipped from the user-facing ``tools`` list again (the v4.0.0 release accidentally emitted them with a ``synthetic`` flag, which broke the ``M5`` identifier check downstream).
+- **Defensive ``getattr`` on ``FunctionDef`` fields** in V16/V19/V20 — older test fixtures without ``description`` / ``chain_callable`` / ``effects`` attributes no longer crash the validator with ``AttributeError``.
+- **``Manifest`` schema version literal expanded to ``[1, 2, 3]``** — the static ``imperal.schema.json`` file is regenerated to include the new v4.0.0 federal fields (``actions_explicit``, ``icon_size_bytes``, ``lifecycle_hooks`` + per-tool ``action_type``, ``chain_callable``, ``effects``, ``params_schema``, ``return_schema``, ``event``, ``owner_chat_tool``).
+
+### Tests
+
+- 934 passed, 3 skipped, 0 failed (was 12 failed in v4.0.0).
+- ``test_is_valid_no_errors`` updated to construct a federal-compliant ``Extension`` fixture (``display_name``, ``description``, ``icon``, ``actions_explicit``).
+- ``test_manifest_schema_version_rejects_3`` renamed to ``test_manifest_schema_version_rejects_4`` — v4.0.0 accepts ``schema_version=3``; v5.0.0 will accept ``=4``.
+- ``test_manifest_emits_webhooks_section`` asserts ``schema_version == 3`` (was ``2``).
+
 ## v4.0.0 — 2026-05-01 — Federal Extension Contract: typed dispatch, manifest v3, V14-V24 validators
 
 **BREAKING.** Major release. Closes the chain-planner BYOLLM-router gap that allowed silent write failures (extension says "deleted" but nothing was deleted because the router LLM summarised instead of dispatching the typed call). Federal contract: every extension that passes V14-V24 is GUARANTEED to work with the kernel's typed-dispatch chain pipeline — no LLM guessing, no path divergence.

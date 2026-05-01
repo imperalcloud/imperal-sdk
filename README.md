@@ -29,85 +29,90 @@ Think **Shopify for AI agents**. You build it. Users install it. The platform ha
 pip install imperal-sdk
 ```
 
-### What's New in v3.7.0 (2026-05-01)
-
-**Anti-Hallucination Federal Hardening — I-AH-1.**
-
-- **`imperal_sdk.chat.guards.check_id_shape_fabrication`** — federal-grade
-  guard at the chat handler boundary. Rejects empirically observed
-  fabricated `message_id` / `thread_id` / `email_id` / `msg_id` slug
-  pattern `^[a-z][a-z0-9]*-[a-z][a-z0-9]*-\d+$` BEFORE Pydantic
-  coercion. Returns `error_code=FABRICATED_ID_SHAPE` with self-correction
-  hint so the LLM can call `inbox()` / `search()` / `folder()` first.
-- New error code `FABRICATED_ID_SHAPE` in `chat.error_codes.ERROR_TAXONOMY`.
-- 11 new tests; 934 total passing.
+### What's New in v4.0.0 — Federal Extension Contract (BREAKING)
 
 ```bash
-pip install 'imperal-sdk>=3.7.0'
+pip install 'imperal-sdk>=4.0.0'
 ```
 
-See [`CHANGELOG.md`](CHANGELOG.md) for full v3.7.0 notes. The companion
-five federal invariants (I-AH-2 v2, I-AH-3, I-AH-4, I-MAGIC-UX-1,
-I-MAGIC-UX-2) live in the kernel — see workspace doc
-`imperal/webbee/docs/anti-hallucination-federal-hardening.md`.
+v4.0.0 closes the chain-planner BYOLLM-router gap that allowed silent
+write failures (extension says "deleted" but nothing was deleted because
+the router LLM summarised instead of calling the typed function). The
+federal contract guarantees every extension that passes V14-V24 works
+with the kernel's typed-dispatch chain pipeline — no LLM guessing.
 
-### What's New in v3.5.x (2026-04-30)
+**New Extension contract surface:**
 
-**Federal Audit Closure + LLM Config Unification (LCU).**
+```python
+from pydantic import BaseModel, Field
+from imperal_sdk import Extension, ChatExtension, ActionResult
 
-- **v3.5.0 — `ExtensionsClient.emit()` routes through kernel audit chokepoint**
-  (`imperal_kernel.audit.record_action`). Every cross-extension emit now
-  produces an `action_ledger` row in addition to firing the Redis pub/sub
-  event — federal-grade forensics on every extension-emitted event.
-  Backward compatible: emit signature unchanged; falls back to legacy direct
-  Redis publish when the SDK runs outside a kernel (unit tests).
-- **v3.5.1 — `LLMConfig` extended with 6 admin-tunable AI param fields**
-  (`temperature`, `max_tokens`, `top_p`, `presence_penalty`,
-  `frequency_penalty`, `stop_sequences`). New `LLMConfig.api_kwargs()`
-  returns provider-filtered kwargs (e.g. drops `presence_penalty` for
-  Anthropic, all but `max_tokens` for OpenAI gpt-5/o-series). Mirrors the
-  kernel-side LCU schema so admin per-purpose / per-extension slots reach
-  the upstream API uniformly. Chat handler `tool_use` loop `max_tokens` is
-  no longer hardcoded — reads via federal cascade
-  (`cfg.max_tokens` → `ctx.config.tool_use_max_tokens` → 2048 backstop).
-
-```bash
-pip install 'imperal-sdk>=3.5.1,<4.0.0'
+ext = Extension(
+    "my-agent",
+    version="1.0.0",
+    display_name="My Agent",                            # V15 — human-readable, ≥3 chars
+    description=(                                       # V14 — ≥40 chars, what it does
+        "Demo agent that greets users and echoes "
+        "messages back, demonstrating federal v4 contract."
+    ),
+    icon="icon.svg",                                    # V21 — required SVG, ≤100KB, viewBox
+    actions_explicit=True,                              # V19 — federal default
+    capabilities=["my-agent:read", "my-agent:write"],
+)
 ```
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full v3.5.x notes and the kernel-
-side reference docs `audit-chokepoint.md` / `llm-config-cascade.md` (in the
-Imperal kernel `docs/` tree).
+**New per-function fields:**
 
-### What's New in v3.0.0 (breaking)
+```python
+class GreetParams(BaseModel):                            # V17 — explicit Pydantic params
+    name: str = Field(default="World", description="Name to greet")
 
-**Identity Contract Unification (W1)** — single source of truth for `User`
-/ `Tenant` shapes lives in `imperal_sdk.types.identity`.
 
-- **Legacy `imperal_sdk.auth.user.User` is gone.** Replace
-  `from imperal_sdk.auth.user import User` with
-  `from imperal_sdk.types.identity import User` (full / API-facing) or
-  `UserContext` (lean / runtime — what `ctx.user` is).
-- **`ctx.user.id` → `ctx.user.imperal_id`.** The attribute was renamed
-  to match the canonical wire field name. Non-cosmetic — the SDK has
-  no `.id` alias on `UserContext`, so old code raises `AttributeError`.
-- **All identity types are `frozen=True` + `extra="forbid"`** — federal-
-  strict deny-over-leak posture. Auth-gw `UserResponse` / `TenantResponse`
-  now subclass the SDK types so wire shape is identical end-to-end.
-- **`has_scope` / `has_role` helpers** preserved on `User` and
-  `UserContext`. Dot-notation: `user.has_scope("cases.read")` returns
-  `True` for `"cases.*"`.
-- **Drift validator** — `python -m imperal_sdk.tools.validate_identity_contract
-  --authgw-path=<dir>` enforced by GitHub Actions CI gate, auth-gw
-  pre-commit hook, and an hourly SigNoz sweeper.
-
-```bash
-pip install 'imperal-sdk>=3.0.0,<4.0.0'
+@chat.function(
+    "create_note",
+    action_type="write",
+    description="Create a note in the user's notebook with optional folder.",
+    chain_callable=True,                                # V19 — kernel typed dispatch (default True for write/destructive)
+    effects=["create:note"],                            # V20 — declared side-effect surface
+)
+async def fn_create_note(ctx, params: NoteParams) -> ActionResult:   # V18 — typed return
+    ...
 ```
 
-Older v1.6.0+ skeleton/cache/HMAC features remain — see
-[`CHANGELOG.md`](CHANGELOG.md) for the full v3.0.0 migration guide and
-v2.0.1 baseline.
+**Manifest schema v3** — every typed `@chat.function` is now emitted as
+a tool with full `params_schema`, `return_schema`, `chain_callable`,
+`effects`. The kernel reads this directly and dispatches typed calls
+without delegating to the ChatExtension LLM router.
+
+**Federal validators V14-V24 (all ERROR severity):**
+
+| Rule | Enforces |
+|---|---|
+| V14 | Extension `description` ≥40 chars, ≠ app_id |
+| V15 | Extension `display_name` ≥3 chars, ≠ app_id (verbatim) |
+| V16 | Per-tool `description` ≥20 chars (synthetic skipped) |
+| V17 | Explicit Pydantic `BaseModel` params on every `@chat.function` |
+| V18 | Typed return annotation (`ActionResult` or Pydantic model) |
+| V19 | `actions_explicit=True` + `chain_callable=True` on writes/destructive |
+| V20 | `effects=[...]` declared on writes/destructive (WARN v4, ERROR v5) |
+| V21 | Required SVG icon — XML-validated `<svg>` root + `viewBox`, ≤100KB, no embedded raster |
+| V22 | Lifecycle hook signatures match SDK contract (closes `on_refresh()` TypeError class) |
+| V24 | Handlers must NOT read `ctx.skeleton.*` (AST walk — skeleton is LLM context only, use `ctx.api`) |
+
+**Removed (BREAKING):**
+
+- `ChatExtension(model=...)` parameter (deprecated since 3.3.0). LLM
+  resolution lives in kernel ctx-injection (`ctx._llm_configs`).
+
+**Migration:** if you maintain an extension and your next publish via
+the Dev Portal fails one of V14-V24, the report tells you exactly which
+field to add. Existing deployed extensions keep working at runtime
+(kernel reads new manifest fields gracefully when present).
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full release notes and the
+v3.7.0 anti-hallucination guards (`I-AH-1` `FABRICATED_ID_SHAPE`) +
+prior v3.5.x federal audit closure (`audit-chokepoint`, `llm-config-cascade`)
++ v3.0.0 identity contract (`UserContext`, `ctx.user.imperal_id`).
 
 ---
 

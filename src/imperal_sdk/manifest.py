@@ -50,6 +50,12 @@ def generate_manifest(ext: Extension) -> dict:
     tools: list[dict] = []
 
     for name, tool_def in ext.tools.items():
+        if name.startswith("__"):
+            # Synthetic entries (__webhook__*, __panel__*, __widget__*, __tray__*)
+            # belong to their own declarative sections — keep them out of the
+            # user-facing tools list. The kernel reads them from
+            # webhooks / tray / exposed / panel sections directly.
+            continue
         sig = inspect.signature(tool_def.func)
         params = {}
         for pname, param in sig.parameters.items():
@@ -67,7 +73,6 @@ def generate_manifest(ext: Extension) -> dict:
             "description": tool_def.description,
             "scopes": tool_def.scopes,
             "parameters": params,
-            "synthetic": name.startswith("__"),
         })
 
     # Federal v4.0.0 — emit every @chat.function as a typed tool. This is what

@@ -16,7 +16,7 @@ def test_manifest_emits_webhooks_section():
     assert manifest["webhooks"] == [
         {"path": "/stripe/checkout", "method": "POST", "secret_header": "Stripe-Signature"}
     ]
-    assert manifest["manifest_schema_version"] == 2
+    assert manifest["manifest_schema_version"] == 3
 
 
 def test_manifest_no_webhooks_section_when_empty():

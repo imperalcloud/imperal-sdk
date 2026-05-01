@@ -254,7 +254,7 @@
     },
     "Tool": {
       "additionalProperties": false,
-      "description": "One entry in `manifest['tools']`.",
+      "description": "One entry in `manifest['tools']`.\n\nFederal v4.0.0 \u2014 typed dispatch fields (action_type, chain_callable,\neffects, params_schema, return_schema, event) declared at top level so\nthe kernel chain planner can route deterministically without\nre-deriving from extension code.",
       "properties": {
         "name": {
           "minLength": 1,
@@ -279,6 +279,99 @@
           },
           "title": "Parameters",
           "type": "object"
+        },
+        "action_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Type"
+        },
+        "chain_callable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Callable"
+        },
+        "effects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "params_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params Schema"
+        },
+        "return_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Return Schema"
+        },
+        "event": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event"
+        },
+        "owner_chat_tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Chat Tool"
+        },
+        "synthetic": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Synthetic"
         }
       },
       "required": [
@@ -388,7 +481,8 @@
         {
           "enum": [
             1,
-            2
+            2,
+            3
           ],
           "type": "integer"
         },
@@ -533,6 +627,46 @@
       ],
       "default": null,
       "title": "Tray"
+    },
+    "actions_explicit": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actions Explicit"
+    },
+    "icon_size_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Icon Size Bytes"
+    },
+    "lifecycle_hooks": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lifecycle Hooks"
     },
     "name": {
       "anyOf": [

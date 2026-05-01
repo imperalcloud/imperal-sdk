@@ -354,6 +354,14 @@ def validate_extension(ext) -> ValidationReport:
     icon_path = getattr(ext, "icon", "") or ""
     actions_explicit = getattr(ext, "actions_explicit", True)
 
+    def _ext_functions(chat_ext):
+        """Backward-compat accessor — real ChatExtension exposes a
+        ``.functions`` property; older test fixtures only have ``_functions``."""
+        funcs = getattr(chat_ext, "functions", None)
+        if funcs is None:
+            funcs = getattr(chat_ext, "_functions", {})
+        return funcs or {}
+
     # V14 — extension description ≥40 chars, ≠ app_id
     if not description or len(description.strip()) < 40 or description.strip() == app_id:
         report.issues.append(ValidationIssue(
@@ -396,10 +404,10 @@ def validate_extension(ext) -> ValidationReport:
     # V16 — every @chat.function description ≥20 chars (skip __* synthetic)
     chat_extensions: dict = getattr(ext, "_chat_extensions", {})
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
-        for fn_name, fn_def in chat_ext.functions.items():
+        for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
                 continue  # synthetic skip
-            fn_desc = (fn_def.description or "").strip()
+            fn_desc = (getattr(fn_def, "description", "") or "").strip()
             if len(fn_desc) < 20:
                 report.issues.append(ValidationIssue(
                     rule="V16", level="ERROR",
@@ -416,7 +424,7 @@ def validate_extension(ext) -> ValidationReport:
 
     # V17 — every @chat.function has explicit Pydantic params model
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
-        for fn_name, fn_def in chat_ext.functions.items():
+        for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
                 continue
             if getattr(fn_def, "_pydantic_model", None) is None:
@@ -433,23 +441,35 @@ def validate_extension(ext) -> ValidationReport:
                     ),
                 ))
 
-    # V18 — every @chat.function returns Pydantic model (subclass of ActionResult)
+    # V18 — every @chat.function declares a typed return annotation. Accepts
+    # ActionResult (or subclass) AND Pydantic BaseModel — uses the existing
+    # ``_looks_like_action_result`` + ``_resolve_hints`` helpers so the Generic-
+    # based ActionResult class is properly recognised.
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
-        for fn_name, fn_def in chat_ext.functions.items():
+        for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
                 continue
-            ret_model = getattr(fn_def, "_return_model", None)
-            if ret_model is None:
+            hints = _resolve_hints(fn_def.func)
+            ret = hints.get("return") if hints else None
+            if ret is None:
+                # Fallback for PEP 563 string annotations that didn't resolve.
+                ret = (getattr(fn_def.func, "__annotations__", {}) or {}).get("return")
+            ok = (
+                _looks_like_action_result(ret)
+                or _is_basemodel_subclass(ret)
+                or getattr(fn_def, "_return_model", None) is not None
+            )
+            if not ok:
                 report.issues.append(ValidationIssue(
                     rule="V18", level="ERROR",
                     message=(
-                        f"@chat.function {fn_name!r} must declare a Pydantic "
-                        f"return type (subclass of ActionResult)"
+                        f"@chat.function {fn_name!r} must declare a typed return "
+                        f"annotation: ``-> ActionResult`` (or subclass / Pydantic model)"
                     ),
                     fix=(
-                        "Annotate the handler return as `-> ActionResult` or a "
-                        "subclass. Federal V18 — kernel reads return_schema from "
-                        "manifest for typed dispatch."
+                        "Annotate the handler return as ``-> ActionResult``. "
+                        "Federal V18 — kernel reads return_schema from manifest "
+                        "for typed dispatch."
                     ),
                 ))
 
@@ -469,14 +489,16 @@ def validate_extension(ext) -> ValidationReport:
         ))
     else:
         for chat_tool_name, chat_ext in (chat_extensions or {}).items():
-            for fn_name, fn_def in chat_ext.functions.items():
+            for fn_name, fn_def in _ext_functions(chat_ext).items():
                 if fn_name.startswith("__"):
                     continue
-                if fn_def.action_type in ("write", "destructive") and not fn_def.chain_callable:
+                _fn_action = getattr(fn_def, "action_type", "read")
+                _fn_chain = getattr(fn_def, "chain_callable", True)
+                if _fn_action in ("write", "destructive") and not _fn_chain:
                     report.issues.append(ValidationIssue(
                         rule="V19", level="ERROR",
                         message=(
-                            f"@chat.function {fn_name!r} (action_type={fn_def.action_type}) "
+                            f"@chat.function {fn_name!r} (action_type={_fn_action}) "
                             f"must have chain_callable=True under actions_explicit=True"
                         ),
                         fix=(
@@ -488,14 +510,16 @@ def validate_extension(ext) -> ValidationReport:
     # V20 — every write/destructive @chat.function declares effects (info-level
     # for v4.0.0, error-level v5.0.0). Effects power the audit ledger + narrator.
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
-        for fn_name, fn_def in chat_ext.functions.items():
+        for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
                 continue
-            if fn_def.action_type in ("write", "destructive") and not fn_def.effects:
+            _fn_action20 = getattr(fn_def, "action_type", "read")
+            _fn_effects20 = getattr(fn_def, "effects", []) or []
+            if _fn_action20 in ("write", "destructive") and not _fn_effects20:
                 report.issues.append(ValidationIssue(
                     rule="V20", level="WARN",
                     message=(
-                        f"@chat.function {fn_name!r} ({fn_def.action_type}) "
+                        f"@chat.function {fn_name!r} ({_fn_action20}) "
                         f"should declare effects=['create:resource'] etc. "
                         f"(federal V20, error in v5.0.0)"
                     ),
@@ -505,7 +529,10 @@ def validate_extension(ext) -> ValidationReport:
                     ),
                 ))
 
-    # V21 — required SVG icon
+    # V21 — required SVG icon. Validates via ``xml.etree`` parser — checks
+    # the actual SVG document structure rather than substring-scanning.
+    # Catches wrong root element, missing viewBox attribute, and embedded
+    # base64 raster via real attribute lookup.
     if not icon_path:
         report.issues.append(ValidationIssue(
             rule="V21", level="ERROR",
@@ -526,41 +553,68 @@ def validate_extension(ext) -> ValidationReport:
             fix="Federal V21 — only SVG icons accepted. Convert raster to SVG.",
         ))
     else:
-        # Validate icon file content if locatable
         import os as _os
-        for candidate in (icon_path, _os.path.join(_os.getcwd(), icon_path)):
-            if _os.path.exists(candidate):
-                try:
-                    sz = _os.path.getsize(candidate)
-                    if sz > 100 * 1024:
+        import xml.etree.ElementTree as _ET
+        candidate = None
+        for cand in (icon_path, _os.path.join(_os.getcwd(), icon_path)):
+            if _os.path.exists(cand):
+                candidate = cand
+                break
+        if candidate is not None:
+            try:
+                sz = _os.path.getsize(candidate)
+            except OSError:
+                sz = 0
+            if sz > 100 * 1024:
+                report.issues.append(ValidationIssue(
+                    rule="V21", level="ERROR",
+                    message=f"Icon {icon_path!r} is {sz} bytes — max 100KB",
+                    fix="Optimize SVG (remove metadata, simplify paths) or split assets.",
+                ))
+            try:
+                tree = _ET.parse(candidate)
+                root = tree.getroot()
+                # Strip XML namespace from tag for comparison.
+                local_tag = root.tag.rsplit("}", 1)[-1]
+                if local_tag != "svg":
+                    report.issues.append(ValidationIssue(
+                        rule="V21", level="ERROR",
+                        message=f"Icon {icon_path!r} root element is <{local_tag}>, must be <svg>",
+                        fix="Federal V21 — root element must be <svg>.",
+                    ))
+                if not root.attrib.get("viewBox"):
+                    report.issues.append(ValidationIssue(
+                        rule="V21", level="ERROR",
+                        message=f"Icon {icon_path!r} missing viewBox attribute on <svg>",
+                        fix="Federal V21 — viewBox required for multi-size rendering.",
+                    ))
+                # Walk all <image> elements + check href / xlink:href for base64
+                # data URIs. Real attribute lookup beats substring scan.
+                for img in root.iter():
+                    img_local = img.tag.rsplit("}", 1)[-1]
+                    if img_local != "image":
+                        continue
+                    href = (
+                        img.attrib.get("href")
+                        or img.attrib.get("{http://www.w3.org/1999/xlink}href")
+                        or ""
+                    )
+                    if href.startswith("data:image") and "base64" in href:
                         report.issues.append(ValidationIssue(
                             rule="V21", level="ERROR",
-                            message=f"Icon {icon_path!r} is {sz} bytes — max 100KB",
-                            fix="Optimize SVG (remove metadata, simplify paths) or split assets.",
-                        ))
-                    with open(candidate, "rb") as _f:
-                        head = _f.read(2048).decode("utf-8", errors="ignore").lower()
-                    if "<svg" not in head:
-                        report.issues.append(ValidationIssue(
-                            rule="V21", level="ERROR",
-                            message=f"Icon {icon_path!r} missing <svg> root element",
-                            fix="Federal V21 — must be valid SVG XML.",
-                        ))
-                    if "viewbox" not in head:
-                        report.issues.append(ValidationIssue(
-                            rule="V21", level="ERROR",
-                            message=f"Icon {icon_path!r} missing viewBox attribute",
-                            fix="Federal V21 — viewBox required for multi-size rendering.",
-                        ))
-                    if "data:image" in head and "base64" in head:
-                        report.issues.append(ValidationIssue(
-                            rule="V21", level="ERROR",
-                            message=f"Icon {icon_path!r} contains embedded base64 raster",
+                            message=(
+                                f"Icon {icon_path!r} contains embedded base64 "
+                                f"raster in <image href=...>"
+                            ),
                             fix="Federal V21 — pure SVG only, no embedded PNG/JPEG.",
                         ))
-                except OSError:
-                    pass
-                break
+                        break
+            except _ET.ParseError as exc:
+                report.issues.append(ValidationIssue(
+                    rule="V21", level="ERROR",
+                    message=f"Icon {icon_path!r} is not valid XML: {exc}",
+                    fix="Federal V21 — must parse as well-formed SVG XML.",
+                ))
 
     # V22 — lifecycle hook signatures match SDK contract
     _LIFECYCLE_REQUIRED_KW = {
@@ -600,43 +654,50 @@ def validate_extension(ext) -> ValidationReport:
         except (ValueError, TypeError):
             pass
 
-    # V23 — capabilities in known set (<app>:read, <app>:write, <app>:*)
-    capabilities = getattr(ext, "capabilities", []) or []
-    _CAP_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*:(read|write|admin|\*)$")
-    for cap in capabilities:
-        if not _CAP_PATTERN.match(cap):
-            report.issues.append(ValidationIssue(
-                rule="V23", level="ERROR",
-                message=(
-                    f"Capability {cap!r} must be '<namespace>:read|write|admin|*' format"
-                ),
-                fix=(
-                    "Use 'notes:read', 'mail:write', 'admin:*', etc. "
-                    "Federal V23 — kernel only grants known capability shapes."
-                ),
-            ))
+    # V23 — DROPPED. ``manifest_schema.SCOPE_PATTERN`` already enforces scope
+    # shape via Pydantic validation. Federal capability registry validation is
+    # a kernel-side concern (scope chokepoint), not the SDK's job.
 
-    # V24 — handler bodies must NOT access ctx.skeleton.* for data reads
-    # (skeleton is LLM-only context cache; handlers use ctx.api).
-    # AST static analysis on each @chat.function body.
+    # V24 — handler bodies must NOT access ``ctx.skeleton.*``. Skeleton is the
+    # LLM context cache; handlers use ``ctx.api`` for real backend ops. Federal
+    # AST walk catches actual ``ctx.skeleton`` attribute access expressions and
+    # ignores incidental matches inside string literals or comments.
     import ast as _ast
     import inspect as _insp
-    _SKELETON_ACCESS_PATTERN = re.compile(r"\bctx\s*\.\s*skeleton\b")
+
+    class _SkeletonAccessVisitor(_ast.NodeVisitor):
+        def __init__(self):
+            self.hits: list[int] = []
+
+        def visit_Attribute(self, node: _ast.Attribute) -> None:
+            if node.attr == "skeleton":
+                inner = node.value
+                if isinstance(inner, _ast.Name) and inner.id == "ctx":
+                    self.hits.append(node.lineno)
+            self.generic_visit(node)
+
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
-        for fn_name, fn_def in chat_ext.functions.items():
+        for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
                 continue
             try:
                 src = _insp.getsource(fn_def.func)
             except (OSError, TypeError):
                 continue
-            if _SKELETON_ACCESS_PATTERN.search(src):
+            try:
+                tree = _ast.parse(_insp.cleandoc(src) if src.lstrip() != src else src)
+            except SyntaxError:
+                continue
+            visitor = _SkeletonAccessVisitor()
+            visitor.visit(tree)
+            if visitor.hits:
                 report.issues.append(ValidationIssue(
                     rule="V24", level="ERROR",
                     message=(
-                        f"@chat.function {fn_name!r} reads from ctx.skeleton — "
-                        f"federal V24 forbids this. Skeleton is the LLM context "
-                        f"cache (read by router/narrator), not a data source."
+                        f"@chat.function {fn_name!r} accesses ctx.skeleton at "
+                        f"line(s) {visitor.hits} — federal V24 forbids this. "
+                        f"Skeleton is the LLM context cache (read by "
+                        f"router/narrator), not a data source."
                     ),
                     fix=(
                         "Use ctx.api.<...>() to fetch from the real backend. "

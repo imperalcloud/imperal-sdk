@@ -76,12 +76,17 @@ def test_webhook_method_enum_rejects_invalid():
         jsonschema.validate(bad_method, schema)
 
 
-def test_manifest_schema_version_rejects_3():
-    """manifest_schema_version enum [1, 2] — version 3 is rejected."""
+def test_manifest_schema_version_rejects_4():
+    """manifest_schema_version enum [1, 2, 3] in v4.0.0 — version 4 rejected.
+
+    v4.0.0 (2026-05-01): Federal Extension Contract added schema_version=3 with
+    typed @chat.function emission, ``actions_explicit``, ``icon``, lifecycle
+    hook signatures. Future v5.0.0 bumps the enum to include 4.
+    """
     schema = json.loads(SCHEMA_PATH.read_text())
     bad_version = {
         "app_id": "my-ext", "version": "1.0.0",
-        "manifest_schema_version": 3,
+        "manifest_schema_version": 4,
         "tools": [], "signals": [], "schedules": [],
     }
     with pytest.raises(jsonschema.ValidationError):
