@@ -241,9 +241,9 @@ def _build_test_chat_ext(client) -> ChatExtension:
     chat_ext = ChatExtension(ext=ext, tool_name="tasks", description="tasks ext", system_prompt="Test")
 
     async def _create_task(ctx, params: _CreateTaskParams):
-        return ActionResult.ok(
-            summary=f"Created '{params.title}' in {params.project_id}",
+        return ActionResult.success(
             data={"task_id": "tsk_42"},
+            summary=f"Created '{params.title}' in {params.project_id}",
         )
 
     # Wire @chat.function manually using internal hooks
@@ -260,8 +260,33 @@ def _build_test_ctx() -> Any:
     return MockContext(user_id="imp_u_test")
 
 
+@pytest.fixture(autouse=False)
+def allow_target_scope(monkeypatch):
+    """Monkeypatch SDK-standalone _check_target_scope fallback to allow calls.
+
+    Without this, the fallback returns allowed=False (correct production
+    semantics when imperal_kernel is absent), blocking the integration test
+    from exercising the retry path. Tests that pass this fixture flag the
+    guard as a no-op for the duration of the test.
+    """
+    def _allow(**kwargs):
+        return {
+            "allowed": True,
+            "reason": "test fixture override",
+            "target_user_id": kwargs.get("user_id", ""),
+            "required_scope": "",
+            "force_confirmation": False,
+            "cross_user": False,
+            "verdict": "test_allow",
+        }
+    # Patch BOTH the source module AND the import site that chat/guards.py uses
+    monkeypatch.setattr("imperal_sdk.runtime.executor._check_target_scope", _allow)
+    monkeypatch.setattr("imperal_sdk.chat.guards._check_target_scope", _allow, raising=False)
+    yield
+
+
 @pytest.mark.asyncio
-async def test_retry_succeeds_on_attempt_2():
+async def test_retry_succeeds_on_attempt_2(allow_target_scope):
     """LLM emits invalid args first, valid after prose feedback. fc append happens once with success=True."""
     from imperal_sdk.chat.handler import handle_message
 
@@ -300,16 +325,18 @@ async def test_retry_succeeds_on_attempt_2():
 
 
 @pytest.mark.asyncio
-async def test_retry_exhausted_returns_validation_error(caplog):
+async def test_retry_exhausted_returns_validation_error(caplog, allow_target_scope):
     """LLM emits invalid args twice. Exit with VALIDATION_MISSING_FIELD. SigNoz outcome=exhausted."""
     from imperal_sdk.chat.handler import handle_message
 
     client = _MockLLMClient([
         # Round 1: missing fields
         [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
-        # Retry: still missing project_id
+        # Retry attempt 1: still missing project_id
         [_MockToolUseBlock(id="tu_2", name="create_task", input={"title": "T", "description": "x"})],
-        # No third tool_use — kernel sees exhausted, LLM emits final text
+        # Retry attempt 2: still missing project_id (retry_count reaches _RETRY_BUDGET=2)
+        [_MockToolUseBlock(id="tu_3", name="create_task", input={"title": "T", "description": "x"})],
+        # After exhausted path returns, kernel emits final text
         [_MockTextBlock(text="Не смог собрать аргументы")],
     ])
     ext = _build_test_chat_ext(client)
