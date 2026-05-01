@@ -843,3 +843,39 @@ async def test_no_retry_zero_extra_llm_calls(allow_target_scope):
     assert client.call_count == 2  # No extra LLM calls vs pre-feature baseline
     assert len(ext._functions_called) == 1
     assert ext._functions_called[0]["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# Task 10: retry layer does not swallow LLM client exceptions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_llm_client_error_in_retry_propagates(allow_target_scope):
+    """If the retry create_message call itself raises, exception propagates (not caught by retry layer)."""
+    import httpx
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        # Round 1: invalid tool_use
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        # Retry call raises
+        httpx.TimeoutException("retry call timed out"),
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        # handle_message has an outer except that catches Exception and returns
+        # a partial-result error response — so the timeout is caught at THAT
+        # level (not by the retry layer). Verify it surfaces a partial-result
+        # error response, NOT a normal completion.
+        result = await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # The outer handler catches Exception (handler.py:508-535) and returns
+    # an error result. We verify the retry layer did NOT swallow the error.
+    assert "Error" in result.get("response", "") or result.get("response", "").startswith("Error:")
