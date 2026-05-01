@@ -361,3 +361,122 @@ async def test_retry_exhausted_returns_validation_error(caplog, allow_target_sco
         "validation_retry_outcome" in r.message and "outcome=exhausted" in r.message
         for r in caplog.records
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 5: gave_up + redundant + multi-tool_use cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_retry_llm_gave_up_with_final_text(caplog, allow_target_scope):
+    """LLM emits final text in retry round instead of tool_use → exit retry, fail row appended."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        # Retry round: only text, no tool_use
+        [_MockTextBlock(text="Не смог собрать аргументы")],
+        # Final text (caller doesn't reach this — but enqueue defensively)
+        [_MockTextBlock(text="...")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        with caplog.at_level(logging.INFO, logger="imperal_sdk.chat.handler"):
+            await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["success"] is False
+    assert any("outcome=llm_gave_up" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_retry_redundant_args_logged(caplog, allow_target_scope):
+    """LLM repeats byte-identical args in retry → log warning + count toward budget."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        # Retry: identical args (byte-identical input)
+        [_MockToolUseBlock(id="tu_2", name="create_task", input={"description": "x"})],
+        # Third attempt also identical to exhaust budget
+        [_MockToolUseBlock(id="tu_3", name="create_task", input={"description": "x"})],
+        [_MockTextBlock(text="...")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        with caplog.at_level(logging.WARNING, logger="imperal_sdk.chat.handler"):
+            await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    assert any("outcome=redundant" in r.message for r in caplog.records)
+    assert any("validation_retry_redundant" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_retry_switches_to_different_tool(allow_target_scope):
+    """LLM emits tool_use with different name in retry round → exit retry as gave_up."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        # Retry round emits a DIFFERENT tool name → treated as gave_up
+        [_MockToolUseBlock(id="tu_2", name="read_tasks", input={})],
+        [_MockTextBlock(text="...")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # The create_task fc is appended (failure, gave_up); read_tasks isn't registered so wouldn't execute anyway
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["name"] == "create_task"
+    assert ext._functions_called[0]["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_retry_multi_tool_use_takes_first_matching(allow_target_scope):
+    """LLM emits multiple tool_use blocks in retry response — pick first matching same-name."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task", input={"description": "x"})],
+        # Retry: TWO tool_use blocks; first valid, second junk
+        [
+            _MockToolUseBlock(id="tu_2a", name="create_task",
+                input={"title": "T", "project_id": "p"}),
+            _MockToolUseBlock(id="tu_2b", name="something_else", input={}),
+        ],
+        [_MockTextBlock(text="ok")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # Retry succeeded with first matching block
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["success"] is True
+    assert ext._functions_called[0]["params"]["title"] == "T"
