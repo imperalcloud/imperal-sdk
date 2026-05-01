@@ -138,6 +138,48 @@ def _emit_retry_outcome(*, tool: str, ext: str, outcome: str, retry_count: int) 
     )
 
 
+def _validation_missing_field_response(
+    *,
+    e: PydanticValidationError,
+    chat_ext: ChatExtension,
+    tu,
+    action_type: str,
+    cfg: dict,
+) -> str:
+    """Build VALIDATION_MISSING_FIELD response, append fc, return trimmed content.
+
+    Shared between exhausted-retry and llm-gave-up branches. Single fc-append
+    per logical tool call (I-PYDANTIC-FC-SINGLE-APPEND).
+    """
+    missing: list = []
+    for err in e.errors():
+        if err.get("type") == "missing":
+            loc_p = err.get("loc") or ()
+            if loc_p:
+                missing.append(loc_p[0])
+    log.error(
+        f"ChatExtension validation error {tu.name}: missing={missing}"
+    )
+    content = json.dumps({
+        "RESULT": "ERROR",
+        "error_code": "VALIDATION_MISSING_FIELD",
+        "missing_fields": missing,
+    })
+    chat_ext._functions_called.append({
+        "name": tu.name, "params": tu.input,
+        "action_type": action_type, "success": False,
+        "intercepted": False, "event": "",
+        "result": {
+            "error_code": "VALIDATION_MISSING_FIELD",
+            "missing_fields": missing,
+        },
+    })
+    return trim_tool_result(
+        content, cfg["max_result_tokens"],
+        cfg["list_truncate_items"], cfg["string_truncate_chars"],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Config resolution helpers
 # ---------------------------------------------------------------------------
@@ -365,38 +407,16 @@ async def _execute_function(
         except PydanticValidationError as e:
             if not _retry_eligible or retry_count >= _RETRY_BUDGET:
                 # Exhausted OR not eligible for retry — existing failure handling.
-                missing = []
-                for err in e.errors():
-                    if err.get("type") == "missing":
-                        loc_p = err.get("loc") or ()
-                        if loc_p:
-                            missing.append(loc_p[0])
-                log.error(
-                    f"ChatExtension validation error {current_tu.name}: missing={missing}"
+                content = _validation_missing_field_response(
+                    e=e, chat_ext=chat_ext, tu=current_tu,
+                    action_type=action_type, cfg=cfg,
                 )
-                content = json.dumps({
-                    "RESULT": "ERROR",
-                    "error_code": "VALIDATION_MISSING_FIELD",
-                    "missing_fields": missing,
-                })
-                chat_ext._functions_called.append({
-                    "name": current_tu.name, "params": current_tu.input,
-                    "action_type": action_type, "success": False,
-                    "intercepted": False, "event": "",
-                    "result": {
-                        "error_code": "VALIDATION_MISSING_FIELD",
-                        "missing_fields": missing,
-                    },
-                })
                 if _retry_eligible:
                     _emit_retry_outcome(
                         tool=current_tu.name, ext=_ext_name,
                         outcome="exhausted", retry_count=retry_count,
                     )
-                return trim_tool_result(
-                    content, cfg["max_result_tokens"],
-                    cfg["list_truncate_items"], cfg["string_truncate_chars"],
-                )
+                return content
 
             # Retry path: re-prompt LLM with structured prose feedback.
             prose = format_pydantic_for_llm(e)
@@ -419,38 +439,40 @@ async def _execute_function(
                 cfg=retry_ctx["_exec_cfg"],
                 **retry_ctx["_api_kwargs"],
             )
+            # Mirror the main loop's usage callback for retry LLM calls
+            # (handler.py:411-426). Without this, retry token cost is silently
+            # dropped from billing/observability.
+            _usage_cb = getattr(ctx, "_llm_usage_callback", None)
+            if _usage_cb and hasattr(retry_resp, "usage") and retry_resp.usage is not None:
+                try:
+                    from imperal_sdk.runtime.llm_provider import LLMUsage
+                    _exec_cfg = retry_ctx["_exec_cfg"]
+                    _uid = str(getattr(ctx.user, "id", "")) if hasattr(ctx, "user") and ctx.user else ""
+                    _usage = LLMUsage(
+                        provider=_exec_cfg.provider,
+                        model=_exec_cfg.model,
+                        input_tokens=getattr(retry_resp.usage, "input_tokens", 0) or 0,
+                        output_tokens=getattr(retry_resp.usage, "output_tokens", 0) or 0,
+                        is_byollm=_exec_cfg.is_byollm,
+                        purpose="execution",
+                        user_id=_uid,
+                    )
+                    await _usage_cb(_usage)
+                except Exception as _e:
+                    log.debug(f"retry usage callback failed: {_e}")  # NEVER raise
             new_tools = [b for b in retry_resp.content if getattr(b, "type", None) == "tool_use"]
             new_tu = next((b for b in new_tools if b.name == current_tu.name), None)
             if new_tu is None:
                 # LLM gave up (final text or different tool). Existing failure shape.
-                missing = []
-                for err in e.errors():
-                    if err.get("type") == "missing":
-                        loc_p = err.get("loc") or ()
-                        if loc_p:
-                            missing.append(loc_p[0])
-                content = json.dumps({
-                    "RESULT": "ERROR",
-                    "error_code": "VALIDATION_MISSING_FIELD",
-                    "missing_fields": missing,
-                })
-                chat_ext._functions_called.append({
-                    "name": current_tu.name, "params": current_tu.input,
-                    "action_type": action_type, "success": False,
-                    "intercepted": False, "event": "",
-                    "result": {
-                        "error_code": "VALIDATION_MISSING_FIELD",
-                        "missing_fields": missing,
-                    },
-                })
+                content = _validation_missing_field_response(
+                    e=e, chat_ext=chat_ext, tu=current_tu,
+                    action_type=action_type, cfg=cfg,
+                )
                 _emit_retry_outcome(
                     tool=current_tu.name, ext=_ext_name,
                     outcome="llm_gave_up", retry_count=retry_count,
                 )
-                return trim_tool_result(
-                    content, cfg["max_result_tokens"],
-                    cfg["list_truncate_items"], cfg["string_truncate_chars"],
-                )
+                return content
 
             # I-AH-1 federal re-check on retry (spec section 8 E15).
             _ret_id_rejection = check_id_shape_fabrication(new_tu.input or {})
