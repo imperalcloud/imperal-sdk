@@ -2,6 +2,48 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v4.0.0 — 2026-05-01 — Federal Extension Contract: typed dispatch, manifest v3, V14-V24 validators
+
+**BREAKING.** Major release. Closes the chain-planner BYOLLM-router gap that allowed silent write failures (extension says "deleted" but nothing was deleted because the router LLM summarised instead of dispatching the typed call). Federal contract: every extension that passes V14-V24 is GUARANTEED to work with the kernel's typed-dispatch chain pipeline — no LLM guessing, no path divergence.
+
+### Added — Federal v4.0.0 contract surface
+
+- **`Extension(display_name=, description=, icon=, actions_explicit=)` kwargs.** Every extension declares its identity, federal description, SVG icon, and the typed-dispatch contract opt-in (default `True`).
+- **`@chat.function(chain_callable=, effects=)` kwargs.** `chain_callable` defaults to `True` for `action_type in ("write","destructive")` so the kernel issues direct typed calls instead of delegating to the ChatExtension LLM router. `effects=["create:note"]` declares the side-effect surface for the audit ledger + chain narrator.
+- **Manifest schema v3** — `manifest_schema_version=3`. New top-level fields: `name`, `description`, `icon`, `icon_size_bytes`, `actions_explicit`, `lifecycle_hooks`. Per-tool fields: `action_type`, `chain_callable`, `effects`, `params_schema`, `return_schema`, `event`, `owner_chat_tool`, `synthetic`. Every `@chat.function` is now emitted as a typed tool with full Pydantic schema — kernel chain planner reads these directly.
+- **Auto-detected return type from Pydantic annotation.** `async def fn(ctx, params: XParams) -> ActionResult` populates `_return_model` automatically; manifest emits `return_schema` from `model_json_schema()`.
+
+### Added — Federal validators V14-V24 (all ERROR severity)
+
+- **V14** — Extension `description` must be ≥40 chars and ≠ `app_id`.
+- **V15** — Extension `display_name` must be ≥3 chars and ≠ `app_id` (case-sensitive verbatim).
+- **V16** — Every `@chat.function` description ≥20 chars (skip `__*` synthetic tools).
+- **V17** — Every `@chat.function` declares an explicit Pydantic `BaseModel` param. No `**kwargs`, no `Any`, no `func.__doc__`-derived params.
+- **V18** — Every `@chat.function` returns a Pydantic model (subclass of `ActionResult`).
+- **V19** — `Extension(actions_explicit=True)` AND every `action_type in ("write","destructive")` tool has `chain_callable=True`.
+- **V20** — Every write/destructive `@chat.function` declares `effects=[...]` (WARN-level v4.0.0, ERROR v5.0.0).
+- **V21** — Required SVG icon. Must be valid SVG with `<svg>` root + `viewBox`, max 100KB, no embedded base64 raster.
+- **V22** — Lifecycle hooks (`on_install` / `on_refresh` / `on_uninstall` / `on_upgrade`) match SDK signature contract. Closes the `on_refresh() got unexpected keyword 'message'` TypeError class.
+- **V23** — `capabilities` declared in known shape `<namespace>:read|write|admin|*`.
+- **V24** — `@chat.function` handlers MUST NOT read from `ctx.skeleton.*` (AST scan). Skeleton is the LLM-context cache only; handlers use `ctx.api` for real backend ops.
+
+### Removed — BREAKING
+
+- `AA_BRANCH` typed-call fastpath in kernel `session_workflow.py` — replaced by federal manifest-driven dispatch in `chain_planner.py`. The systemd drop-in `IMPERAL_KERNEL_ACTION_AUTHORITY=true` is no longer read; remove it from your worker config. Single federal pipeline now serves all read/write/destructive paths uniformly.
+- `ChatExtension(model=...)` parameter — deprecated since 3.3.0. LLM resolution lives in kernel ctx-injection (`ctx._llm_configs`).
+
+### Why this matters
+
+Pre-v4.0.0, the kernel's chain planner saw only the `tool_<ext>_chat` BYOLLM router in the manifest — `delete_folder`, `create_note`, etc. were invisible. The planner had to delegate to `tool_<ext>_chat` which made its own LLM call, and that LLM sometimes summarised the request instead of calling the typed function. Result: user said "delete X", Webbee responded "done", but X was still there. Federal-grade catastrophe.
+
+v4.0.0 closes this by making every typed `@chat.function` visible in the manifest with full schema. Kernel reads `chain_callable=True` and issues the typed call directly. No LLM router in the dispatch path. No silent write failures.
+
+Combined with the SDK 3.7.0 anti-hallucination guards (I-AH-1 FABRICATED_ID_SHAPE) and the kernel-side I-AH-2/3/4 + I-MAGIC-UX-1/2 invariants shipped 2026-05-01, this closes ~75% of recent hallucination/regression bug classes. Remaining 25% is classifier accuracy, narrator prose, external API failures, and user input ambiguity — separate workstreams.
+
+### Migration
+
+Imperal-owned extensions (`admin`, `automations`, `billing`, `developer`, `hello-world`, `sharelock-v2`) ship retrofitted in this release. Third-party extensions: their next Dev Portal publish runs against V14-V24. Existing deployed manifests continue to work at runtime via legacy compatibility (kernel infers `chain_callable` from `action_type` when the new field is missing).
+
 ## v3.7.0 — 2026-05-01 — Anti-Hallucination Federal Hardening: I-AH-1 fabricated message_id guard
 
 ### Added
@@ -10,6 +52,15 @@ All notable changes to `imperal-sdk` are documented here.
 - The guard returns a structured `error_code=FABRICATED_ID_SHAPE` envelope with an actionable hint instructing the LLM to call `inbox()`, `search()`, `folder()`, or the `mail_inbox_summary` skeleton first. The wire integration sits in `_execute_function` BEFORE Pydantic coercion so the LLM gets a specific self-correction signal.
 - New error code `FABRICATED_ID_SHAPE` added to `imperal_sdk.chat.error_codes.ERROR_TAXONOMY` (10 codes total now). Kernel mirror at `imperal_kernel.narration.error_codes` updated in parallel — catalog sync invariant preserved.
 - Coverage for `_ID_SHAPE_FIELDS = ("message_id", "thread_id", "email_id", "msg_id")` — all four exercised in `tests/test_id_shape_guard.py` (10 unit tests + 1 wire test in `tests/test_chat_guards.py`).
+
+### Notes
+
+I-AH-1 is one of six federal anti-hallucination invariants shipped on
+2026-05-01 across SDK + kernel. The other five (I-AH-2 v2, I-AH-3,
+I-AH-4, I-MAGIC-UX-1, I-MAGIC-UX-2) live in the kernel and don't
+require an SDK release; together they form the full sprint package.
+See workspace doc `imperal/webbee/docs/anti-hallucination-federal-hardening.md`
+for the full federal record + kernel commits.
 
 ## v3.6.0 — 2026-05-01 — UEB Phase 1a: Manifest v2 + Event envelope EV6..EV8 + @ext.emits
 

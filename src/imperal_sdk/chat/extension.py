@@ -27,6 +27,18 @@ _ACTION_WORDS = ("send", "create", "delete", "update", "archive", "reply", "forw
 
 @dataclass
 class FunctionDef:
+    """Federal v4.0.0 — typed function declaration.
+
+    The kernel reads ``chain_callable`` from the manifest to pick typed
+    dispatch (direct ``app/func(args)`` call) vs. legacy ChatExtension
+    LLM-router delegation. Default ``True`` for any ``action_type`` other
+    than ``"read"`` so the kernel can deterministically execute writes
+    without giving the LLM a chance to summarise instead.
+
+    ``effects`` declares the side-effect surface (``["create:note"]``,
+    ``["delete:folder"]``, etc.) so the chain narrator + audit ledger
+    can describe exactly what changed without re-deriving from text.
+    """
     name: str
     func: Callable
     description: str
@@ -34,8 +46,11 @@ class FunctionDef:
     action_type: str = "read"  # "read", "write", or "destructive"
     event: str = ""  # event name for ActionResult publishing (e.g. "mail.sent")
     event_schema: type | None = None  # Pydantic BaseModel for typed event data
+    chain_callable: bool = True  # federal v4.0.0 — kernel uses typed dispatch
+    effects: list[str] = field(default_factory=list)  # ["create:note", "delete:folder", ...]
     _pydantic_model: type | None = None  # auto-detected Pydantic BaseModel class
     _pydantic_param: str = ""  # parameter name that receives the model instance
+    _return_model: type | None = None  # auto-detected return Pydantic model
 
 class ChatExtension:
     def __init__(self, ext, tool_name: str, description: str, system_prompt: str = "",
@@ -87,23 +102,51 @@ class ChatExtension:
 
     def function(self, name: str, description: str, params: dict | None = None,
                  action_type: str = "read", event: str = "",
-                 event_schema: type | None = None):
-        """Register a chat function.
+                 event_schema: type | None = None,
+                 chain_callable: bool | None = None,
+                 effects: list[str] | None = None):
+        """Register a chat function (federal v4.0.0 contract).
 
         Args:
             name: Function name (used in tool_use calls).
-            description: What this function does (shown to LLM).
-            params: Parameter definitions dict.
-            action_type: "read", "write", or "destructive". Default "read".
-                         Used by KAV for action verification and 2-step confirmation.
-            event: Event name for ActionResult publishing (e.g. "mail.sent").
-            event_schema: Optional Pydantic BaseModel class for typed event data validation.
+            description: What this function does, ≥20 chars (V16). Shown to LLM.
+            params: Parameter definitions dict. SDK auto-derives from a Pydantic
+                BaseModel param annotation when omitted (V17 federal rule —
+                no ``**kwargs`` or untyped handlers).
+            action_type: ``"read"``, ``"write"``, or ``"destructive"``. Drives
+                KAV verification and the 2-step confirmation gate.
+            event: Event name for ActionResult publishing.
+            event_schema: Optional Pydantic BaseModel class for typed event data.
+            chain_callable: Federal v4.0.0 — when ``True`` the kernel issues a
+                direct typed call ``app/func(args)`` instead of delegating to
+                the ChatExtension LLM router. Defaults to ``True`` for
+                ``action_type in ("write","destructive")`` so writes never get
+                lost in LLM paraphrase.
+            effects: Side-effect surface list — ``["create:note"]``,
+                ``["delete:folder"]``, etc. Used by chain narrator + audit ledger.
         """
+        if chain_callable is None:
+            chain_callable = action_type in ("write", "destructive")
+
         def decorator(func: Callable) -> Callable:
-            # Auto-detect Pydantic BaseModel params
+            # Auto-detect Pydantic BaseModel params + return type
             resolved_params = params
             _detected_model = None
             _detected_param = ""
+            _detected_return_model = None
+            try:
+                import typing as _typing
+                hints = _typing.get_type_hints(func)
+                ret_ann = hints.get("return")
+                if ret_ann is not None:
+                    try:
+                        from pydantic import BaseModel as _BM
+                        if isinstance(ret_ann, type) and issubclass(ret_ann, _BM):
+                            _detected_return_model = ret_ann
+                    except (TypeError, ImportError):
+                        pass
+            except Exception:
+                pass
             if resolved_params is None:
                 import inspect
                 sig = inspect.signature(func)
@@ -142,7 +185,10 @@ class ChatExtension:
                 name=name, func=func, description=description,
                 params=resolved_params, action_type=action_type, event=event,
                 event_schema=event_schema,
+                chain_callable=chain_callable,
+                effects=list(effects or []),
                 _pydantic_model=_detected_model, _pydantic_param=_detected_param,
+                _return_model=_detected_return_model,
             )
             return func
         return decorator

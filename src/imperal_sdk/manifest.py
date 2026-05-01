@@ -32,13 +32,24 @@ __all__ = [
 
 
 def generate_manifest(ext: Extension) -> dict:
-    """Auto-generate extension manifest from Extension object."""
-    tools = []
+    """Auto-generate federal manifest v3 from Extension object.
+
+    Federal v4.0.0 changes:
+      - Top-level ``name`` (display_name), ``description``, ``icon`` emitted.
+      - ``actions_explicit`` declares the extension follows the typed-dispatch
+        contract — kernel uses ``chain_callable`` per tool.
+      - Every ``@chat.function`` is emitted as a typed tool with
+        ``action_type``, ``chain_callable``, ``effects``, ``params_schema``,
+        ``return_schema``. The kernel chain planner reads these directly and
+        issues ``app/func(args)`` calls without delegating to the
+        ChatExtension LLM router.
+      - ``lifecycle_hooks`` records signatures so the kernel can pass kwargs
+        the hook actually accepts (closes the ``on_refresh(message=)``
+        TypeError class).
+    """
+    tools: list[dict] = []
+
     for name, tool_def in ext.tools.items():
-        if name.startswith("__"):
-            # Synthetic entries (__webhook__*, __panel__*, __widget__*, __tray__*)
-            # belong to their own declarative sections — skip from user-facing tools list.
-            continue
         sig = inspect.signature(tool_def.func)
         params = {}
         for pname, param in sig.parameters.items():
@@ -56,7 +67,38 @@ def generate_manifest(ext: Extension) -> dict:
             "description": tool_def.description,
             "scopes": tool_def.scopes,
             "parameters": params,
+            "synthetic": name.startswith("__"),
         })
+
+    # Federal v4.0.0 — emit every @chat.function as a typed tool. This is what
+    # closes the chain_planner gap: kernel sees the typed surface and dispatches
+    # directly via ``app/func(args)`` instead of delegating to the BYOLLM router.
+    for chat_tool_name, chat_ext in (getattr(ext, "_chat_extensions", {}) or {}).items():
+        for fn_name, fn_def in chat_ext.functions.items():
+            params_schema: dict = {}
+            if getattr(fn_def, "_pydantic_model", None) is not None:
+                try:
+                    params_schema = fn_def._pydantic_model.model_json_schema()
+                except Exception:
+                    params_schema = {}
+            return_schema: dict = {}
+            if getattr(fn_def, "_return_model", None) is not None:
+                try:
+                    return_schema = fn_def._return_model.model_json_schema()
+                except Exception:
+                    return_schema = {}
+            tools.append({
+                "name": fn_name,
+                "description": fn_def.description,
+                "action_type": fn_def.action_type,
+                "chain_callable": fn_def.chain_callable,
+                "effects": list(fn_def.effects or []),
+                "params_schema": params_schema,
+                "return_schema": return_schema,
+                "event": fn_def.event or "",
+                "scopes": [],
+                "owner_chat_tool": chat_tool_name,
+            })
 
     signals = [{"name": name} for name in ext.signals]
     schedules = [
@@ -65,15 +107,29 @@ def generate_manifest(ext: Extension) -> dict:
     ]
 
     manifest = {
-        "manifest_schema_version": 2,
+        "manifest_schema_version": 3,
         "app_id": ext.app_id,
         "version": ext.version,
+        "name": ext.display_name or ext.app_id,
+        "description": ext.description or "",
+        "icon": ext.icon or "",
+        "actions_explicit": ext.actions_explicit,
         "capabilities": ext.capabilities,
         "tools": tools,
         "signals": signals,
         "schedules": schedules,
         "required_scopes": _collect_scopes(ext),
     }
+
+    if ext.icon:
+        # Resolve icon_size_bytes if file resolvable from CWD or extension dir
+        for candidate in (ext.icon, os.path.join(os.getcwd(), ext.icon)):
+            if os.path.exists(candidate):
+                try:
+                    manifest["icon_size_bytes"] = os.path.getsize(candidate)
+                except OSError:
+                    pass
+                break
 
     if ext.webhooks:
         manifest["webhooks"] = [wh.to_manifest() for wh in ext.webhooks.values()]
@@ -89,6 +145,14 @@ def generate_manifest(ext: Extension) -> dict:
 
     if ext.lifecycle or ext._health_check:
         manifest["lifecycle"] = ext._build_lifecycle_section()
+
+    # Federal V22 — record lifecycle hook signatures so kernel knows what
+    # kwargs to pass (closes the ``on_refresh(message=)`` TypeError class).
+    if ext.lifecycle:
+        manifest["lifecycle_hooks"] = {
+            hook_name: {"signature": str(inspect.signature(hook.func))}
+            for hook_name, hook in ext.lifecycle.items()
+        }
 
     if ext.tray_items:
         manifest["tray"] = [t.to_manifest() for t in ext.tray_items.values()]
