@@ -2,6 +2,131 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v3.6.0 — 2026-05-01 — UEB Phase 1a: Manifest v2 + Event envelope EV6..EV8 + @ext.emits
+
+First slice of Universal Event Bus (UEB). Closes Manifest Gap from
+`contracts-roadmap.md` §2.1 by emitting five new declarative sections
+in `imperal.json`. Adds the federal cross-namespace block at decoration
+time and tightens manifest validation. **Backward-compat additive** —
+v1 manifests continue to validate without change.
+
+### New — Event envelope EV6..EV8
+
+- `Event` Pydantic model (new in `types/contracts.py`) carries the v2
+  UEB envelope: `type`, `scope`, `action`, `actor`, `tenant_id`,
+  `user_id`, `timestamp`, `data` plus three new optional fields:
+  - `event_id: str | None` (EV6) — UUIDv7 dedup key for SETNX
+    idempotency
+  - `schema_version: int | None` (EV7) — monotone, breaking-change
+    marker. `Field(ge=1)` enforced
+  - `source: Literal["user", "system", "automation", "rbac", "mcp",
+    "webhook"] | None` (EV8) — AuditSource value
+- `EventModel` (existing v1 Redis-streams contract) extended with the
+  same EV6..EV8 fields as optional. Required because `get_event_schema()`
+  derives the published JSON Schema from `EventModel`. The static
+  `event.schema.json` carries the new properties verbatim.
+
+### New — `@ext.emits` decorator
+
+```python
+@ext.emits("billing.topup_completed", schema_ref="#/schemas/topup")
+async def credit(ctx, amount: int):
+    ...
+```
+
+- Symmetric with `@ext.on_event` — declares an event the extension
+  emits. Powers the manifest `events.emits[]` section so Registry,
+  Marketplace, and Dev Portal can see emit declarations.
+- Federal cross-namespace block fires at decoration time:
+  `@ext.emits("notes.foo")` from an extension with `app_id="billing"`
+  raises `ValueError` immediately — no namespace impersonation possible.
+- Dotted-format guard: undotted event types raise `ValueError`.
+
+### New — Manifest v2 (`manifest_schema_version: 2`)
+
+`generate_manifest()` now emits five additional optional sections when
+the corresponding decorators / declarations are present (sections are
+omitted entirely when empty — clean v1 manifest preserved):
+
+- **M6 `webhooks`** — from `@ext.webhook(path, method, secret_header)`
+- **M7 `events`** — `subscribes` (from `@ext.on_event`) + `emits`
+  (from `@ext.emits`)
+- **M8 `exposed`** — from `@ext.expose(name, action_type)`
+- **M9 `lifecycle`** — `on_install`/`on_uninstall`/`on_enable`/
+  `on_disable` (from existing decorators) + `on_upgrade: [versions]`
+  + `health_check.interval_sec`
+- **M10 `tray`** — from `@ext.tray(tray_id, icon, tooltip)`
+
+### Changed — `__`-dunder synthetic tools no longer leak into `tools[]`
+
+The `@ext.webhook` / `@ext.tray` / `@ext.panel` / `@ext.widget`
+decorators register synthetic `__webhook__path` / `__tray__id` /
+`__panel__id` / `__widget__id` entries into `_tools` so
+`DirectCallWorkflow` can dispatch them. Previously these synthetic
+names leaked into the manifest `tools` list, producing M5 validation
+failures (slashes / underscores not valid identifiers).
+
+`generate_manifest()` now filters `name.startswith("__")` from both the
+emitted `tools` list and `_collect_scopes()` accumulation. User-facing
+manifest is clean; declarative sections (`webhooks`, `tray`, etc.)
+carry the synthetic data instead.
+
+### Changed — Static `imperal.schema.json` v2 with constraint enforcement
+
+JSON Schema regenerated from updated Pydantic models, now carries:
+
+- `manifest_schema_version: enum [1, 2]`
+- `webhooks[].path: pattern ^/[a-z0-9_/-]+$`
+- `webhooks[].method: enum [POST, GET, PUT, DELETE]`
+- `exposed[].action_type: enum [read, write]`
+- `tray[].tray_id: pattern ^[a-z][a-z0-9_-]+$`
+- `lifecycle.health_check.interval_sec: minimum 30`
+- `events.{subscribes,emits}[].type: minLength 1`
+  (federal no-silent-drop)
+
+### New — Semantic validators (M6.3 / M7.3 / M8.2)
+
+`validate_manifest_dict` raises `ValueError` on three rules JSON
+Schema cannot express:
+
+- **M6.3** `webhooks[].path` uniqueness — duplicate webhook paths
+  rejected
+- **M7.3** `events.emits[].type` must be prefixed by `app_id + "."`
+  (cross-namespace block, second line of defense after the decorator)
+- **M8.2** `exposed[].name` uniqueness — duplicate exposed methods
+  rejected
+
+The Pydantic-error path continues to return `list[ValidationIssue]`
+unchanged; only the new rules raise.
+
+### Backward compat
+
+- v1 manifests (no `manifest_schema_version`, no v2 sections) validate
+  unchanged against the new static schema.
+- All new fields and sections are optional with `default=None` /
+  conditional emission.
+- Existing `validate_manifest_dict(...) == []` round-trip assertions
+  continue to pass for valid v1/v2 manifests.
+
+### Bookkeeping
+
+- 37 new tests covering envelope v2, decorator, manifest sections,
+  schema constraints, and semantic validators.
+- Federal feedback applied: `feedback_no_silent_drop_in_truthy_guards`
+  (use `is not None` / `min_length=1` instead of truthy guards),
+  `feedback_audit_chokepoint_no_bypasses` (cross-namespace enforced
+  at decoration time), `feedback_sdk_upgrade_must_audit_all_venvs`
+  (deploy script audits every site-packages install).
+
+### Known follow-ups (post-Phase-1a)
+
+- `manifest_schema.py` is 441 LOC, over the 300-line workspace rule;
+  split into per-section sub-modules tracked for cleanup pass.
+- UEB Phase 1b (kernel-side `audit/_streams.py` + `_consumer.py` +
+  catalogue) lands separately — see
+  `superpowers/specs/2026-05-01-universal-event-bus-design.md` and
+  `superpowers/plans/2026-05-01-universal-event-bus.md`.
+
 ## v3.5.2 — 2026-04-30 — Hotfix: federal determinism restored
 
 ### Fixed (latent bug)
