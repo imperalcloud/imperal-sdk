@@ -77,3 +77,33 @@ def test_connected_emails_not_shared_state():
 # that guard is tracked separately under the P2 federal-chat-integrity
 # track (see docs/superpowers/specs/2026-04-23-federal-grade-chat-
 # integrity-design.md), not Phase 4.
+
+# I-AH-1 L3 wire test: handler intercepts fabrication BEFORE Pydantic
+import json as _json
+import types as _types
+
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_handler_intercepts_fabricated_message_id():
+    """End-to-end: _execute_function returns FABRICATED_ID_SHAPE envelope."""
+    from imperal_sdk.chat.handler import _execute_function
+    from imperal_sdk.chat.extension import ChatExtension
+    from imperal_sdk.extension import Extension
+    ext = Extension("mail-test", version="1.0.0")
+    chat_ext = ChatExtension(ext=ext, tool_name="mail_test", description="x")
+    chat_ext._functions = {
+        "read_email": _types.SimpleNamespace(
+            _pydantic_model=None, _pydantic_param=None,
+            func=lambda ctx, **kw: None, event="",
+        )
+    }
+    chat_ext._functions_called = []
+    tu = _types.SimpleNamespace(name="read_email", input={"message_id": "fake-outlook-7"})
+    cfg = {"max_result_tokens": 4000, "list_truncate_items": 50, "string_truncate_chars": 1000}
+    out = await _execute_function(chat_ext, ctx=None, tu=tu, action_type="read", cfg=cfg)
+    payload = _json.loads(out)
+    assert payload["RESULT"] == "ERROR"
+    assert payload["error_code"] == "FABRICATED_ID_SHAPE"
+    assert chat_ext._functions_called[-1]["intercepted"] is True

@@ -166,6 +166,30 @@ async def _execute_function(chat_ext: ChatExtension, ctx, tu, action_type: str, 
         return trim_tool_result(content, cfg["max_result_tokens"], cfg["list_truncate_items"], cfg["string_truncate_chars"])
 
     _func_def = chat_ext._functions[tu.name]
+
+    # I-AH-1 L3: pre-validation shape guard — reject empirically observed
+    # fabricated message_id slug shapes BEFORE Pydantic coercion so error
+    # feedback to the LLM is specific ("FABRICATED_ID_SHAPE") rather than
+    # generic ("VALIDATION_MISSING_FIELD"). Closes Bug-1 from prod chat
+    # 2026-05-01.
+    from imperal_sdk.chat.guards import check_id_shape_fabrication
+    _id_rejection = check_id_shape_fabrication(tu.input or {})
+    if _id_rejection is not None:
+        log.error(
+            "ChatExtension I-AH-1 reject %s field=%s value=%r",
+            tu.name, _id_rejection["field"], _id_rejection["value"],
+        )
+        content = json.dumps({"RESULT": "ERROR", **_id_rejection})
+        chat_ext._functions_called.append({
+            "name": tu.name, "params": tu.input, "action_type": action_type,
+            "success": False, "intercepted": True, "event": "",
+            "result": _id_rejection,
+        })
+        return trim_tool_result(
+            content, cfg["max_result_tokens"],
+            cfg["list_truncate_items"], cfg["string_truncate_chars"],
+        )
+
     try:
         if _func_def._pydantic_model and _func_def._pydantic_param:
             _model_instance = _func_def._pydantic_model(**(tu.input or {}))
