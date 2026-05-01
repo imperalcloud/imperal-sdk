@@ -813,3 +813,33 @@ async def test_function_call_model_validates_post_retry_dict(allow_target_scope)
         # FunctionCallModel.extra="forbid" — this raises if ANY extra field
         # snuck through (e.g. retry_count, retry_history)
         FunctionCallModel.model_validate(fc_dict)
+
+
+# ---------------------------------------------------------------------------
+# Task 9: token budget regression — happy path makes zero extra LLM calls
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_no_retry_zero_extra_llm_calls(allow_target_scope):
+    """Happy path (valid args first try) — same LLM call count as pre-feature: 1 tool_use + 1 final text."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="create_task",
+            input={"title": "T", "project_id": "p", "description": "x"})],
+        [_MockTextBlock(text="ok")],
+    ])
+    ext = _build_test_chat_ext(client)
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    assert client.call_count == 2  # No extra LLM calls vs pre-feature baseline
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["success"] is True
