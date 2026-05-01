@@ -7,7 +7,7 @@ Purpose
 Replace ad-hoc ``str(exception)`` content that historically leaked into
 user-visible writes (email bodies, note titles, SMS). Every kernel- or
 SDK-side error that surfaces to an LLM tool_result MUST map to one of the
-9 codes below; the corresponding i18n key drives the actual user-facing
+10 codes below; the corresponding i18n key drives the actual user-facing
 copy via :mod:`imperal_kernel.responses.templates`.
 
 This module is *read-only data* — no logic, no fabrication surface.
