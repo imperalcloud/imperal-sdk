@@ -235,6 +235,16 @@ class _CreateTaskParams(BaseModel):
     description: str = ""
 
 
+class _MarkReadParams(BaseModel):
+    """Mock Pydantic params model with message_id (an _ID_SHAPE_FIELDS member)."""
+    message_id: str
+
+
+class _GenericExceptionParams(BaseModel):
+    """Mock Pydantic params model for the generic-exception test."""
+    v: str
+
+
 def _build_test_chat_ext(client) -> ChatExtension:
     """Build minimal ChatExtension with one Pydantic-typed function."""
     ext = Extension("tasks-test", version="1.0.0")
@@ -480,3 +490,167 @@ async def test_retry_multi_tool_use_takes_first_matching(allow_target_scope):
     assert len(ext._functions_called) == 1
     assert ext._functions_called[0]["success"] is True
     assert ext._functions_called[0]["params"]["title"] == "T"
+
+
+# ---------------------------------------------------------------------------
+# Task 6: I-PYDANTIC-RETRY-SCOPE — non-Pydantic failures do not retry
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_legacy_kwargs_extension_no_retry(allow_target_scope):
+    """Function without _pydantic_model → retry path dormant; PydanticValidationError never raised."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="legacy_fn", input={"x": 1})],
+        [_MockTextBlock(text="done")],
+    ])
+    base_ext = Extension("legacy-test", version="1.0.0")
+    ext = ChatExtension(ext=base_ext, tool_name="legacy", description="legacy ext", system_prompt="t")
+
+    async def _legacy(ctx, **kwargs):
+        return ActionResult.success(summary="ok", data=kwargs)
+    ext.function("legacy_fn", action_type="read", description="legacy")(_legacy)
+
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "do x")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # Single fc, no retry. Only 2 LLM calls (tool_use + text), no retry call.
+    assert client.call_count == 2
+    assert len(ext._functions_called) == 1
+
+
+@pytest.mark.asyncio
+async def test_unknown_sub_function_does_not_retry(allow_target_scope):
+    """LLM emits tu for an unregistered function → UNKNOWN_SUB_FUNCTION pre-guard, no retry."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="not_a_function", input={})],
+        [_MockTextBlock(text="done")],
+    ])
+    ext = _build_test_chat_ext(client)  # registers create_task only
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "create task")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # 2 LLM calls — no retry
+    assert client.call_count == 2
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["result"]["error_code"] == "UNKNOWN_SUB_FUNCTION"
+
+
+@pytest.mark.asyncio
+async def test_fabricated_id_first_attempt_does_not_retry(allow_target_scope):
+    """I-AH-1 pre-guard rejects fabricated ID on first attempt — retry layer not entered."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    # Use a tool name that takes message_id (one of _ID_SHAPE_FIELDS)
+    base_ext = Extension("mail-test", version="1.0.0")
+    ext = ChatExtension(ext=base_ext, tool_name="mail", description="mail ext", system_prompt="t")
+
+    async def _action(ctx, params: _MarkReadParams):
+        return ActionResult.success(summary="ok")
+    ext.function("mark_read", action_type="write", description="mark read")(_action)
+
+    client = _MockLLMClient([
+        # Fabricated slug pattern (matches _FABRICATED_SLUG_RE per check_id_shape_fabrication)
+        [_MockToolUseBlock(id="tu_1", name="mark_read",
+            input={"message_id": "webhostmost-outlook-1"})],
+        [_MockTextBlock(text="done")],
+    ])
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "mark first read")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # I-AH-1 short-circuited; no retry; outer handler returns immediately on
+    # intercepted=True (handler.py:743-744), so call_count==1 (not 2).
+    assert client.call_count == 1
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["result"]["error_code"] == "FABRICATED_ID_SHAPE"
+    assert ext._functions_called[0]["intercepted"] is True
+
+
+@pytest.mark.asyncio
+async def test_fabricated_id_on_retry_input_blocks(caplog, allow_target_scope):
+    """LLM fabricates ID in retry input → I-AH-1 re-check fires, retry exits with FABRICATED_ID_SHAPE."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    base_ext = Extension("mail-test", version="1.0.0")
+    ext = ChatExtension(ext=base_ext, tool_name="mail", description="mail ext", system_prompt="t")
+
+    async def _action(ctx, params: _MarkReadParams):
+        return ActionResult.success(summary="ok")
+    ext.function("mark_read", action_type="write", description="mark read")(_action)
+
+    client = _MockLLMClient([
+        # First: missing message_id → triggers Pydantic retry
+        [_MockToolUseBlock(id="tu_1", name="mark_read", input={})],
+        # Retry: fabricated slug
+        [_MockToolUseBlock(id="tu_2", name="mark_read",
+            input={"message_id": "webhostmost-outlook-1"})],
+        [_MockTextBlock(text="done")],
+    ])
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        with caplog.at_level(logging.WARNING, logger="imperal_sdk.chat.handler"):
+            await handle_message(ext, ctx, "mark first read")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["result"]["error_code"] == "FABRICATED_ID_SHAPE"
+    assert ext._functions_called[0]["intercepted"] is True
+    # SigNoz outcome=fabricated_id_on_retry
+    assert any("outcome=fabricated_id_on_retry" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_generic_exception_does_not_retry(allow_target_scope):
+    """Function raises generic Exception → INTERNAL fc-append, retry layer not invoked."""
+    from imperal_sdk.chat.handler import handle_message
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    base_ext = Extension("x-test", version="1.0.0")
+    ext = ChatExtension(ext=base_ext, tool_name="x", description="x ext", system_prompt="t")
+
+    async def _action(ctx, params: _GenericExceptionParams):
+        raise RuntimeError("boom")
+    ext.function("do_x", action_type="read", description="x")(_action)
+
+    client = _MockLLMClient([
+        [_MockToolUseBlock(id="tu_1", name="do_x", input={"v": "1"})],
+        [_MockTextBlock(text="done")],
+    ])
+    ctx = _build_test_ctx()
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: client
+    try:
+        await handle_message(ext, ctx, "do x")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    # No retry — exactly 2 LLM calls (tool_use + text response)
+    assert client.call_count == 2
+    assert len(ext._functions_called) == 1
+    assert ext._functions_called[0]["result"]["error_code"] == "INTERNAL"
