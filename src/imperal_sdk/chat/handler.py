@@ -45,6 +45,11 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+# Pydantic validation retry budget per @chat.function call.
+# Spec invariant I-PYDANTIC-RETRY-BUDGET (SPEC2-LLM-ARGS-QUALITY, v4.1.0).
+_RETRY_BUDGET = 2
+
+
 class TaskCancelled(Exception):
     """Raised by ctx.progress() when user cancels a task."""
     pass
@@ -225,8 +230,28 @@ async def _build_factual_response(chat_ext: ChatExtension, ctx, client) -> str:
 # Function execution  (P2 Task 20 — structured error_code surfaces)
 # ---------------------------------------------------------------------------
 
-async def _execute_function(chat_ext: ChatExtension, ctx, tu, action_type: str, cfg: dict) -> str:
+async def _execute_function(
+    chat_ext: ChatExtension, ctx, tu, action_type: str, cfg: dict,
+    *,
+    retry_ctx: dict | None = None,
+) -> str:
     """Execute a single function call and return the tool result content string.
+
+    When ``retry_ctx`` is provided AND the function uses a Pydantic params
+    model, ``PydanticValidationError`` triggers up to ``_RETRY_BUDGET=2``
+    retries with structured prose feedback to the LLM. Without ``retry_ctx``
+    (or for legacy ``**kwargs`` extensions), behavior is exactly the
+    pre-feature implementation.
+
+    ``retry_ctx`` shape (passed by handle_message tool-use loop):
+      client, messages, _system, _exec_cfg, _tools_for_llm,
+      _tool_use_mt, _api_kwargs
+
+    Pre-guards (UNKNOWN_SUB_FUNCTION, I-AH-1 fabricated_id) run BEFORE the
+    retry loop and short-circuit with their own fc-append.
+
+    I-AH-1 federal: fabricated-id re-check fires on every retry attempt
+    (security guard remains effective across retries).
 
     Error contract (I-ERR-CODE-1): every failure surfaces in BOTH the
     JSON-encoded content AND ``_functions_called[-1]["result"]`` as a dict
@@ -273,84 +298,215 @@ async def _execute_function(chat_ext: ChatExtension, ctx, tu, action_type: str, 
             cfg["list_truncate_items"], cfg["string_truncate_chars"],
         )
 
-    try:
-        if _func_def._pydantic_model and _func_def._pydantic_param:
-            _model_instance = _func_def._pydantic_model(**(tu.input or {}))
-            result = await _func_def.func(ctx, **{_func_def._pydantic_param: _model_instance})
-        else:
-            result = await _func_def.func(ctx, **tu.input)
+    # === Pydantic-aware retry loop (SPEC2-LLM-ARGS-QUALITY, v4.1.0) ===
+    current_tu = tu
+    retry_count = 0
+    _ext_name = chat_ext.tool_name
 
-        _is_action_result = isinstance(result, ActionResult)
-        if _is_action_result:
-            content = json.dumps(result.to_dict(), default=str, ensure_ascii=False)
-        else:
-            content = json.dumps(result, default=str, ensure_ascii=False)
-            if _func_def.event:
-                log.warning(f"ChatExtension {chat_ext.tool_name}: function '{tu.name}' has event='{_func_def.event}' but returned dict, not ActionResult")
-        content = trim_tool_result(content, cfg["max_result_tokens"], cfg["list_truncate_items"], cfg["string_truncate_chars"])
+    # Eligibility for retry: retry_ctx provided AND function uses a Pydantic
+    # params model (legacy **kwargs paths cannot raise PydanticValidationError).
+    _retry_eligible = (
+        retry_ctx is not None
+        and bool(_func_def._pydantic_model)
+        and bool(_func_def._pydantic_param)
+    )
 
-        # Determine success
-        if _is_action_result:
-            success = result.status == "success"
-        else:
-            success = True
-            if isinstance(result, dict):
-                if result.get("RESULT") == "ERROR" or result.get("error"):
-                    success = False
-                elif "success" in result:
-                    success = bool(result["success"])
+    while True:
+        try:
+            if _func_def._pydantic_model and _func_def._pydantic_param:
+                _model_instance = _func_def._pydantic_model(**(current_tu.input or {}))
+                result = await _func_def.func(ctx, **{_func_def._pydantic_param: _model_instance})
+            else:
+                result = await _func_def.func(ctx, **current_tu.input)
 
-        chat_ext._functions_called.append({
-            "name": tu.name, "params": tu.input, "action_type": action_type,
-            "success": success, "intercepted": False,
-            "event": _func_def.event if _is_action_result else "",
-            "result": result if _is_action_result else None,
-        })
-        return content
+            # === SUCCESS path ===
+            _is_action_result = isinstance(result, ActionResult)
+            if _is_action_result:
+                content = json.dumps(result.to_dict(), default=str, ensure_ascii=False)
+            else:
+                content = json.dumps(result, default=str, ensure_ascii=False)
+                if _func_def.event:
+                    log.warning(
+                        f"ChatExtension {chat_ext.tool_name}: function '{current_tu.name}' "
+                        f"has event='{_func_def.event}' but returned dict, not ActionResult"
+                    )
+            content = trim_tool_result(
+                content, cfg["max_result_tokens"],
+                cfg["list_truncate_items"], cfg["string_truncate_chars"],
+            )
 
-    except TaskCancelled:
-        raise
+            if _is_action_result:
+                success = result.status == "success"
+            else:
+                success = True
+                if isinstance(result, dict):
+                    if result.get("RESULT") == "ERROR" or result.get("error"):
+                        success = False
+                    elif "success" in result:
+                        success = bool(result["success"])
 
-    except PydanticValidationError as e:
-        # Arg-validation failure on the auto-detected Pydantic model. Surface
-        # missing fields explicitly so the LLM can self-correct without
-        # having to parse a freeform string. This is also the error surface
-        # the write-arg-bleed guard (Task 21) reads on subsequent calls.
-        missing = []
-        for err in e.errors():
-            if err.get("type") == "missing":
-                loc = err.get("loc") or ()
-                if loc:
-                    missing.append(loc[0])
-        log.error(f"ChatExtension validation error {tu.name}: missing={missing}")
-        content = json.dumps({
-            "RESULT": "ERROR",
-            "error_code": "VALIDATION_MISSING_FIELD",
-            "missing_fields": missing,
-        })
-        chat_ext._functions_called.append({
-            "name": tu.name, "params": tu.input, "action_type": action_type,
-            "success": False, "intercepted": False, "event": "",
-            "result": {"error_code": "VALIDATION_MISSING_FIELD", "missing_fields": missing},
-        })
-        return trim_tool_result(content, cfg["max_result_tokens"], cfg["list_truncate_items"], cfg["string_truncate_chars"])
+            chat_ext._functions_called.append({
+                "name": current_tu.name, "params": current_tu.input,
+                "action_type": action_type, "success": success,
+                "intercepted": False,
+                "event": _func_def.event if _is_action_result else "",
+                "result": result if _is_action_result else None,
+            })
+            _emit_retry_outcome(
+                tool=current_tu.name, ext=_ext_name,
+                outcome=("no_retry" if retry_count == 0 else "success"),
+                retry_count=retry_count,
+            )
+            return content
 
-    except Exception as e:
-        # Generic internal failure. error_class is the exception type name
-        # (safe to expose) but str(e) is NOT included — it has leaked PII,
-        # paths, and credentials historically.
-        log.error(f"ChatExtension internal error {tu.name}: {e}", exc_info=True)
-        content = json.dumps({
-            "RESULT": "ERROR",
-            "error_code": "INTERNAL",
-            "error_class": type(e).__name__,
-        })
-        chat_ext._functions_called.append({
-            "name": tu.name, "params": tu.input, "action_type": action_type,
-            "success": False, "intercepted": False, "event": "",
-            "result": {"error_code": "INTERNAL", "error_class": type(e).__name__},
-        })
-        return trim_tool_result(content, cfg["max_result_tokens"], cfg["list_truncate_items"], cfg["string_truncate_chars"])
+        except TaskCancelled:
+            raise
+
+        except PydanticValidationError as e:
+            if not _retry_eligible or retry_count >= _RETRY_BUDGET:
+                # Exhausted OR not eligible for retry — existing failure handling.
+                missing = []
+                for err in e.errors():
+                    if err.get("type") == "missing":
+                        loc_p = err.get("loc") or ()
+                        if loc_p:
+                            missing.append(loc_p[0])
+                log.error(
+                    f"ChatExtension validation error {current_tu.name}: missing={missing}"
+                )
+                content = json.dumps({
+                    "RESULT": "ERROR",
+                    "error_code": "VALIDATION_MISSING_FIELD",
+                    "missing_fields": missing,
+                })
+                chat_ext._functions_called.append({
+                    "name": current_tu.name, "params": current_tu.input,
+                    "action_type": action_type, "success": False,
+                    "intercepted": False, "event": "",
+                    "result": {
+                        "error_code": "VALIDATION_MISSING_FIELD",
+                        "missing_fields": missing,
+                    },
+                })
+                if _retry_eligible:
+                    _emit_retry_outcome(
+                        tool=current_tu.name, ext=_ext_name,
+                        outcome="exhausted", retry_count=retry_count,
+                    )
+                return trim_tool_result(
+                    content, cfg["max_result_tokens"],
+                    cfg["list_truncate_items"], cfg["string_truncate_chars"],
+                )
+
+            # Retry path: re-prompt LLM with structured prose feedback.
+            prose = format_pydantic_for_llm(e)
+            log.info(
+                f"chat_handler validation_retry tool={current_tu.name} "
+                f"retry_count={retry_count + 1}/{_RETRY_BUDGET}"
+            )
+
+            tmp_messages = list(retry_ctx["messages"]) + [
+                {"role": "assistant", "content": [current_tu]},
+                {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": current_tu.id, "content": prose}
+                ]},
+            ]
+            retry_resp = await retry_ctx["client"].create_message(
+                max_tokens=retry_ctx["_tool_use_mt"],
+                system=retry_ctx["_system"],
+                messages=tmp_messages,
+                tools=retry_ctx["_tools_for_llm"],
+                cfg=retry_ctx["_exec_cfg"],
+                **retry_ctx["_api_kwargs"],
+            )
+            new_tools = [b for b in retry_resp.content if getattr(b, "type", None) == "tool_use"]
+            new_tu = next((b for b in new_tools if b.name == current_tu.name), None)
+            if new_tu is None:
+                # LLM gave up (final text or different tool). Existing failure shape.
+                missing = []
+                for err in e.errors():
+                    if err.get("type") == "missing":
+                        loc_p = err.get("loc") or ()
+                        if loc_p:
+                            missing.append(loc_p[0])
+                content = json.dumps({
+                    "RESULT": "ERROR",
+                    "error_code": "VALIDATION_MISSING_FIELD",
+                    "missing_fields": missing,
+                })
+                chat_ext._functions_called.append({
+                    "name": current_tu.name, "params": current_tu.input,
+                    "action_type": action_type, "success": False,
+                    "intercepted": False, "event": "",
+                    "result": {
+                        "error_code": "VALIDATION_MISSING_FIELD",
+                        "missing_fields": missing,
+                    },
+                })
+                _emit_retry_outcome(
+                    tool=current_tu.name, ext=_ext_name,
+                    outcome="llm_gave_up", retry_count=retry_count,
+                )
+                return trim_tool_result(
+                    content, cfg["max_result_tokens"],
+                    cfg["list_truncate_items"], cfg["string_truncate_chars"],
+                )
+
+            # I-AH-1 federal re-check on retry (spec section 8 E15).
+            _ret_id_rejection = check_id_shape_fabrication(new_tu.input or {})
+            if _ret_id_rejection is not None:
+                log.warning(
+                    "ChatExtension I-AH-1 reject-on-retry %s field=%s value=%r",
+                    new_tu.name, _ret_id_rejection["field"], _ret_id_rejection["value"],
+                )
+                content = json.dumps({"RESULT": "ERROR", **_ret_id_rejection})
+                chat_ext._functions_called.append({
+                    "name": new_tu.name, "params": new_tu.input,
+                    "action_type": action_type, "success": False,
+                    "intercepted": True, "event": "",
+                    "result": _ret_id_rejection,
+                })
+                _emit_retry_outcome(
+                    tool=current_tu.name, ext=_ext_name,
+                    outcome="fabricated_id_on_retry", retry_count=retry_count + 1,
+                )
+                return trim_tool_result(
+                    content, cfg["max_result_tokens"],
+                    cfg["list_truncate_items"], cfg["string_truncate_chars"],
+                )
+
+            # Redundant retry detection (byte-identical args).
+            if json.dumps(new_tu.input or {}, sort_keys=True) == json.dumps(current_tu.input or {}, sort_keys=True):
+                _emit_retry_outcome(
+                    tool=current_tu.name, ext=_ext_name,
+                    outcome="redundant", retry_count=retry_count + 1,
+                )
+                log.warning(
+                    "chat_handler validation_retry_redundant tool=%s args_unchanged=true retry_count=%d",
+                    current_tu.name, retry_count + 1,
+                )
+
+            current_tu = new_tu
+            retry_count += 1
+            continue  # while True
+
+        except Exception as e:
+            log.error(f"ChatExtension internal error {current_tu.name}: {e}", exc_info=True)
+            content = json.dumps({
+                "RESULT": "ERROR",
+                "error_code": "INTERNAL",
+                "error_class": type(e).__name__,
+            })
+            chat_ext._functions_called.append({
+                "name": current_tu.name, "params": current_tu.input,
+                "action_type": action_type, "success": False,
+                "intercepted": False, "event": "",
+                "result": {"error_code": "INTERNAL", "error_class": type(e).__name__},
+            })
+            return trim_tool_result(
+                content, cfg["max_result_tokens"],
+                cfg["list_truncate_items"], cfg["string_truncate_chars"],
+            )
 
 
 # ---------------------------------------------------------------------------
