@@ -151,6 +151,33 @@ class Webhook(BaseModel):
     secret_header: str = ""
 
 
+class EventSubscription(BaseModel):
+    """One entry in `manifest['events']['subscribes']` (M7)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    handler: str
+
+
+class EventEmit(BaseModel):
+    """One entry in `manifest['events']['emits']` (M7)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    schema_ref: Optional[str] = None
+
+
+class Events(BaseModel):
+    """The `manifest['events']` section (M7)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subscribes: List[EventSubscription] = Field(default_factory=list)
+    emits: List[EventEmit] = Field(default_factory=list)
+
+
 # === Root model =======================================================
 
 class Manifest(BaseModel):
@@ -178,6 +205,7 @@ class Manifest(BaseModel):
     migrations_dir: Optional[str] = None
     config_defaults: Optional[Dict[str, Any]] = None
     webhooks: Optional[List[Webhook]] = None
+    events: Optional[Events] = None
 
     # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
     name: Optional[str] = None
@@ -312,6 +340,9 @@ __all__ = [
     "Signal",
     "Schedule",
     "Webhook",
+    "EventSubscription",
+    "EventEmit",
+    "Events",
     "validate_manifest_dict",
     "get_schema",
     "MANIFEST_SCHEMA",

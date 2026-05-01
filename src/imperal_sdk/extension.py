@@ -54,6 +54,9 @@ class EventHandlerDef:
     event_type: str
     func: Callable
 
+    def to_manifest(self) -> dict:
+        return {"type": self.event_type, "handler": self.func.__name__}
+
 
 @dataclass
 class EmitsDef:

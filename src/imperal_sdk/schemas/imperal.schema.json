@@ -1,5 +1,74 @@
 {
   "$defs": {
+    "EventEmit": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['events']['emits']` (M7).",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "schema_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Ref"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "EventEmit",
+      "type": "object"
+    },
+    "EventSubscription": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['events']['subscribes']` (M7).",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "handler": {
+          "title": "Handler",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "handler"
+      ],
+      "title": "EventSubscription",
+      "type": "object"
+    },
+    "Events": {
+      "additionalProperties": false,
+      "description": "The `manifest['events']` section (M7).",
+      "properties": {
+        "subscribes": {
+          "items": {
+            "$ref": "#/$defs/EventSubscription"
+          },
+          "title": "Subscribes",
+          "type": "array"
+        },
+        "emits": {
+          "items": {
+            "$ref": "#/$defs/EventEmit"
+          },
+          "title": "Emits",
+          "type": "array"
+        }
+      },
+      "title": "Events",
+      "type": "object"
+    },
     "Schedule": {
       "additionalProperties": false,
       "description": "One entry in `manifest['schedules']`.",
@@ -240,6 +309,17 @@
       ],
       "default": null,
       "title": "Webhooks"
+    },
+    "events": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Events"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "name": {
       "anyOf": [
