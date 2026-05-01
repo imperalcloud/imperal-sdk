@@ -55,3 +55,22 @@ def test_no_message_id_field_passthrough():
     """Tool with no message_id arg is not affected."""
     rejected = check_id_shape_fabrication({"query": "unread", "limit": 10})
     assert rejected is None
+
+
+def test_rejects_thread_id_slug_fabrication():
+    rejected = check_id_shape_fabrication({"thread_id": "fake-gmail-3"})
+    assert rejected is not None
+    assert rejected["error_code"] == "FABRICATED_ID_SHAPE"
+    assert rejected["field"] == "thread_id"
+
+
+def test_rejects_email_id_slug_fabrication():
+    rejected = check_id_shape_fabrication({"email_id": "fake-outlook-2"})
+    assert rejected is not None
+    assert rejected["field"] == "email_id"
+
+
+def test_rejects_msg_id_slug_fabrication():
+    rejected = check_id_shape_fabrication({"msg_id": "fake-imap-7"})
+    assert rejected is not None
+    assert rejected["field"] == "msg_id"

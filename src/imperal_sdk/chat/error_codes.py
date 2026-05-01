@@ -33,6 +33,7 @@ from __future__ import annotations
 # --------------------------------------------------------------------------- #
 VALIDATION_MISSING_FIELD = "VALIDATION_MISSING_FIELD"
 VALIDATION_TYPE_ERROR = "VALIDATION_TYPE_ERROR"
+FABRICATED_ID_SHAPE = "FABRICATED_ID_SHAPE"
 UNKNOWN_TOOL = "UNKNOWN_TOOL"
 UNKNOWN_SUB_FUNCTION = "UNKNOWN_SUB_FUNCTION"
 PERMISSION_DENIED = "PERMISSION_DENIED"
@@ -52,6 +53,11 @@ ERROR_TAXONOMY: dict[str, dict[str, str]] = {
         "user_hint_i18n_key": "errors.validation.type_error",
         "default_en": "Invalid value type for field: {field}",
         "default_ru": "Неверный тип значения для поля: {field}",
+    },
+    "FABRICATED_ID_SHAPE": {
+        "user_hint_i18n_key": "errors.validation.fabricated_id_shape",
+        "default_en": "The supplied id matches a known fabrication pattern; call inbox()/search()/folder() first to obtain a real id",
+        "default_ru": "Идентификатор похож на сфабрикованный; сначала вызовите inbox()/search()/folder() и возьмите реальный id",
     },
     "UNKNOWN_TOOL": {
         "user_hint_i18n_key": "errors.dispatch.unknown_tool",
@@ -95,6 +101,7 @@ __all__ = [
     "ERROR_TAXONOMY",
     "VALIDATION_MISSING_FIELD",
     "VALIDATION_TYPE_ERROR",
+    "FABRICATED_ID_SHAPE",
     "UNKNOWN_TOOL",
     "UNKNOWN_SUB_FUNCTION",
     "PERMISSION_DENIED",

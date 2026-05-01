@@ -10,6 +10,7 @@ execution.
 from __future__ import annotations
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any, Iterable
 
 if TYPE_CHECKING:
@@ -30,8 +31,9 @@ except ImportError:
 # Import with fallback mirroring the exact 9 keys — so a missing/broken
 # Task 19 module still leaves the bleed guard operational on the canonical set.
 try:
-    from imperal_sdk.chat.error_codes import ERROR_TAXONOMY  # type: ignore
+    from imperal_sdk.chat.error_codes import ERROR_TAXONOMY, FABRICATED_ID_SHAPE  # type: ignore
 except ImportError:  # pragma: no cover — defensive
+    FABRICATED_ID_SHAPE = "FABRICATED_ID_SHAPE"  # type: ignore[assignment]
     ERROR_TAXONOMY = frozenset({
         "VALIDATION_MISSING_FIELD",
         "VALIDATION_TYPE_ERROR",
@@ -334,8 +336,6 @@ def _check_confirmation_guard(
 # base64; real Gmail IDs are 16-char hex; UUIDs and other long opaque IDs
 # pass through unchanged.
 
-import re
-
 _FABRICATED_SLUG_RE = re.compile(r"^[a-z][a-z0-9]*-[a-z][a-z0-9]*-\d+$")
 
 # Fields whose values must be provider-native IDs, never invented.
@@ -359,7 +359,7 @@ def check_id_shape_fabrication(params: dict) -> dict | None:
         val = params.get(field)
         if isinstance(val, str) and _FABRICATED_SLUG_RE.match(val):
             return {
-                "error_code": "FABRICATED_ID_SHAPE",
+                "error_code": FABRICATED_ID_SHAPE,
                 "field": field,
                 "value": val,
                 "hint": (

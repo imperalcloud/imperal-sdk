@@ -11,8 +11,8 @@ resolve through this catalog -> i18n key -> template rendering, not str(e).
 def test_taxonomy_exhaustive():
     from imperal_sdk.chat.error_codes import ERROR_TAXONOMY
     expected = {
-        "VALIDATION_MISSING_FIELD", "VALIDATION_TYPE_ERROR", "UNKNOWN_TOOL",
-        "UNKNOWN_SUB_FUNCTION", "PERMISSION_DENIED", "BACKEND_TIMEOUT",
+        "VALIDATION_MISSING_FIELD", "VALIDATION_TYPE_ERROR", "FABRICATED_ID_SHAPE",
+        "UNKNOWN_TOOL", "UNKNOWN_SUB_FUNCTION", "PERMISSION_DENIED", "BACKEND_TIMEOUT",
         "BACKEND_5XX", "RATE_LIMITED", "INTERNAL",
     }
     assert set(ERROR_TAXONOMY) == expected
@@ -38,11 +38,13 @@ def test_default_en_and_ru_present():
 
 def test_known_error_codes_publicly_importable():
     from imperal_sdk.chat.error_codes import (
-        VALIDATION_MISSING_FIELD, VALIDATION_TYPE_ERROR, UNKNOWN_TOOL,
-        UNKNOWN_SUB_FUNCTION, PERMISSION_DENIED, BACKEND_TIMEOUT,
+        VALIDATION_MISSING_FIELD, VALIDATION_TYPE_ERROR, FABRICATED_ID_SHAPE,
+        UNKNOWN_TOOL, UNKNOWN_SUB_FUNCTION, PERMISSION_DENIED, BACKEND_TIMEOUT,
         BACKEND_5XX, RATE_LIMITED, INTERNAL,
     )
     assert VALIDATION_MISSING_FIELD == "VALIDATION_MISSING_FIELD"
+    assert VALIDATION_TYPE_ERROR == "VALIDATION_TYPE_ERROR"
+    assert FABRICATED_ID_SHAPE == "FABRICATED_ID_SHAPE"
     assert INTERNAL == "INTERNAL"
     assert UNKNOWN_TOOL == "UNKNOWN_TOOL"
     assert UNKNOWN_SUB_FUNCTION == "UNKNOWN_SUB_FUNCTION"
@@ -50,7 +52,6 @@ def test_known_error_codes_publicly_importable():
     assert BACKEND_TIMEOUT == "BACKEND_TIMEOUT"
     assert BACKEND_5XX == "BACKEND_5XX"
     assert RATE_LIMITED == "RATE_LIMITED"
-    assert VALIDATION_TYPE_ERROR == "VALIDATION_TYPE_ERROR"
 
 
 def test_taxonomy_entries_are_frozen_shape():

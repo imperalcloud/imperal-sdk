@@ -175,7 +175,7 @@ async def _execute_function(chat_ext: ChatExtension, ctx, tu, action_type: str, 
     from imperal_sdk.chat.guards import check_id_shape_fabrication
     _id_rejection = check_id_shape_fabrication(tu.input or {})
     if _id_rejection is not None:
-        log.error(
+        log.warning(
             "ChatExtension I-AH-1 reject %s field=%s value=%r",
             tu.name, _id_rejection["field"], _id_rejection["value"],
         )
