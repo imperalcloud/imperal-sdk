@@ -51,6 +51,58 @@ class TaskCancelled(Exception):
 
 
 # ---------------------------------------------------------------------------
+# Pydantic feedback loop helper (SPEC2-LLM-ARGS-QUALITY, v4.1.0)
+# ---------------------------------------------------------------------------
+
+def format_pydantic_for_llm(e: PydanticValidationError) -> str:
+    """Convert PydanticValidationError to LLM-friendly retry feedback prose.
+
+    Returns a multi-line string structured as:
+
+        Your previous tool call had invalid arguments. Fix these issues:
+        - '<loc>': <human reason>
+        - '<loc>': <human reason>
+
+        Retry the tool call with corrected arguments.
+
+    Per-error-type templates (per spec section 6.1):
+      missing            -> required field is missing — provide a value
+      string_*           -> expected string, got {input_type}
+      int_*              -> expected integer, got {input!r}
+      datetime_*         -> expected ISO datetime (e.g. '2026-05-03T00:00:00'), got {input!r}
+      list_type          -> expected list/array, got {input_type}
+      extra_forbidden    -> unknown field — remove it
+      (other)            -> loc: msg (Pydantic's own message)
+    """
+    lines = ["Your previous tool call had invalid arguments. Fix these issues:"]
+    for err in e.errors():
+        loc_parts = err.get("loc") or ()
+        loc = ".".join(str(p) for p in loc_parts) if loc_parts else "<root>"
+        err_type = err.get("type", "")
+        msg = err.get("msg", "")
+        input_val = err.get("input")
+        input_type_name = type(input_val).__name__ if input_val is not None else "None"
+
+        if err_type == "missing":
+            lines.append(f"- '{loc}': required field is missing — provide a value")
+        elif err_type.startswith("string_"):
+            lines.append(f"- '{loc}': expected string, got {input_type_name}")
+        elif err_type.startswith("int_"):
+            lines.append(f"- '{loc}': expected integer, got {input_val!r}")
+        elif err_type.startswith("datetime_"):
+            lines.append(f"- '{loc}': expected ISO datetime (e.g. '2026-05-03T00:00:00'), got {input_val!r}")
+        elif err_type == "list_type":
+            lines.append(f"- '{loc}': expected list/array, got {input_type_name}")
+        elif err_type == "extra_forbidden":
+            lines.append(f"- '{loc}': unknown field — remove it")
+        else:
+            lines.append(f"- '{loc}': {msg}")
+    lines.append("")
+    lines.append("Retry the tool call with corrected arguments.")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Config resolution helpers
 # ---------------------------------------------------------------------------
 
