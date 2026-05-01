@@ -97,3 +97,24 @@ def test_format_multiple_errors_combined():
     assert "'title'" in out
     assert "'project_id'" in out
     assert out.count("required field is missing") == 2
+
+
+def test_format_unknown_type_falls_back_to_pydantic_msg():
+    """Spec T1.6: unknown Pydantic error type routes to fallback `else` branch using Pydantic's msg."""
+    from pydantic import field_validator
+
+    class _CustomModel(BaseModel):
+        value: str
+
+        @field_validator("value")
+        @classmethod
+        def check_value(cls, v: str) -> str:
+            if v == "bad":
+                raise ValueError("custom business rule violated")
+            return v
+
+    e = _build_validation_error(_CustomModel, {"value": "bad"})
+    out = format_pydantic_for_llm(e)
+    # The fallback branch produces "- '<loc>': <msg>" using Pydantic's msg verbatim
+    assert "'value'" in out
+    assert "custom business rule violated" in out
