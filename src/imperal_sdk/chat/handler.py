@@ -102,6 +102,37 @@ def format_pydantic_for_llm(e: PydanticValidationError) -> str:
     return "\n".join(lines)
 
 
+# Outcome levels — per spec section 9 logging contract
+_RETRY_OUTCOME_LEVELS: dict[str, int] = {
+    "no_retry": logging.DEBUG,
+    "success": logging.INFO,
+    "redundant": logging.WARNING,
+    "exhausted": logging.WARNING,
+    "llm_gave_up": logging.INFO,
+    "fabricated_id_on_retry": logging.WARNING,
+}
+
+
+def _emit_retry_outcome(*, tool: str, ext: str, outcome: str, retry_count: int) -> None:
+    """Emit structured log line for SigNoz retry-outcome metrics derivation.
+
+    Format (consumed by kernel log scrape -> SigNoz):
+      validation_retry_outcome tool=<name> ext=<name> outcome=<value> retry_count=<N>
+
+    Outcome enum (spec section 10): no_retry | success | exhausted | llm_gave_up |
+    redundant | fabricated_id_on_retry.
+
+    No OpenTelemetry dependency — counters derived from log lines via
+    SigNoz log -> metric pipeline (same pattern kernel uses elsewhere).
+    """
+    level = _RETRY_OUTCOME_LEVELS.get(outcome, logging.INFO)
+    log.log(
+        level,
+        "validation_retry_outcome tool=%s ext=%s outcome=%s retry_count=%d",
+        tool, ext, outcome, retry_count,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Config resolution helpers
 # ---------------------------------------------------------------------------

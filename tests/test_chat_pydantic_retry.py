@@ -118,3 +118,39 @@ def test_format_unknown_type_falls_back_to_pydantic_msg():
     # The fallback branch produces "- '<loc>': <msg>" using Pydantic's msg verbatim
     assert "'value'" in out
     assert "custom business rule violated" in out
+
+
+# ---------------------------------------------------------------------------
+# Task 2: SigNoz log emission helper
+# ---------------------------------------------------------------------------
+
+from imperal_sdk.chat.handler import _emit_retry_outcome
+
+
+def test_emit_retry_outcome_logs_structured_line(caplog):
+    with caplog.at_level(logging.INFO, logger="imperal_sdk.chat.handler"):
+        _emit_retry_outcome(tool="create_task", ext="tasks", outcome="success", retry_count=1)
+    assert any(
+        "validation_retry_outcome" in r.message
+        and "tool=create_task" in r.message
+        and "ext=tasks" in r.message
+        and "outcome=success" in r.message
+        and "retry_count=1" in r.message
+        for r in caplog.records
+    )
+
+
+def test_emit_retry_outcome_uses_warning_for_exhausted(caplog):
+    with caplog.at_level(logging.WARNING, logger="imperal_sdk.chat.handler"):
+        _emit_retry_outcome(tool="create_task", ext="tasks", outcome="exhausted", retry_count=2)
+    matching = [r for r in caplog.records if "outcome=exhausted" in r.message]
+    assert matching, "expected at least one WARNING-level record"
+    assert matching[0].levelname == "WARNING"
+
+
+def test_emit_retry_outcome_security_outcome_is_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="imperal_sdk.chat.handler"):
+        _emit_retry_outcome(tool="send_mail", ext="mail", outcome="fabricated_id_on_retry", retry_count=1)
+    matching = [r for r in caplog.records if "fabricated_id_on_retry" in r.message]
+    assert matching
+    assert matching[0].levelname == "WARNING"
