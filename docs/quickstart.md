@@ -1,6 +1,6 @@
 # Quickstart — Build Your First Extension
 
-**Last updated:** 2026-04-18
+**Last updated:** 2026-05-01 (SDK v3.7.0 — anti-hallucination I-AH-1 guard active in chat handler)
 **SDK version:** imperal-sdk 1.5.7 (PEP 563 validator V5/V6 fix — resolves forward references via `typing.get_type_hints`)
 **PyPI:** [pypi.org/project/imperal-sdk](https://pypi.org/project/imperal-sdk/)
 **GitHub:** [github.com/imperalcloud/imperal-sdk](https://github.com/imperalcloud/imperal-sdk)

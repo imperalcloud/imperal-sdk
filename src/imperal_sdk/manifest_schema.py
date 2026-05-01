@@ -81,7 +81,13 @@ class ToolParam(BaseModel):
 
 
 class Tool(BaseModel):
-    """One entry in `manifest['tools']`."""
+    """One entry in `manifest['tools']`.
+
+    Federal v4.0.0 — typed dispatch fields (action_type, chain_callable,
+    effects, params_schema, return_schema, event) declared at top level so
+    the kernel chain planner can route deterministically without
+    re-deriving from extension code.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -89,6 +95,16 @@ class Tool(BaseModel):
     description: str = ""
     scopes: List[str] = Field(default_factory=list)
     parameters: Dict[str, ToolParam] = Field(default_factory=dict)
+
+    # Federal v4.0.0 typed dispatch fields (optional for v1/v2 backward compat)
+    action_type: Optional[str] = None  # "read", "write", "destructive"
+    chain_callable: Optional[bool] = None
+    effects: List[str] = Field(default_factory=list)
+    params_schema: Optional[Dict[str, Any]] = None
+    return_schema: Optional[Dict[str, Any]] = None
+    event: Optional[str] = None
+    owner_chat_tool: Optional[str] = None
+    synthetic: Optional[bool] = None
 
     @field_validator("name")
     @classmethod
@@ -232,7 +248,7 @@ class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # --- Base (always present) ---
-    manifest_schema_version: Optional[Literal[1, 2]] = None
+    manifest_schema_version: Optional[Literal[1, 2, 3]] = None
     app_id: str
     version: str
     capabilities: List[str] = Field(default_factory=list)
@@ -249,6 +265,14 @@ class Manifest(BaseModel):
     exposed: Optional[List[ExposedDecl]] = None
     lifecycle: Optional[LifecycleDecl] = None
     tray: Optional[List[TrayDecl]] = None
+
+    # --- Federal v4.0.0 (manifest_schema_version=3) ---
+    # Federal contract surface — kernel reads these to dispatch deterministically.
+    # All optional for v1/v2 backward compat; validator.py V14-V24 enforces at
+    # publish time via Dev Portal hook.
+    actions_explicit: Optional[bool] = None
+    icon_size_bytes: Optional[int] = None
+    lifecycle_hooks: Optional[Dict[str, Dict[str, Any]]] = None
 
     # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
     name: Optional[str] = None

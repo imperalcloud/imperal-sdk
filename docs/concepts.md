@@ -1,6 +1,6 @@
 # Core Concepts
 
-**SDK version:** imperal-sdk 0.5.0
+**SDK version:** imperal-sdk 3.7.0 (federal anti-hallucination guards live in chat handler, see `chat.guards` module)
 **Last updated:** 2026-04-08
 **Audience:** Extension developers building on Imperal Cloud
 

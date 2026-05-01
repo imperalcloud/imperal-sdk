@@ -344,4 +344,305 @@ def validate_extension(ext) -> ValidationReport:
                 ),
             ))
 
+    # === Federal v4.0.0 contract — V14-V24 =============================
+    # Goal: every extension that passes these is GUARANTEED to work with
+    # the kernel's typed-dispatch chain pipeline. No silent write failures,
+    # no LLM-router guessing, no hallucinated capabilities.
+
+    display_name = getattr(ext, "display_name", "") or ""
+    description = getattr(ext, "description", "") or ""
+    icon_path = getattr(ext, "icon", "") or ""
+    actions_explicit = getattr(ext, "actions_explicit", True)
+
+    # V14 — extension description ≥40 chars, ≠ app_id
+    if not description or len(description.strip()) < 40 or description.strip() == app_id:
+        report.issues.append(ValidationIssue(
+            rule="V14", level="ERROR",
+            message=(
+                f"Extension {app_id!r} description must be ≥40 chars and "
+                f"≠ app_id (got len={len(description)}, value={description!r:.40})"
+            ),
+            fix=(
+                "Set Extension(description=...) to a sentence describing what "
+                "the extension does. Webbee shows this in 'что я умею?' — "
+                "without it the user sees a bare slug. Federal V14."
+            ),
+        ))
+
+    # V15 — extension display_name ≥3 chars, ≠ app_id (case-sensitive verbatim)
+    if not display_name or len(display_name.strip()) < 3:
+        report.issues.append(ValidationIssue(
+            rule="V15", level="ERROR",
+            message=(
+                f"Extension {app_id!r} display_name must be ≥3 chars "
+                f"(got len={len(display_name)}, value={display_name!r})"
+            ),
+            fix=(
+                "Set Extension(display_name='Notes') — human-readable, "
+                "NOT the slug. Federal V15."
+            ),
+        ))
+    elif display_name.strip() == app_id:
+        report.issues.append(ValidationIssue(
+            rule="V15", level="ERROR",
+            message=(
+                f"Extension display_name {display_name!r} verbatim equals "
+                f"app_id {app_id!r} — provide human-readable name "
+                f"(e.g. 'Notes' for app_id='notes')"
+            ),
+            fix="Use 'Notes' instead of 'notes', 'Mail Inbox' instead of 'mail-inbox', etc.",
+        ))
+
+    # V16 — every @chat.function description ≥20 chars (skip __* synthetic)
+    chat_extensions: dict = getattr(ext, "_chat_extensions", {})
+    for chat_tool_name, chat_ext in (chat_extensions or {}).items():
+        for fn_name, fn_def in chat_ext.functions.items():
+            if fn_name.startswith("__"):
+                continue  # synthetic skip
+            fn_desc = (fn_def.description or "").strip()
+            if len(fn_desc) < 20:
+                report.issues.append(ValidationIssue(
+                    rule="V16", level="ERROR",
+                    message=(
+                        f"@chat.function {fn_name!r} (tool {chat_tool_name}) "
+                        f"description must be ≥20 chars (got len={len(fn_desc)})"
+                    ),
+                    fix=(
+                        "Set @chat.function(description='...') to a sentence "
+                        "describing inputs, outputs, and when to use it. The "
+                        "LLM uses this to choose tools. Federal V16."
+                    ),
+                ))
+
+    # V17 — every @chat.function has explicit Pydantic params model
+    for chat_tool_name, chat_ext in (chat_extensions or {}).items():
+        for fn_name, fn_def in chat_ext.functions.items():
+            if fn_name.startswith("__"):
+                continue
+            if getattr(fn_def, "_pydantic_model", None) is None:
+                report.issues.append(ValidationIssue(
+                    rule="V17", level="ERROR",
+                    message=(
+                        f"@chat.function {fn_name!r} must declare a Pydantic "
+                        f"BaseModel param (federal V17 — no **kwargs, no Any)"
+                    ),
+                    fix=(
+                        "Define `class XParams(BaseModel): ...` and use it as "
+                        "the typed handler arg: `async def fn(ctx, params: XParams)`. "
+                        "SDK auto-derives params schema from the model."
+                    ),
+                ))
+
+    # V18 — every @chat.function returns Pydantic model (subclass of ActionResult)
+    for chat_tool_name, chat_ext in (chat_extensions or {}).items():
+        for fn_name, fn_def in chat_ext.functions.items():
+            if fn_name.startswith("__"):
+                continue
+            ret_model = getattr(fn_def, "_return_model", None)
+            if ret_model is None:
+                report.issues.append(ValidationIssue(
+                    rule="V18", level="ERROR",
+                    message=(
+                        f"@chat.function {fn_name!r} must declare a Pydantic "
+                        f"return type (subclass of ActionResult)"
+                    ),
+                    fix=(
+                        "Annotate the handler return as `-> ActionResult` or a "
+                        "subclass. Federal V18 — kernel reads return_schema from "
+                        "manifest for typed dispatch."
+                    ),
+                ))
+
+    # V19 — actions_explicit + chain_callable on writes/destructive
+    if not actions_explicit:
+        report.issues.append(ValidationIssue(
+            rule="V19", level="ERROR",
+            message=(
+                f"Extension {app_id!r} must set actions_explicit=True "
+                f"(federal v4.0.0 default)"
+            ),
+            fix=(
+                "Set Extension(actions_explicit=True). Declares that every "
+                "write/destructive @chat.function is chain-callable as a typed "
+                "structured call — closes the chain_planner BYOLLM-router gap."
+            ),
+        ))
+    else:
+        for chat_tool_name, chat_ext in (chat_extensions or {}).items():
+            for fn_name, fn_def in chat_ext.functions.items():
+                if fn_name.startswith("__"):
+                    continue
+                if fn_def.action_type in ("write", "destructive") and not fn_def.chain_callable:
+                    report.issues.append(ValidationIssue(
+                        rule="V19", level="ERROR",
+                        message=(
+                            f"@chat.function {fn_name!r} (action_type={fn_def.action_type}) "
+                            f"must have chain_callable=True under actions_explicit=True"
+                        ),
+                        fix=(
+                            "Default is True for writes — only set chain_callable=False "
+                            "if you genuinely need LLM-router routing (very rare)."
+                        ),
+                    ))
+
+    # V20 — every write/destructive @chat.function declares effects (info-level
+    # for v4.0.0, error-level v5.0.0). Effects power the audit ledger + narrator.
+    for chat_tool_name, chat_ext in (chat_extensions or {}).items():
+        for fn_name, fn_def in chat_ext.functions.items():
+            if fn_name.startswith("__"):
+                continue
+            if fn_def.action_type in ("write", "destructive") and not fn_def.effects:
+                report.issues.append(ValidationIssue(
+                    rule="V20", level="WARN",
+                    message=(
+                        f"@chat.function {fn_name!r} ({fn_def.action_type}) "
+                        f"should declare effects=['create:resource'] etc. "
+                        f"(federal V20, error in v5.0.0)"
+                    ),
+                    fix=(
+                        "Pass effects=['create:note'] or ['delete:folder'] etc. "
+                        "Used by chain narrator + audit ledger."
+                    ),
+                ))
+
+    # V21 — required SVG icon
+    if not icon_path:
+        report.issues.append(ValidationIssue(
+            rule="V21", level="ERROR",
+            message=(
+                f"Extension {app_id!r} must declare icon='icon.svg' "
+                f"(federal V21 — required SVG marketplace icon)"
+            ),
+            fix=(
+                "Add an icon.svg file to your extension dir + set "
+                "Extension(icon='icon.svg'). Must be valid SVG with viewBox, "
+                "max 100KB, no embedded base64 raster."
+            ),
+        ))
+    elif not icon_path.lower().endswith(".svg"):
+        report.issues.append(ValidationIssue(
+            rule="V21", level="ERROR",
+            message=f"Extension icon {icon_path!r} must be SVG (.svg extension)",
+            fix="Federal V21 — only SVG icons accepted. Convert raster to SVG.",
+        ))
+    else:
+        # Validate icon file content if locatable
+        import os as _os
+        for candidate in (icon_path, _os.path.join(_os.getcwd(), icon_path)):
+            if _os.path.exists(candidate):
+                try:
+                    sz = _os.path.getsize(candidate)
+                    if sz > 100 * 1024:
+                        report.issues.append(ValidationIssue(
+                            rule="V21", level="ERROR",
+                            message=f"Icon {icon_path!r} is {sz} bytes — max 100KB",
+                            fix="Optimize SVG (remove metadata, simplify paths) or split assets.",
+                        ))
+                    with open(candidate, "rb") as _f:
+                        head = _f.read(2048).decode("utf-8", errors="ignore").lower()
+                    if "<svg" not in head:
+                        report.issues.append(ValidationIssue(
+                            rule="V21", level="ERROR",
+                            message=f"Icon {icon_path!r} missing <svg> root element",
+                            fix="Federal V21 — must be valid SVG XML.",
+                        ))
+                    if "viewbox" not in head:
+                        report.issues.append(ValidationIssue(
+                            rule="V21", level="ERROR",
+                            message=f"Icon {icon_path!r} missing viewBox attribute",
+                            fix="Federal V21 — viewBox required for multi-size rendering.",
+                        ))
+                    if "data:image" in head and "base64" in head:
+                        report.issues.append(ValidationIssue(
+                            rule="V21", level="ERROR",
+                            message=f"Icon {icon_path!r} contains embedded base64 raster",
+                            fix="Federal V21 — pure SVG only, no embedded PNG/JPEG.",
+                        ))
+                except OSError:
+                    pass
+                break
+
+    # V22 — lifecycle hook signatures match SDK contract
+    _LIFECYCLE_REQUIRED_KW = {
+        "on_install": set(),
+        "on_uninstall": set(),
+        "on_refresh": {"message"},  # added in SDK 3.x; closes the on_refresh(message=) TypeError class
+        "on_upgrade": {"from_version"},
+    }
+    lifecycle = getattr(ext, "_lifecycle", {}) or {}
+    for hook_name, hook_def in lifecycle.items():
+        required = _LIFECYCLE_REQUIRED_KW.get(hook_name)
+        if required is None:
+            continue
+        try:
+            import inspect as _insp
+            sig = _insp.signature(hook_def.func)
+            params = set(sig.parameters.keys())
+            missing = required - params
+            # Allow **kwargs to absorb everything
+            has_var_kw = any(
+                p.kind == _insp.Parameter.VAR_KEYWORD
+                for p in sig.parameters.values()
+            )
+            if missing and not has_var_kw:
+                report.issues.append(ValidationIssue(
+                    rule="V22", level="ERROR",
+                    message=(
+                        f"Lifecycle hook {hook_name!r} missing required kwargs: "
+                        f"{sorted(missing)}. Closes the TypeError class where kernel "
+                        f"passes message= but extension didn't expect it."
+                    ),
+                    fix=(
+                        f"Add {', '.join(sorted(missing))}=None to the hook signature, "
+                        f"or accept **kwargs."
+                    ),
+                ))
+        except (ValueError, TypeError):
+            pass
+
+    # V23 — capabilities in known set (<app>:read, <app>:write, <app>:*)
+    capabilities = getattr(ext, "capabilities", []) or []
+    _CAP_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*:(read|write|admin|\*)$")
+    for cap in capabilities:
+        if not _CAP_PATTERN.match(cap):
+            report.issues.append(ValidationIssue(
+                rule="V23", level="ERROR",
+                message=(
+                    f"Capability {cap!r} must be '<namespace>:read|write|admin|*' format"
+                ),
+                fix=(
+                    "Use 'notes:read', 'mail:write', 'admin:*', etc. "
+                    "Federal V23 — kernel only grants known capability shapes."
+                ),
+            ))
+
+    # V24 — handler bodies must NOT access ctx.skeleton.* for data reads
+    # (skeleton is LLM-only context cache; handlers use ctx.api).
+    # AST static analysis on each @chat.function body.
+    import ast as _ast
+    import inspect as _insp
+    _SKELETON_ACCESS_PATTERN = re.compile(r"\bctx\s*\.\s*skeleton\b")
+    for chat_tool_name, chat_ext in (chat_extensions or {}).items():
+        for fn_name, fn_def in chat_ext.functions.items():
+            if fn_name.startswith("__"):
+                continue
+            try:
+                src = _insp.getsource(fn_def.func)
+            except (OSError, TypeError):
+                continue
+            if _SKELETON_ACCESS_PATTERN.search(src):
+                report.issues.append(ValidationIssue(
+                    rule="V24", level="ERROR",
+                    message=(
+                        f"@chat.function {fn_name!r} reads from ctx.skeleton — "
+                        f"federal V24 forbids this. Skeleton is the LLM context "
+                        f"cache (read by router/narrator), not a data source."
+                    ),
+                    fix=(
+                        "Use ctx.api.<...>() to fetch from the real backend. "
+                        "Skeleton is updated AFTER actions via @ext.skeleton "
+                        "refresh functions, not read inline by handlers."
+                    ),
+                ))
+
     return report

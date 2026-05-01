@@ -1,6 +1,11 @@
 # API Reference
 
-**Last updated:** 2026-04-08
+**Last updated:** 2026-05-01 (SDK v3.7.0)
+
+> **v3.7.0 additions** — `imperal_sdk.chat.guards.check_id_shape_fabrication`
+> federal anti-hallucination guard; new error code `FABRICATED_ID_SHAPE`
+> in `imperal_sdk.chat.error_codes.ERROR_TAXONOMY`. See
+> [`extension-guidelines.md` § Anti-Hallucination](extension-guidelines.md#anti-hallucination-guards--what-your-extension-gets-for-free-v370).
 **SDK version:** imperal-sdk 1.2.0
 **Audience:** Extension developers building on Imperal Cloud
 

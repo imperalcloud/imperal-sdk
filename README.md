@@ -29,6 +29,28 @@ Think **Shopify for AI agents**. You build it. Users install it. The platform ha
 pip install imperal-sdk
 ```
 
+### What's New in v3.7.0 (2026-05-01)
+
+**Anti-Hallucination Federal Hardening — I-AH-1.**
+
+- **`imperal_sdk.chat.guards.check_id_shape_fabrication`** — federal-grade
+  guard at the chat handler boundary. Rejects empirically observed
+  fabricated `message_id` / `thread_id` / `email_id` / `msg_id` slug
+  pattern `^[a-z][a-z0-9]*-[a-z][a-z0-9]*-\d+$` BEFORE Pydantic
+  coercion. Returns `error_code=FABRICATED_ID_SHAPE` with self-correction
+  hint so the LLM can call `inbox()` / `search()` / `folder()` first.
+- New error code `FABRICATED_ID_SHAPE` in `chat.error_codes.ERROR_TAXONOMY`.
+- 11 new tests; 934 total passing.
+
+```bash
+pip install 'imperal-sdk>=3.7.0'
+```
+
+See [`CHANGELOG.md`](CHANGELOG.md) for full v3.7.0 notes. The companion
+five federal invariants (I-AH-2 v2, I-AH-3, I-AH-4, I-MAGIC-UX-1,
+I-MAGIC-UX-2) live in the kernel — see workspace doc
+`imperal/webbee/docs/anti-hallucination-federal-hardening.md`.
+
 ### What's New in v3.5.x (2026-04-30)
 
 **Federal Audit Closure + LLM Config Unification (LCU).**

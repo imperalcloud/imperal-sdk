@@ -1,6 +1,6 @@
 # Extension Development Guidelines
 
-**SDK version:** imperal-sdk 1.5.17
+**SDK version:** imperal-sdk 3.7.0
 **Last updated:** 2026-04-21 (session 37 — Markdown rendering hygiene: Layer 1 `kernel_formatting_rule.txt` rewrite with DO / NEVER pair teaches the model well-formed Markdown; Layer 2 `imperal_sdk.chat.filters.normalize_markdown` (new) trims `** text **` → `**text**` glitches. Auto-applied at every `ChatExtension._handle` text return. Invariants I-MD-1, I-MD-2. Session 33 — Panel automatic visual styling: Tailwind `@theme` colour remap + container-level padding philosophy + ext-pane padding on ExtensionShell + horizontal Stack auto-wrap + element-level sizing tokens + ESLint wall blocking hardcoded Tailwind scales in Panel code. v1.5.16: `ui.Stack(wrap=...)` now tri-state — `wrap=False` on horizontal Stacks correctly opts out of Panel auto-wrap. Extension authors: see Rule 19 below. Emit semantic intent via `variant=`/`color=` — never hardcode colours or Tailwind classes. v1.5.15 ships `ui.theme(ctx)` accessor + `Context.agency_theme` + Auth GW `PUT /v1/agencies/{id}/theme` with Pydantic WCAG AA validation. Earlier: v1.5.8 session 30 `NotifyProtocol` + webhook URL + `@ext.schedule` dispatcher + fast-RPC Redis-Streams `/call` (388ms→3ms). v1.5.7 PEP 563 validator fix. v1.5.6 CRITICAL FC.result event-publishing fix. v1.5.5 `ui.Graph` Cytoscape. v1.5.4 `@ext.tray()` + OS identity. Session 20 baseline.)
 
 > **v1.5.6 — critical event-publishing fix.** `@chat.function(action_type="write"|"destructive", event="X")` now actually publishes the event through the kernel. Pre-v1.5.6 `ChatExtension._make_chat_result` built `FunctionCall` without the `result` field, so the kernel's event-publishing check at `extension_runner.py` Step 10b never fired. Any extension relying on sidebar `refresh="on_event:X"` or automation rules triggered by `event_type` was silently broken. Upgrading to v1.5.6 requires a companion kernel patch (`extension_runner.py` must hydrate dict-form `ActionResult` via `ActionResult.from_dict()` after Temporal transport). Both fixes are already deployed on platform workers; third-party extension developers should pin `imperal-sdk>=1.5.6`.
@@ -927,3 +927,37 @@ async def panel_inbox(ctx, **kwargs):
 ---
 
 See also: [Quickstart](quickstart.md) | [SDK Clients](clients.md) | [Skeleton](skeleton.md)
+
+---
+
+## Anti-Hallucination guards — what your extension gets for free (v3.7.0+)
+
+Federal anti-hallucination layer added in SDK v3.7.0 protects every
+extension automatically. **You don't need to do anything** — the
+guards run in the chat handler before your tools execute.
+
+### `check_id_shape_fabrication` (I-AH-1)
+
+When the LLM hallucinates a slug-shaped `message_id` (or `thread_id` /
+`email_id` / `msg_id`) like `webhostmost-outlook-1`, the SDK rejects
+the call BEFORE your `@chat.function` runs. The LLM gets a
+`FABRICATED_ID_SHAPE` error with a hint to call `inbox()` / `search()`
+/ `folder()` first to obtain a real ID.
+
+**Implication for your extension:** if you have a `@chat.function`
+that takes a `message_id` arg, real provider IDs (Outlook ~150-char
+base64, Gmail 16-char hex, custom UUIDs, etc.) pass through normally.
+Only the `[a-z]+-[a-z]+-\d+` slug pattern is rejected.
+
+If your extension uses ID fields under different names (e.g.
+`note_uuid`, `task_handle`), they are NOT covered by I-AH-1 by default.
+Add them to the watched set at extension level if you need similar
+protection — file a Dev Portal request to extend the SDK list.
+
+### Cross-references
+
+- Workspace doc: `imperal/webbee/docs/anti-hallucination-federal-hardening.md` —
+  full federal record.
+- Source: `imperal_sdk/chat/guards.py::check_id_shape_fabrication`.
+- Wire: `imperal_sdk/chat/handler.py::_execute_function` (BEFORE Pydantic).
+

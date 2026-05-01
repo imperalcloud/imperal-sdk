@@ -90,7 +90,18 @@ class TrayDef:
         return {"tray_id": self.tray_id, "icon": self.icon, "tooltip": self.tooltip}
 
 class Extension:
-    """Imperal Cloud Extension."""
+    """Imperal Cloud Extension.
+
+    Federal v4.0.0 contract — every extension MUST declare:
+      - ``display_name`` — human-readable name shown in Webbee's capability list
+      - ``description`` — federal-grade plain-language description (≥40 chars)
+      - ``icon`` — SVG file path (≤100KB, with ``<svg>`` root + ``viewBox``)
+      - ``actions_explicit=True`` — every ``action_type="write"|"destructive"``
+        tool is ``chain_callable=True`` so the kernel issues typed calls
+        deterministically without delegating to the extension's LLM router
+
+    Validators V14, V15, V19, V21 enforce these at SDK + Dev Portal level.
+    """
 
     def __init__(
         self,
@@ -99,9 +110,18 @@ class Extension:
         capabilities: list[str] | None = None,
         migrations_dir: str | None = None,
         config_defaults: dict | None = None,
+        *,
+        display_name: str = "",
+        description: str = "",
+        icon: str = "",
+        actions_explicit: bool = True,
     ):
         self.app_id = app_id
         self.version = version
+        self.display_name = display_name
+        self.description = description
+        self.icon = icon
+        self.actions_explicit = actions_explicit
         self.capabilities = capabilities or []
         self.migrations_dir = migrations_dir
         self._tools: dict[str, ToolDef] = {}
@@ -116,10 +136,6 @@ class Extension:
         self._exposed: dict[str, ExposedMethod] = {}
         self._panels: dict[str, dict] = {}
         self._tray: dict[str, "TrayDef"] = {}
-        # v1.6.0 ctx.cache — per-extension Pydantic model registry. Scoped to
-        # this Extension instance: the same name in different extensions
-        # refers to different classes. Invariant:
-        # I-CACHE-MODEL-ON-EXTENSION-INSTANCE.
         self._cache_models: dict[str, type] = {}
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
