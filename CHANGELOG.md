@@ -123,9 +123,7 @@ unchanged; only the new rules raise.
 - `manifest_schema.py` is 441 LOC, over the 300-line workspace rule;
   split into per-section sub-modules tracked for cleanup pass.
 - UEB Phase 1b (kernel-side `audit/_streams.py` + `_consumer.py` +
-  catalogue) lands separately — see
-  `superpowers/specs/2026-05-01-universal-event-bus-design.md` and
-  `superpowers/plans/2026-05-01-universal-event-bus.md`.
+  catalogue) lands separately.
 
 ## v3.5.2 — 2026-04-30 — Hotfix: federal determinism restored
 
