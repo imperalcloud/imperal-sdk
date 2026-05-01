@@ -2,6 +2,15 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v3.7.0 — 2026-05-01 — Anti-Hallucination Federal Hardening: I-AH-1 fabricated message_id guard
+
+### Added
+
+- **I-AH-1 — `imperal_sdk.chat.guards.check_id_shape_fabrication`** rejects empirically observed fabricated `message_id` slug pattern `^[a-z][a-z0-9]*-[a-z][a-z0-9]*-\d+$` at the chat handler boundary. Closes Bug-1 from the prod chat anti-hallucination test 2026-05-01 02:25 UTC where the LLM emitted `message_id="webhostmost-outlook-1"` and `message_id="ivalik-gmail-4"` — slugs that do not exist in any provider's ID format. Real Outlook IDs are ~150-char base64; real Gmail IDs are 16-char hex.
+- The guard returns a structured `error_code=FABRICATED_ID_SHAPE` envelope with an actionable hint instructing the LLM to call `inbox()`, `search()`, `folder()`, or the `mail_inbox_summary` skeleton first. The wire integration sits in `_execute_function` BEFORE Pydantic coercion so the LLM gets a specific self-correction signal.
+- New error code `FABRICATED_ID_SHAPE` added to `imperal_sdk.chat.error_codes.ERROR_TAXONOMY` (10 codes total now). Kernel mirror at `imperal_kernel.narration.error_codes` updated in parallel — catalog sync invariant preserved.
+- Coverage for `_ID_SHAPE_FIELDS = ("message_id", "thread_id", "email_id", "msg_id")` — all four exercised in `tests/test_id_shape_guard.py` (10 unit tests + 1 wire test in `tests/test_chat_guards.py`).
+
 ## v3.6.0 — 2026-05-01 — UEB Phase 1a: Manifest v2 + Event envelope EV6..EV8 + @ext.emits
 
 First slice of Universal Event Bus (UEB). Closes Manifest Gap from
