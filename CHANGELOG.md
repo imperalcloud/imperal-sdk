@@ -93,12 +93,6 @@ Sonnet 4.6 retry call ≈ 700 input + 150 output tokens. Per-call cost ~$0.0044.
 At current production rate (11 rejected/24h × max 2 retries), worst-case
 additional spend ≈ $3/month. Negligible compared to existing chain LLM cost.
 
-### Spec & plan references
-
-- Spec: ``superpowers/specs/2026-05-02-pydantic-feedback-loop-design.md`` (rev 2,
-  commit 6316ef1).
-- Plan: ``superpowers/plans/2026-05-02-pydantic-feedback-loop-plan.md``.
-
 ## v4.0.1 — 2026-05-01 — Federal validator polish: V18 ActionResult, V21 XML parser, V23 dropped, V24 AST walk
 
 Patch release that swaps regex / substring anti-patterns in V14-V24 for proper structural validation, and drops V23 as redundant.
