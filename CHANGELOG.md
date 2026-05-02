@@ -2,6 +2,103 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v4.1.0 — 2026-05-02 — Pydantic feedback loop: bounded retry on validation failure (SPEC2-LLM-ARGS-QUALITY)
+
+Production runtime fix for the largest single hallucination class observed in current
+production traffic: 75% of audit-window hallucinations traced to LLM emitting
+wrong-shape arguments to ``@chat.function`` calls. v4.1.0 adds a bounded retry loop
+inside the SDK chat tool-use path that catches ``pydantic.ValidationError``, formats
+structured prose feedback to the LLM, and lets the LLM self-correct with corrected
+arguments.
+
+Production evidence: 11 ``validation_rejected/24h`` rows on ``tasks/create_task`` —
+all from LLM omitting required ``title`` / ``project_id``. Expected to drop to ≤3/24h
+after this release.
+
+### Added
+
+- **Pydantic feedback loop** in ``chat/handler.py`` (SPEC2-LLM-ARGS-QUALITY). When
+  ``@chat.function`` Pydantic validation fails, the SDK formats structured prose
+  feedback and retries the LLM call up to twice per tool before falling back to the
+  existing ``VALIDATION_MISSING_FIELD`` response.
+- New top-level helper ``format_pydantic_for_llm(e)`` translates
+  ``pydantic.ValidationError`` into per-field human-readable lines. Supports the
+  Pydantic 2 error type prefixes ``string_*``, ``int_*``, ``datetime_*``, plus exact
+  matches ``missing``, ``list_type``, ``extra_forbidden``, with fallback to
+  Pydantic's own ``msg`` for unknown types.
+- New SigNoz log-derived metric ``validation_retry_outcome`` with outcome enum
+  ``no_retry | success | exhausted | llm_gave_up | redundant | fabricated_id_on_retry``.
+  No new dependencies — counters derived from log-line scrape, same pattern kernel
+  uses elsewhere.
+- ``_validation_missing_field_response`` private helper extracts shared
+  VALIDATION_MISSING_FIELD JSON construction from ``exhausted`` and ``llm_gave_up``
+  branches (DRY per CLAUDE.md rule 9).
+- Federal invariants: I-PYDANTIC-RETRY-BUDGET (max 2 retries per tool),
+  I-PYDANTIC-RETRY-SCOPE (only ``PydanticValidationError`` triggers retry —
+  not ``FABRICATED_ID_SHAPE`` / ``UNKNOWN_SUB_FUNCTION`` / generic ``Exception`` /
+  ``TaskCancelled``), I-PYDANTIC-FEEDBACK-STRUCTURED (structured prose, not raw
+  JSON), I-PYDANTIC-FC-SINGLE-APPEND (one ``_functions_called`` entry per logical
+  tool call across retries), I-PYDANTIC-WIRE-FROZEN (no schema or contract
+  changes).
+- 17 new TDD test cases in ``tests/test_chat_pydantic_retry.py`` covering pure
+  function (8), SigNoz emission (3), retry success / exhausted (2), edge cases
+  (4 — gave-up / redundant / multi-tool_use / switched-tool), retry scope
+  (5 — non-Pydantic failure classes), fc-uniqueness (4), wire contract
+  preservation (2), token budget regression (1), exception propagation (1).
+- ``tests/test_chat_pydantic_retry.py::allow_target_scope`` pytest fixture
+  monkeypatches the SDK-standalone ``_check_target_scope`` fallback for retry
+  integration tests, allowing them to exercise the retry path without
+  ``imperal_kernel`` installed.
+
+### Changed
+
+- ``_execute_function`` accepts a new keyword-only kwarg
+  ``retry_ctx: dict | None = None``. Without it, behavior is exactly the v4.0.1
+  implementation (legacy ``**kwargs`` extensions and any caller not yet updated
+  remain unaffected). With it, the Pydantic retry loop activates.
+- ``handle_message`` tool-use loop now passes ``retry_ctx`` to ``_execute_function``
+  on the single per-tu call site.
+- Module constant ``_RETRY_BUDGET = 2`` defines the per-tool-call retry cap.
+- Retry call-site invokes the ``_llm_usage_callback`` for token cost
+  observability, mirroring the main loop's billing telemetry pattern.
+
+### Security
+
+- I-AH-1 ``check_id_shape_fabrication`` now re-runs on every retry attempt input,
+  not just the first attempt. Federal security guard remains effective across
+  retries; new SigNoz alert at ``outcome=fabricated_id_on_retry > 0`` flags any
+  case where the LLM hallucinates an ID slug specifically in a retry round.
+
+### Fixed
+
+- ``runtime/executor.py`` SDK-standalone fallback for ``_check_target_scope``
+  (used when ``imperal_kernel`` is not installed) now returns a complete dict
+  shape with all keys callers expect (``allowed``, ``reason``, ``target_user_id``,
+  ``required_scope``, ``force_confirmation``, ``cross_user``, ``verdict``).
+  Previously the partial dict caused ``KeyError`` in ``chat/guards.py:258`` when
+  running SDK tests standalone. Production behavior unchanged (production has
+  ``imperal_kernel`` installed and uses the real implementation). Log level
+  also dropped from ``error`` to ``warning`` since standalone is an expected
+  scenario for SDK testing, not an operational failure.
+
+### Wire contract
+
+- **No changes** to ``FunctionCall`` dataclass, ``FunctionCallModel`` Pydantic
+  schema, or ``chat_result.schema.json``. SHA256 snapshot pinned in
+  ``test_chat_result_schema_unchanged``.
+
+### Token cost
+
+Sonnet 4.6 retry call ≈ 700 input + 150 output tokens. Per-call cost ~$0.0044.
+At current production rate (11 rejected/24h × max 2 retries), worst-case
+additional spend ≈ $3/month. Negligible compared to existing chain LLM cost.
+
+### Spec & plan references
+
+- Spec: ``superpowers/specs/2026-05-02-pydantic-feedback-loop-design.md`` (rev 2,
+  commit 6316ef1).
+- Plan: ``superpowers/plans/2026-05-02-pydantic-feedback-loop-plan.md``.
+
 ## v4.0.1 — 2026-05-01 — Federal validator polish: V18 ActionResult, V21 XML parser, V23 dropped, V24 AST walk
 
 Patch release that swaps regex / substring anti-patterns in V14-V24 for proper structural validation, and drops V23 as redundant.
