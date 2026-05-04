@@ -2,6 +2,61 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v4.1.2 — 2026-05-05 — `@chat.function(id_projection=...)` for chain-step target projection (NEW-5)
+
+Federal extension contract addition: `@chat.function` accepts an optional
+`id_projection` kwarg declaring the params field that carries the resolved
+target id when the tool runs as a downstream chain step. Closes the
+architectural gap surfaced by `delete_notes_from_folder` whose composite
+name made the kernel's verb-prefix heuristic produce
+`notes_from_folder_id` instead of `folder_id`.
+
+Required for tools where the heuristic fails (compound names like
+`delete_notes_from_folder`, `mark_emails_as_read`,
+`archive_drafts_in_project`). Optional for simple `delete_<entity>` /
+`update_<entity>` names — the heuristic continues to work.
+
+### Added
+
+- **`@chat.function(id_projection=...)`** kwarg (`chat/extension.py`).
+  Declares the params field carrying the resolved target id for chain
+  dispatch. Empty string default — backward-compat for legacy authors.
+- **FunctionDef.id_projection** field surfaces the declaration to the
+  manifest emitter.
+- **Manifest serialization** includes `id_projection` per tool entry —
+  kernel reads it at ext load and populates `ToolEntry.id_projection` so
+  `_project_item_to_args` consults it before falling back to the
+  Pydantic-field auto-detect or verb-prefix heuristic.
+
+### Tests
+
+- `test_chat_function_id_projection_kwarg_propagated` — kwarg flows into
+  FunctionDef.
+- `test_chat_function_id_projection_default_empty` — default empty
+  preserves backward compat.
+
+### Migration
+
+- For tools whose name DOES directly imply the target field
+  (`delete_note` -> `note_id`), no change required. The kernel heuristic
+  continues to work.
+- For composite names where the heuristic produces a wrong field, declare
+  explicitly:
+
+  ```python
+  @chat.function(
+      "delete_notes_from_folder",
+      action_type="destructive",
+      id_projection="folder_id",
+  )
+  async def delete_notes_from_folder(ctx, params: DeleteNotesFromFolderParams):
+      ...
+  ```
+
+  Without `id_projection`, chain step that resolved a folder upstream
+  would have its id dropped on the floor (kernel would look for
+  `notes_from_folder_id` field which the params model does not have).
+
 ## v4.1.1 — 2026-05-05 — Tighten emit_narration mode/prose schema descriptions (NEW-1)
 
 Production runtime fix for a P0 hallucination class observed in BYOLLM extensions:
