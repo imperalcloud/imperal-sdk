@@ -62,6 +62,50 @@ def test_mode_description_scope_clause_present():
     )
 
 
+def test_chat_function_id_projection_kwarg_propagated():
+    """v4.1.2 (NEW-5): @chat.function id_projection kwarg flows into FunctionDef
+    and through manifest serialization so kernel can wire ext-declared
+    target field for chain-step projection (e.g. delete_notes_from_folder
+    -> id_projection='folder_id' instead of heuristic's notes_from_folder_id)."""
+    from imperal_sdk.chat.extension import ChatExtension, FunctionDef
+    from imperal_sdk.extension import Extension
+
+    ext = Extension(app_id="notes_test", display_name="Notes Test", description="x" * 30)
+    chat = ChatExtension(ext, tool_name="tool_notes_chat",
+                         description="Notes test chat tool — minimal fixture for projection")
+
+    @chat.function(
+        "delete_notes_from_folder",
+        description="Delete every note inside the given folder by folder_id",
+        action_type="destructive",
+        id_projection="folder_id",
+    )
+    async def _h(ctx, params):
+        return None
+
+    fn = chat._functions["delete_notes_from_folder"]
+    assert isinstance(fn, FunctionDef)
+    assert fn.id_projection == "folder_id"
+
+
+def test_chat_function_id_projection_default_empty():
+    """v4.1.2: id_projection defaults to empty string when not provided —
+    backward-compat for legacy ext authors who haven't migrated."""
+    from imperal_sdk.chat.extension import ChatExtension
+    from imperal_sdk.extension import Extension
+
+    ext = Extension(app_id="notes_test2", display_name="Notes Test 2", description="x" * 30)
+    chat = ChatExtension(ext, tool_name="tool_notes_chat2",
+                         description="Notes test chat tool 2 — minimal fixture for default check")
+
+    @chat.function("delete_note", description="Delete a single note by note_id")
+    async def _h(ctx, params):
+        return None
+
+    fn = chat._functions["delete_note"]
+    assert fn.id_projection == ""
+
+
 def test_prose_description_warns_against_placeholders():
     """v4.1.1: prose field description must call out placeholder anti-pattern
     (e.g. '<essay 200 words>') so LLM knows brevity rule applies only here."""

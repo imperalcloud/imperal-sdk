@@ -38,6 +38,15 @@ class FunctionDef:
     ``effects`` declares the side-effect surface (``["create:note"]``,
     ``["delete:folder"]``, etc.) so the chain narrator + audit ledger
     can describe exactly what changed without re-deriving from text.
+
+    ``id_projection`` declares the Pydantic params field that carries the
+    resolved target id when this tool runs as a downstream chain step.
+    Default empty — the kernel falls back to a verb-prefix heuristic
+    (``delete_note`` -> ``note_id``). Required for compound names where
+    the heuristic produces a wrong field (``delete_notes_from_folder``
+    would naively yield ``notes_from_folder_id`` instead of ``folder_id``).
+    Federal v4.1.2: one of ``id_projection``, the heuristic match, or
+    explicit kernel registration is required for chain step targets.
     """
     name: str
     func: Callable
@@ -48,6 +57,7 @@ class FunctionDef:
     event_schema: type | None = None  # Pydantic BaseModel for typed event data
     chain_callable: bool = True  # federal v4.0.0 — kernel uses typed dispatch
     effects: list[str] = field(default_factory=list)  # ["create:note", "delete:folder", ...]
+    id_projection: str = ""  # federal v4.1.2 — params field carrying resolved target id
     _pydantic_model: type | None = None  # auto-detected Pydantic BaseModel class
     _pydantic_param: str = ""  # parameter name that receives the model instance
     _return_model: type | None = None  # auto-detected return Pydantic model
@@ -104,7 +114,8 @@ class ChatExtension:
                  action_type: str = "read", event: str = "",
                  event_schema: type | None = None,
                  chain_callable: bool | None = None,
-                 effects: list[str] | None = None):
+                 effects: list[str] | None = None,
+                 id_projection: str | None = None):
         """Register a chat function (federal v4.0.0 contract).
 
         Args:
@@ -124,6 +135,16 @@ class ChatExtension:
                 lost in LLM paraphrase.
             effects: Side-effect surface list — ``["create:note"]``,
                 ``["delete:folder"]``, etc. Used by chain narrator + audit ledger.
+            id_projection: Federal v4.1.2 — name of the params field that
+                carries the resolved target id when this tool runs as a
+                downstream chain step (e.g. ``"folder_id"`` for
+                ``delete_notes_from_folder`` whose params include
+                ``folder_id: str``). When omitted, the kernel falls back to
+                a verb-prefix heuristic (``delete_note`` -> ``note_id``)
+                that fails for compound tool names. REQUIRED whenever the
+                tool name does not directly imply the target field, e.g.
+                ``delete_notes_from_folder``, ``mark_emails_as_read``,
+                ``archive_drafts_in_project``.
         """
         if chain_callable is None:
             chain_callable = action_type in ("write", "destructive")
@@ -187,6 +208,7 @@ class ChatExtension:
                 event_schema=event_schema,
                 chain_callable=chain_callable,
                 effects=list(effects or []),
+                id_projection=id_projection or "",
                 _pydantic_model=_detected_model, _pydantic_param=_detected_param,
                 _return_model=_detected_return_model,
             )

@@ -98,6 +98,7 @@ def generate_manifest(ext: Extension) -> dict:
                 "action_type": fn_def.action_type,
                 "chain_callable": fn_def.chain_callable,
                 "effects": list(fn_def.effects or []),
+                "id_projection": fn_def.id_projection or "",
                 "params_schema": params_schema,
                 "return_schema": return_schema,
                 "event": fn_def.event or "",
