@@ -2,6 +2,51 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## v4.1.1 — 2026-05-05 — Tighten emit_narration mode/prose schema descriptions (NEW-1)
+
+Production runtime fix for a P0 hallucination class observed in BYOLLM extensions:
+when `narration_mode="audit"` reaches a single-extension write/destructive turn,
+the LLM over-applies the audit-brevity semantic GLOBALLY across all tool calls
+in the same turn. Concrete repro: user asks `"создай заметку ВАВАВА с эссе про
+зелёный цвет 200 слов"`, LLM emits `create_note(title='ВАВАВА',
+content_text='<essay about green color, 200 words>')` — a placeholder pattern
+instead of the actual 200-word essay.
+
+Root cause: the `mode` and `prose` field descriptions in `EMIT_NARRATION_TOOL`
+described audit semantics without explicitly scoping them to the prose field.
+The LLM (Anthropic Haiku 4.5 + Sonnet 4 BYOLLM models) faithfully read the
+description and generalized "audit = brief / structured / no creative prose"
+to all tools the BYOLLM dispatched — including content-bearing fields in
+`create_note`, `send_email`, `write_post`, etc.
+
+### Changed
+
+- **`mode` field description** in `EMIT_NARRATION_TOOL` schema (`chat/narration.py`)
+  now carries an explicit `SCOPE` clause clarifying that audit semantics control
+  only the `prose` field's interpretation by the kernel renderer — NOT a global
+  brevity directive. Other tool calls (create_note, send_email, write_post)
+  MUST contain the full user-requested content in their own parameter fields,
+  regardless of audit vs. narrative mode.
+- **`prose` field description** now carries a `CRITICAL` clause that warns
+  against placeholder anti-patterns (e.g. `<essay 200 words>`) and explicitly
+  references concrete content fields in other tools (`create_note.content_text`,
+  `send_email.body`) that must always carry the full user-requested content.
+
+### Tests
+
+- `test_mode_description_scope_clause_present` — guards the SCOPE clause + the
+  "Other tool calls" reference + the "FULL user-requested content" instruction.
+- `test_prose_description_warns_against_placeholders` — guards the CRITICAL
+  clause + placeholder anti-pattern callout + concrete `create_note.content_text`
+  example.
+
+### Migration
+
+No code changes required from extension authors. Pure schema-description
+tightening; the LLM observes the new descriptions on the next turn after
+deploy. PyPI publish + `pip install --upgrade imperal-sdk==4.1.1` on the
+kernel host and auth-gateway venvs is the only operational step.
+
 ## v4.1.0 — 2026-05-02 — Pydantic feedback loop: bounded retry on validation failure (SPEC2-LLM-ARGS-QUALITY)
 
 Production runtime fix for the largest single hallucination class observed in current

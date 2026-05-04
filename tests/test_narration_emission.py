@@ -49,6 +49,30 @@ def test_status_enum_exact():
     assert set(s["enum"]) == {"success", "error", "intercepted"}
 
 
+def test_mode_description_scope_clause_present():
+    """v4.1.1: mode field description must explicitly scope-restrict audit
+    semantics to the prose field only — not to other tools' content fields.
+    Without this, BYOLLM LLMs interpret 'audit mode' globally and emit
+    placeholders like '<essay 200 words>' in create_note.content_text."""
+    mode_desc = EMIT_NARRATION_TOOL["input_schema"]["properties"]["mode"]["description"]
+    assert "SCOPE" in mode_desc, "mode description must explicitly mark scope"
+    assert "Other tool calls" in mode_desc, "must reference other tool calls explicitly"
+    assert "FULL user-requested content" in mode_desc, (
+        "must instruct LLM to write full content in non-narration tools"
+    )
+
+
+def test_prose_description_warns_against_placeholders():
+    """v4.1.1: prose field description must call out placeholder anti-pattern
+    (e.g. '<essay 200 words>') so LLM knows brevity rule applies only here."""
+    prose_desc = EMIT_NARRATION_TOOL["input_schema"]["properties"]["prose"]["description"]
+    assert "CRITICAL" in prose_desc
+    assert "placeholders" in prose_desc.lower()
+    assert "create_note.content_text" in prose_desc, (
+        "concrete example must be present so LLM grounds the rule"
+    )
+
+
 def test_parse_minimal_valid():
     em = parse_narration_emission({
         "mode": "audit", "prose": "done.",

@@ -81,7 +81,14 @@ EMIT_NARRATION_TOOL = {
                 "enum": ["audit", "narrative"],
                 "description": (
                     "Kernel-assigned by classifier. Echo the value from "
-                    "system_hint. Cannot be self-selected."
+                    "system_hint. Cannot be self-selected. SCOPE: this "
+                    "field controls ONLY how the prose field below is "
+                    "interpreted by the kernel renderer — it is NOT a "
+                    "global brevity directive. Other tool calls in this "
+                    "turn (create_note, send_email, write_post, etc.) "
+                    "MUST contain the FULL user-requested content in "
+                    "their own parameter fields, regardless of audit "
+                    "vs. narrative mode."
                 ),
             },
             "prose": {
@@ -89,7 +96,12 @@ EMIT_NARRATION_TOOL = {
                 "description": (
                     "User-facing text. In audit mode, used ONLY to phrase "
                     "per-call verdicts; kernel composes the overall layout. "
-                    "In narrative mode, the full response."
+                    "In narrative mode, the full response. CRITICAL: this "
+                    "field's brevity rule applies ONLY to this prose field "
+                    "— content fields in OTHER tool calls (e.g. "
+                    "create_note.content_text, send_email.body) MUST carry "
+                    "the full content the user asked for, never "
+                    "placeholders like '<essay 200 words>'."
                 ),
             },
             "per_call_verdicts": {
