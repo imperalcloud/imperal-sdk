@@ -2,6 +2,21 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.1.3 — 2026-05-06
+
+### Refactor
+
+- Split `chat/handler.py` (807 LOC, violated rule 6 >300 LOC) into thinner
+  `chat/handler.py` + new `chat/retry.py` containing the Pydantic feedback
+  loop helpers (`format_pydantic_for_llm`, `_emit_retry_outcome`,
+  `_RETRY_BUDGET`, `_validation_missing_field_response`).
+- Public API surface unchanged — these symbols remain importable from
+  `imperal_sdk.chat.handler` via re-export. No behavioral change vs v4.1.2.
+- Logger name for `validation_retry_outcome` lines pinned to
+  `imperal_sdk.chat.handler` (NOT `__name__`) to preserve SigNoz scrape
+  pipeline contract and existing `caplog` test scoping.
+- Federal: closes ARCH-FILES-SPLIT-2 (active_followups 2026-05-02).
+
 ## v4.1.2 — 2026-05-05 — `@chat.function(id_projection=...)` for chain-step target projection (NEW-5)
 
 Federal extension contract addition: `@chat.function` accepts an optional
