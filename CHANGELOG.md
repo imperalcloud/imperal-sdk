@@ -2,6 +2,37 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.1.4 — 2026-05-09
+
+### Documentation
+
+- Repository hygiene cleanup. The canonical, version-locked,
+  code-validated documentation lives at https://docs.imperal.io.
+  Removed the stale local `docs/` tree (most files predated the v4
+  Federal Extension Contract) and `examples/hello_extension/` (pre-v4
+  scaffold that would fail validators V14, V15, V19, V21, V24).
+- README rewritten under the canonical positioning: *"Imperal Cloud
+  is the world's first AI Cloud OS. Webbee 🐝 is its agent."* The
+  5-minute quickstart now ships v4 federal-contract-correct code,
+  release notes no longer duplicated inline (CHANGELOG.md is the
+  single source of release history), broken or removed deep links
+  cleaned up.
+
+### Tests
+
+- OpenAPI specs relocated from `docs/openapi/` to
+  `tests/fixtures/openapi/` — semantically they were always test
+  fixtures (read by `tests/test_spec_validation.py`) rather than
+  user-facing documentation. `OPENAPI_DIR` updated to the new path.
+  No public-API or runtime change.
+
+### Repository
+
+- GitHub `description` updated to put Webbee front-and-centre:
+  *"The SDK for Webbee 🐝 — the agent of Imperal Cloud, the world's
+  first AI Cloud OS. Build extensions in Python."*
+- GitHub homepage URL set to https://docs.imperal.io.
+
 ## 4.1.3 — 2026-05-06
 
 ### Refactor

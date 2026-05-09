@@ -11,7 +11,7 @@
 [![Tests](https://github.com/imperalcloud/imperal-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/imperalcloud/imperal-sdk/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[Quickstart](#5-minute-quickstart) · [Documentation](https://docs.imperal.io) · [PyPI](https://pypi.org/project/imperal-sdk/) · [Discord](https://discord.gg/imperal)
+[Quickstart](#5-minute-quickstart) · [Documentation](https://docs.imperal.io) · [PyPI](https://pypi.org/project/imperal-sdk/) · [imperal.io](https://imperal.io)
 
 </div>
 
@@ -211,9 +211,9 @@ async def test_greet():
 
 | | |
 |---|---|
+| **Website** | [imperal.io](https://imperal.io) |
 | **Documentation** | [docs.imperal.io](https://docs.imperal.io) |
 | **PyPI** | [pypi.org/project/imperal-sdk](https://pypi.org/project/imperal-sdk/) |
-| **Discord** | [discord.gg/imperal](https://discord.gg/imperal) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
 | **Source** | [github.com/imperalcloud/imperal-sdk](https://github.com/imperalcloud/imperal-sdk) |
 | **License** | [AGPL-3.0](LICENSE) |

@@ -7,8 +7,8 @@ third-party developers or propagate into generated clients:
 
 - Every JSON Schema file under `imperal_sdk/schemas/` is a valid
   Draft 2020-12 schema (`jsonschema.Draft202012Validator.check_schema`).
-- Every OpenAPI 3.x file under `docs/openapi/` validates against the
-  OpenAPI Specification (`openapi_spec_validator.validate`).
+- Every OpenAPI 3.x file under `tests/fixtures/openapi/` validates against
+  the OpenAPI Specification (`openapi_spec_validator.validate`).
 - Internal consistency checks that generators routinely miss:
   unique operation IDs, all $refs resolve, every response declares a
   schema (or an explicit no-content code).
@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS_DIR = ROOT / "src" / "imperal_sdk" / "schemas"
-OPENAPI_DIR = ROOT / "docs" / "openapi"
+OPENAPI_DIR = ROOT / "tests" / "fixtures" / "openapi"
 
 
 # === JSON Schema files =============================================
