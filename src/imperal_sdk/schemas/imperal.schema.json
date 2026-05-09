@@ -372,6 +372,18 @@
           ],
           "default": null,
           "title": "Synthetic"
+        },
+        "id_projection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id Projection"
         }
       },
       "required": [
@@ -492,6 +504,18 @@
       ],
       "default": null,
       "title": "Manifest Schema Version"
+    },
+    "sdk_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sdk Version"
     },
     "app_id": {
       "title": "App Id",

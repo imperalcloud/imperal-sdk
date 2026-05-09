@@ -2,6 +2,34 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.1.5 — 2026-05-09
+
+### Fixed
+
+- `manifest_schema.Tool` now accepts `id_projection` (federal v4.1.2).
+  The chat extension emitter wrote this field into manifests, but
+  `Tool.model_config = ConfigDict(extra="forbid")` rejected it during
+  `imperal validate`, breaking every extension that used the v4.1.2
+  feature. Production extensions (notes, sql-db, tasks) shipped with
+  this field via the Dev Portal validator pipeline; the local CLI
+  validator was the only consumer that erred.
+- `manifest_schema.Manifest` now accepts `sdk_version` so the field
+  emitted by `generate_manifest` round-trips through validation.
+
+### Added
+
+- `generate_manifest(ext)` now emits `sdk_version` (sourced from
+  `imperal_sdk.__version__`) at the top level of `imperal.json`. Stops
+  the `SDK-VERSION-1` validator from warning on every fresh build that
+  uses v1.6.0 features (`ctx.cache`, `@ext.skeleton`).
+- Static `src/imperal_sdk/schemas/imperal.schema.json` regenerated to
+  reflect the new optional fields.
+
+### Tests
+
+- 968 tests pass (3 skipped) including the static-schema-matches-runtime
+  spec validator that catches schema drift.
+
 ## 4.1.4 — 2026-05-09
 
 ### Documentation

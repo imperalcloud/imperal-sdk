@@ -112,8 +112,14 @@ def generate_manifest(ext: Extension) -> dict:
         for name, sched in ext.schedules.items()
     ]
 
+    # Federal v4.1.5 — emit sdk_version so the v1.6.0+ feature gate
+    # validator (SDK-VERSION-1) finds it without engineers hand-editing
+    # imperal.json after every `imperal build`.
+    from imperal_sdk import __version__ as _sdk_version
+
     manifest = {
         "manifest_schema_version": 3,
+        "sdk_version": _sdk_version,
         "app_id": ext.app_id,
         "version": ext.version,
         "name": ext.display_name or ext.app_id,

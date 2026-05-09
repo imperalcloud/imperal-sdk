@@ -106,6 +106,12 @@ class Tool(BaseModel):
     owner_chat_tool: Optional[str] = None
     synthetic: Optional[bool] = None
 
+    # Federal v4.1.2 — declared params field that carries the resolved
+    # target id when the tool runs as a downstream chain step. Must be
+    # accepted in the schema since the manifest emitter writes it (see
+    # FunctionDef.id_projection in chat/extension.py).
+    id_projection: Optional[str] = None
+
     @field_validator("name")
     @classmethod
     def _name_is_identifier(cls, v: str) -> str:
@@ -249,6 +255,10 @@ class Manifest(BaseModel):
 
     # --- Base (always present) ---
     manifest_schema_version: Optional[Literal[1, 2, 3]] = None
+    # SDK contract version emitted by `generate_manifest`; consumed by
+    # validator_v1_6_0.SDK-VERSION-1 to detect extensions that pre-date
+    # the v1.6.0 cache + skeleton contract.
+    sdk_version: Optional[str] = None
     app_id: str
     version: str
     capabilities: List[str] = Field(default_factory=list)
