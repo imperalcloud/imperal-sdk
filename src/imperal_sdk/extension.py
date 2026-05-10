@@ -445,7 +445,8 @@ class Extension:
         return decorator
 
     def panel(self, panel_id: str, slot: str = "center", title: str = "",
-              icon: str = "", refresh: str = "manual", **kwargs):
+              icon: str = "", refresh: str = "manual",
+              center_overlay: bool = False, **kwargs):
         """Declare a UI panel. Handler returns UINode tree.
         Panel fetched via /call endpoint with function __panel__{panel_id}.
 
@@ -454,6 +455,14 @@ class Extension:
         the less-common `"overlay"` / `"bottom"` / `"chat-sidebar"`.
         Unknown values raise ValueError at decoration time. The `"main"`
         value was removed in SDK 3.4.0 — use `"center"` instead.
+
+        `center_overlay=True` (federal v4.1.8+) replaces the legacy
+        hardcoded TS allowlist in the Imperal Panel host. When set,
+        the kernel publishes ``center_overlay: true`` into the panel's
+        unified_config entry; the frontend's ``isCenterOverlay`` reads
+        the flag declaratively instead of consulting a hardcoded list of
+        panel_id literals. Pair with ``slot="center"`` for the modal
+        center-overlay surface (chat collapses to 380 px right rail).
         """
         if slot not in ALLOWED_PANEL_SLOTS:
             raise ValueError(
@@ -471,7 +480,11 @@ class Extension:
                 name=f"__panel__{panel_id}", func=wrapper,
                 description=f"Panel: {title or panel_id}",
             )
-            self._panels[panel_id] = {"slot": slot, "title": title, "icon": icon, "refresh": refresh, **kwargs}
+            self._panels[panel_id] = {
+                "slot": slot, "title": title, "icon": icon,
+                "refresh": refresh, "center_overlay": center_overlay,
+                **kwargs,
+            }
             return func
         return decorator
 

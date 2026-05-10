@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.1.8 — 2026-05-10
+
+### Added
+
+- **`@ext.panel(..., center_overlay=True)`** federal v4.1.8 — replaces
+  the legacy hardcoded TypeScript `isCenterOverlay` allowlist in the
+  Imperal Panel host (`usePanelDiscovery.ts`). When set, the kernel
+  publishes `center_overlay: true` into the panel's `unified_config`
+  entry; the frontend reads the flag declaratively instead of
+  consulting a hardcoded list of `panel_id` literals (`compose`,
+  `email_viewer`, `editor`, `workshop`).
+- Backward compatibility: the legacy hardcoded allowlist remains as a
+  fallback for extensions that haven't been redeployed since v4.1.7.
+  It will be dropped once `compose`/`email_viewer`/`editor` migrate
+  to declarative `center_overlay=True`.
+
+974 tests pass (3 skipped).
+
 ## 4.1.7 — 2026-05-10
 
 ### Added
