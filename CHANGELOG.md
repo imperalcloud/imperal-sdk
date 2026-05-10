@@ -2,6 +2,30 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.1.7 — 2026-05-10
+
+### Added
+
+- **`PANEL_SLOT_RENDERING_STATUS`** federal contract in
+  `imperal_sdk.types.contributions` — single source of truth for
+  what the Imperal Panel host actually does with each slot:
+  `"permanent"` (always-fetched column), `"center-overlay"`
+  (on-demand via `__panel__<id>` action when panel_id matches the
+  host's `isCenterOverlay` allowlist; chat collapses to 380 px
+  right rail), or `"reserved"` (accepted by SDK validator but
+  frontend has no render path).
+- **`I-PANEL-RENDERING-CONTRACT`** invariant gate
+  (`tests/test_panel_rendering_contract.py`) — when a contributor
+  adds a slot to `ALLOWED_PANEL_SLOTS` they MUST also declare its
+  rendering status. Closes the v4.1.x class of bug where extensions
+  decorated with `slot="overlay"` etc. and the SDK accepted the
+  registration but the frontend silently dropped them.
+- Companion `docs.imperal.io/concepts/panels.mdx` rewrite to match
+  the contract — accurate slot table + center-overlay activation
+  walk-through (auto_action wire-up + isCenterOverlay allowlist).
+
+974 tests pass, 3 skipped.
+
 ## 4.1.6 — 2026-05-10
 
 ### CI / federal hardening

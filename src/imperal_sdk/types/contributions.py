@@ -13,6 +13,34 @@ ALLOWED_PANEL_SLOTS: frozenset[str] = frozenset({
 })
 
 
+# I-PANEL-RENDERING-CONTRACT (federal v4.1.6+):
+# Single source of truth for *what the Imperal Panel host actually does*
+# with each declared slot. The keys MUST equal ALLOWED_PANEL_SLOTS exactly
+# (asserted by tests/test_panel_rendering_contract.py). The values are:
+#
+#   "permanent"      — fetched at session-init batch discovery; rendered
+#                      as a persistent column. Currently: left, right.
+#   "center-overlay" — fetched on demand via __panel__<id> action when the
+#                      panel_id is in the host's isCenterOverlay allowlist
+#                      (currently {compose, email_viewer+message_id,
+#                      editor+note_id, workshop}). Renders over the chat
+#                      region; chat collapses to a 380px right rail.
+#   "reserved"       — accepted by the SDK validator but the frontend has
+#                      no render path. @ext.panel(slot=...) is a no-op for
+#                      these. Reserved for future host work.
+#
+# When the frontend's render path for a slot changes, BOTH this map and
+# the docs table at docs.imperal.io/concepts/panels.mdx MUST be updated.
+PANEL_SLOT_RENDERING_STATUS: dict[str, str] = {
+    "left":         "permanent",
+    "right":        "permanent",
+    "center":       "center-overlay",
+    "overlay":      "reserved",
+    "bottom":       "reserved",
+    "chat-sidebar": "reserved",
+}
+
+
 @dataclass
 class Panel:
     """A movable UI panel contributed by an extension.
