@@ -2,6 +2,29 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.1.9 — 2026-05-10
+
+### Fixed
+
+- **`imperal init <name>` template now passes federal validators
+  cleanly.** The previous scaffold generated `Extension(name, version="1.0.0")`
+  without `display_name=`/`description=`/`icon=`/`actions_explicit=` —
+  failing V14 (description ≥40 chars), V15 (display_name ≥3 chars
+  ≠ app_id), V16 (per-function description ≥20 chars), and V21 (icon.svg
+  required) on the very first `imperal validate`. New scaffold writes
+  v4-correct kwargs, a proper `ChatExtension(...)` declaration, an
+  `icon.svg` placeholder (V21-compliant XML root + viewBox),
+  `requirements.txt: imperal-sdk>=4.0.0` (was `>=1.0.0`), and a test
+  file that exercises Pydantic param validation + `MockContext`.
+
+### Changed
+
+- CLI `init` next-steps message updated to the canonical workflow:
+  `pip install` → `imperal build` → `imperal validate` →
+  `imperal test` → `imperal deploy`.
+
+974 tests pass, 3 skipped.
+
 ## 4.1.8 — 2026-05-10
 
 ### Added

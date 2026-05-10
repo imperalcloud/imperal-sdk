@@ -14,43 +14,58 @@ def test_cli_version():
 
 
 def test_cli_init_chat_template():
-    """Default chat template generates ChatExtension + ActionResult scaffold."""
+    """Default chat template generates v4-compliant ChatExtension + ActionResult scaffold."""
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init", "my-test-ext"])
         assert result.exit_code == 0
-        assert "Extension 'my-test-ext' created!" in result.output
+        assert "Extension 'my-test-ext' scaffolded" in result.output
         assert "(template: chat)" in result.output
         assert os.path.exists("my-test-ext/main.py")
+        assert os.path.exists("my-test-ext/icon.svg")  # V21 federal — required
         assert os.path.exists("my-test-ext/requirements.txt")
         assert os.path.exists("my-test-ext/tests/test_main.py")
         assert os.path.exists("my-test-ext/.gitignore")
 
         with open("my-test-ext/main.py") as f:
             content = f.read()
-            assert 'Extension("my-test-ext"' in content
+            assert '"my-test-ext"' in content
             assert "ChatExtension" in content
             assert "ActionResult" in content
             assert 'version="1.0.0"' in content
+            # v4 federal kwargs that v4.1.9 fix added
+            assert "display_name=" in content
+            assert "description=" in content
+            assert "icon=" in content
+            assert "actions_explicit=True" in content
 
         with open("my-test-ext/requirements.txt") as f:
-            assert "imperal-sdk>=1.0.0" in f.read()
+            assert "imperal-sdk>=4.0.0" in f.read()  # v4.1.9 — was >=1.0.0
+
+        with open("my-test-ext/icon.svg") as f:
+            svg = f.read()
+            assert "<svg" in svg
+            assert "viewBox" in svg
 
 
 def test_cli_init_tool_template():
-    """Tool template generates bare @ext.tool scaffold."""
+    """Tool template generates bare @ext.tool scaffold (v4-compliant)."""
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init", "my-tool-ext", "--template", "tool"])
         assert result.exit_code == 0
         assert "(template: tool)" in result.output
         assert os.path.exists("my-tool-ext/main.py")
+        assert os.path.exists("my-tool-ext/icon.svg")
 
         with open("my-tool-ext/main.py") as f:
             content = f.read()
-            assert 'Extension("my-tool-ext"' in content
+            assert '"my-tool-ext"' in content
             assert "@ext.tool" in content
             assert 'version="1.0.0"' in content
+            # v4 federal kwargs (added in v4.1.9 init scaffold fix)
+            assert "display_name=" in content
+            assert "actions_explicit=True" in content
 
 
 def test_cli_init_invalid_template():

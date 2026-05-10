@@ -67,75 +67,156 @@ def cli():
 @click.argument("name")
 @click.option("--template", type=click.Choice(["chat", "tool"]), default="chat", help="Extension template")
 def init(name: str, template: str):
-    """Scaffold a new extension project."""
+    """Scaffold a new extension project (federal v4 contract)."""
     os.makedirs(name, exist_ok=True)
     os.makedirs(f"{name}/tests", exist_ok=True)
 
+    title = name.replace("-", " ").replace("_", " ").title()
+    # V14 requires description ≥40 chars, V15 requires display_name ≥3 chars
+    # ≠ app_id, V16 requires per-function description ≥20 chars. We seed
+    # values that satisfy all three so `imperal build && imperal validate`
+    # passes immediately — no surprises for new authors.
+    display_name = f"{title} Extension"
+    description = (
+        f"{title} — a starter extension scaffolded by `imperal init`. "
+        f"Replace this description with something specific to your tool."
+    )
+
     if template == "chat":
-        main_content = f'''"""{name} — Imperal Cloud Extension."""
-from pydantic import BaseModel
+        main_content = f'''"""{title} extension — Imperal Cloud."""
+from pydantic import BaseModel, Field
 from imperal_sdk import Extension, ChatExtension, ActionResult
 
-ext = Extension("{name}", version="1.0.0")
-chat = ChatExtension(ext, tool_name="{name}", description="{name.replace('-', ' ').title()} extension")
+
+# Federal v4 Extension surface — V14 (description ≥40 chars), V15
+# (display_name ≥3 chars, ≠ app_id), V19 (actions_explicit=True), and
+# V21 (icon.svg required, XML <svg> root + viewBox) are all satisfied
+# by these defaults. Edit display_name + description before publish.
+ext = Extension(
+    "{name}",
+    version="1.0.0",
+    display_name={display_name!r},
+    description={description!r},
+    icon="icon.svg",
+    actions_explicit=True,
+    capabilities=[{name!r} + ":read"],
+)
+
+chat = ChatExtension(
+    ext,
+    tool_name={name.replace('-', '_')!r},
+    description={f"{title} — chat tool entrypoint."!r},
+)
 
 
 class GreetParams(BaseModel):
-    name: str = "World"
+    """Pydantic params model — V17 federal: typed BaseModel param required."""
+    name: str = Field(default="World", description="Person to greet")
 
 
-@chat.function("greet", description="Say hello", params={{}}, action_type="read")
+@chat.function(
+    "greet",
+    action_type="read",
+    description="Greet someone by name with a friendly message.",
+)
 async def fn_greet(ctx, params: GreetParams) -> ActionResult:
-    """Greet someone by name."""
+    """Echo a greeting to verify the extension loads + validators pass."""
     return ActionResult.success(
         data={{"message": f"Hello, {{params.name}}!"}},
         summary=f"Greeted {{params.name}}",
     )
 '''
     else:
-        main_content = f'''"""{name} — Imperal Cloud Extension."""
+        main_content = f'''"""{title} extension — Imperal Cloud (tool template, no chat surface)."""
 from imperal_sdk import Extension
 
-ext = Extension("{name}", version="1.0.0")
+
+ext = Extension(
+    "{name}",
+    version="1.0.0",
+    display_name={display_name!r},
+    description={description!r},
+    icon="icon.svg",
+    actions_explicit=True,
+    capabilities=[{name!r} + ":read"],
+)
 
 
-@ext.tool("{name}", description="{name.replace('-', ' ').title()}")
-async def hello(ctx, name: str = "World"):
-    """Say hello."""
-    return {{"message": f"Hello, {{name}}!"}}
+@ext.tool({name!r}, scopes=[{name!r} + ":read"], description={f"{title} — invoke from automations or chains."!r})
+async def fn_default(ctx, **kwargs):
+    """Stub tool. Replace with your own."""
+    return {{"message": "ok"}}
 '''
 
     with open(f"{name}/main.py", "w") as f:
         f.write(main_content)
 
+    # V21 federal: extensions MUST ship a valid SVG icon. We seed a tiny
+    # placeholder that passes the validator (XML root + viewBox + ≤100 KB).
+    with open(f"{name}/icon.svg", "w") as f:
+        f.write(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+            'fill="none" stroke="currentColor" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round" width="24" height="24">'
+            '<rect x="3" y="3" width="18" height="18" rx="2"/>'
+            '<path d="M9 9h6v6H9z"/>'
+            '</svg>\n'
+        )
+
     with open(f"{name}/requirements.txt", "w") as f:
-        f.write("imperal-sdk>=1.0.0\n")
+        f.write("imperal-sdk>=4.0.0\n")
 
     with open(f"{name}/tests/__init__.py", "w") as f:
         pass
 
-    test_content = f'''"""Tests for {name} extension."""
-import pytest
-from imperal_sdk.testing import MockContext
-from main import ext
-
-
-def test_extension_registered():
-    assert ext.app_id == "{name}"
-    assert ext.version == "1.0.0"
-'''
+    test_content = (
+        f'"""Tests for {name} extension."""\n'
+        f'import pytest\n'
+        f'from imperal_sdk.testing import MockContext\n'
+        f'from main import ext\n'
+    )
+    if template == "chat":
+        test_content += (
+            f'from main import GreetParams, fn_greet\n\n\n'
+            f'def test_extension_registered():\n'
+            f'    assert ext.app_id == "{name}"\n'
+            f'    assert ext.version == "1.0.0"\n'
+            f'    assert ext.display_name and ext.display_name != ext.app_id\n'
+            f'    assert len(ext.description) >= 40\n\n\n'
+            f'@pytest.mark.asyncio\n'
+            f'async def test_greet_returns_action_result():\n'
+            f'    ctx = MockContext(user_id="imp_u_test")\n'
+            f'    result = await fn_greet(ctx, GreetParams(name="Alex"))\n'
+            f'    assert result.status == "success"\n'
+            f'    assert "Alex" in result.summary\n'
+        )
+    else:
+        test_content += (
+            f'\n\ndef test_extension_registered():\n'
+            f'    assert ext.app_id == "{name}"\n'
+            f'    assert ext.version == "1.0.0"\n'
+            f'    assert "{name}" in ext.tools\n'
+        )
 
     with open(f"{name}/tests/test_main.py", "w") as f:
         f.write(test_content)
 
     with open(f"{name}/.gitignore", "w") as f:
-        f.write("venv/\n__pycache__/\n*.pyc\n.env\n.imperal/\n")
+        f.write(
+            "venv/\n.venv/\n__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n"
+            ".env\n.imperal/\nimperal.json\n.DS_Store\n"
+        )
 
-    click.echo(f"Extension '{name}' created! (template: {template})")
+    click.echo(f"Extension '{name}' scaffolded (template: {template})")
+    click.echo(f"")
+    click.echo(f"Next steps:")
     click.echo(f"  cd {name}")
-    click.echo(f"  pip install imperal-sdk")
-    click.echo(f"  imperal validate")
-    click.echo(f"  imperal dev")
+    click.echo(f"  pip install 'imperal-sdk>=4.0.0'")
+    click.echo(f"  imperal build       # generates imperal.json")
+    click.echo(f"  imperal validate    # runs V14-V22+V24 federal validators")
+    click.echo(f"  imperal test        # smoke-test handlers via MockContext")
+    click.echo(f"  imperal deploy      # upload to panel.imperal.io/developer")
 
 
 @cli.command()
