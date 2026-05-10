@@ -2,6 +2,25 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.1.6 — 2026-05-10
+
+### CI / federal hardening
+
+- **`I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC`** invariant added — new
+  `tests/test_manifest_roundtrip_gate.py` builds a canary Extension
+  exercising every emitter code path (`@ext.tool` / `@ext.signal` /
+  `@ext.schedule` / `@ext.webhook` / `@ext.on_event` / `@ext.on_install` /
+  `@ext.health_check` / `@ext.panel` / `@chat.function` with all v4
+  fields including `effects` + `id_projection`) and asserts every
+  field emitted by `generate_manifest()` round-trips through
+  `validate_manifest_dict()` cleanly. Catches the v4.1.4 → v4.1.5
+  class of bug at PR time instead of at CLI-validate time.
+- Hard-floor checks for v4 required top-level fields and per-tool
+  v4 contract fields (action_type / chain_callable / effects /
+  params_schema / event / id_projection).
+
+No runtime behaviour change. 971 tests pass (was 968 + 3 new gates).
+
 ## 4.1.5 — 2026-05-09
 
 ### Fixed
