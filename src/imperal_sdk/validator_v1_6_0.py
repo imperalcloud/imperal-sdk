@@ -15,9 +15,13 @@ Seven new rules added on top of the V1-V16 contract in ``validator.py``:
   registered via ``<ext>.cache_model`` (static AST check).
 * ``CACHE-TTL-1`` — ``ctx.cache.set(..., ttl_seconds=X)`` where ``X`` is a
   literal int outside ``[5, 300]``.
-* ``MANIFEST-SKELETON-1`` — Tool name matches ``skeleton_refresh_*`` or
-  ``skeleton_alert_*`` but decorator is ``@ext.tool`` (should be
-  ``@ext.skeleton``).
+* ``MANIFEST-SKELETON-1`` — Tool name matches ``skeleton_refresh_*`` but
+  decorator is ``@ext.tool`` (should be ``@ext.skeleton``). NOTE:
+  ``skeleton_alert_*`` is exempt — ``@ext.skeleton(section)`` only registers
+  the refresh slot; the paired alert handler is registered separately with
+  ``@ext.tool("skeleton_alert_<section>")`` per ``Extension.skeleton``
+  docstring and is discovered by the kernel via tool-name presence in
+  ``tools[]`` (see ``activities/config_loader.py``).
 * ``SDK-VERSION-1`` — ``imperal.json`` missing ``sdk_version`` or
   ``sdk_version < "1.6.0"`` when the extension uses v1.6.0 features
   (``ctx.cache``, ``@ext.skeleton``, etc.).
@@ -233,10 +237,17 @@ def _uses_v1_6_0_features(trees: dict[str, ast.Module]) -> bool:
 
 
 def _collect_skeleton_tool_targets(trees: dict[str, ast.Module]) -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.Call, str, str]]:
-    """Find ``@ext.tool("skeleton_refresh_*" | "skeleton_alert_*")`` targets.
+    """Find ``@ext.tool("skeleton_refresh_*")`` targets.
 
     Returns (func_node, decorator_call, tool_name, file_path) tuples. Each
     one triggers MANIFEST-SKELETON-1.
+
+    NOTE: ``skeleton_alert_*`` is NOT flagged here. ``@ext.skeleton(section)``
+    only registers ``skeleton_refresh_<section>`` — there is no sugar for the
+    paired alert handler. Per ``Extension.skeleton`` docstring, alert handlers
+    MUST be registered separately with ``@ext.tool("skeleton_alert_<section>")``.
+    The kernel discovers alert tools by name in ``tools[]`` (see
+    ``activities/config_loader.py`` ``has_alert = "skeleton_alert_X" in tool_names``).
     """
     hits = []
     for path, tree in trees.items():
@@ -253,7 +264,7 @@ def _collect_skeleton_tool_targets(trees: dict[str, ast.Module]) -> list[tuple[a
                 tool_name = dec.args[0].value
                 if not isinstance(tool_name, str):
                     continue
-                if tool_name.startswith("skeleton_refresh_") or tool_name.startswith("skeleton_alert_"):
+                if tool_name.startswith("skeleton_refresh_"):
                     hits.append((node, dec, tool_name, path))
     return hits
 
@@ -296,15 +307,16 @@ def validate_source_tree(path: str) -> list[ValidationIssue]:
     for file_path, tree in trees.items():
         issues.extend(_visit_module(file_path, tree, registered_class_names))
 
-    # Manifest rule: tool names that should have been @ext.skeleton.
+    # Manifest rule: skeleton_refresh_* tool names that should have been
+    # @ext.skeleton (alert handlers are exempt — see _collect_skeleton_tool_targets).
     for _node, dec, tool_name, file_path in _collect_skeleton_tool_targets(trees):
-        section = tool_name.split("_", 2)[-1] if tool_name.startswith("skeleton_refresh_") else tool_name.split("_", 2)[-1]
+        section = tool_name[len("skeleton_refresh_"):]
         issues.append(ValidationIssue(
             rule="MANIFEST-SKELETON-1",
             level="ERROR",
             message=(
                 f"Tool {tool_name!r} uses @ext.tool but names a skeleton "
-                f"refresh/alert slot. Use @ext.skeleton({section!r}) so the "
+                f"refresh slot. Use @ext.skeleton({section!r}) so the "
                 f"kernel auto-wires section metadata."
             ),
             file=_relpath(file_path, path),

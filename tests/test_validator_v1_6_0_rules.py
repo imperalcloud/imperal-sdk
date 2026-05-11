@@ -235,7 +235,13 @@ async def probe(ctx):
 
 
 # ---------------------------------------------------------------------------
-# MANIFEST-SKELETON-1 — skeleton_refresh_*/skeleton_alert_* with @ext.tool
+# MANIFEST-SKELETON-1 — skeleton_refresh_* with @ext.tool
+#
+# NOTE: skeleton_alert_* is the documented, kernel-supported pattern via
+# @ext.tool — @ext.skeleton(section) only registers skeleton_refresh_<section>,
+# not the paired alert handler. See Extension.skeleton docstring and
+# activities/config_loader.py (kernel discovers alerts by name in tools[]).
+# MANIFEST-SKELETON-1 only flags refresh-slot @ext.tool usage.
 # ---------------------------------------------------------------------------
 
 
@@ -255,9 +261,12 @@ async def alert_monitors(ctx, prev, curr):
 """)
     issues = validate_source_tree(str(tmp_path))
     hits = _rules(issues, "MANIFEST-SKELETON-1")
-    assert len(hits) == 2, issues
-    names = sorted(h.message for h in hits)
-    assert "skeleton_refresh_monitors" in names[0] or "skeleton_refresh_monitors" in names[1]
+    # Only the refresh slot is flagged — alert handler via @ext.tool is the
+    # documented contract (Extension.skeleton docstring; kernel config_loader
+    # discovers skeleton_alert_X by tool-name presence in tools[]).
+    assert len(hits) == 1, issues
+    assert "skeleton_refresh_monitors" in hits[0].message
+    assert "skeleton_alert_monitors" not in hits[0].message
 
 
 def test_manifest_skeleton_1_silent_on_ext_skeleton_decorator(tmp_path):
@@ -269,6 +278,30 @@ ext = Extension("app", version="1.0.0")
 @ext.skeleton("monitors", alert=True)
 async def refresh_monitors(ctx):
     return {"response": {"count": 0}}
+""")
+    issues = validate_source_tree(str(tmp_path))
+    assert _rules(issues, "MANIFEST-SKELETON-1") == []
+
+
+def test_manifest_skeleton_1_silent_on_paired_alert_via_ext_tool(tmp_path):
+    """skeleton_alert_* via @ext.tool is the canonical pattern, not an error.
+
+    @ext.skeleton(section) registers ONLY skeleton_refresh_<section>;
+    the paired alert handler must be a separate @ext.tool. Validator
+    must not flag this case as MANIFEST-SKELETON-1.
+    """
+    _write(tmp_path, "main.py", """
+from imperal_sdk import Extension
+
+ext = Extension("app", version="1.0.0")
+
+@ext.skeleton("tasks", alert=True, ttl=30)
+async def refresh_tasks(ctx):
+    return {"response": {"overdue_count": 0}}
+
+@ext.tool("skeleton_alert_tasks", description="Alert on new overdue tasks.")
+async def alert_tasks(ctx, old=None, new=None):
+    return {"response": "0 tasks overdue"}
 """)
     issues = validate_source_tree(str(tmp_path))
     assert _rules(issues, "MANIFEST-SKELETON-1") == []
