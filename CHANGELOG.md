@@ -2,6 +2,29 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.1 — 2026-05-11
+
+### Fixed
+
+- **`MANIFEST-SKELETON-1` false positive on `@ext.tool("skeleton_alert_*")`**.
+  The local AST validator (`validator_v1_6_0.py`) was flagging the
+  canonical paired-alert pattern as a rule violation with the fix
+  suggestion *"Replace with `@ext.skeleton(<section>)`"* — but that
+  suggestion is wrong. `@ext.skeleton(section, alert=True)` registers
+  **only** `skeleton_refresh_<section>`; the paired
+  `skeleton_alert_<section>` handler **must** be registered separately
+  with `@ext.tool` (the kernel discovers alerts by tool-name presence
+  in `tools[]`, not via any `@ext.skeleton` metadata). The validator
+  now flags only `skeleton_refresh_*` tools, leaving
+  `skeleton_alert_*` as the documented, kernel-supported pattern.
+  See `Extension.skeleton` docstring and
+  `docs.imperal.io/en/sdk/decorator-skeleton-reference`.
+
+  Test updates: `test_manifest_skeleton_1_triggers_on_wrong_decorator`
+  expects exactly 1 hit (refresh only); new
+  `test_manifest_skeleton_1_silent_on_paired_alert_via_ext_tool` locks
+  the canonical pattern as silent.
+
 ## 4.2.0 — 2026-05-11
 
 ### Added
