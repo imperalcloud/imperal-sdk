@@ -115,6 +115,7 @@ class Extension:
         description: str = "",
         icon: str = "",
         actions_explicit: bool = True,
+        system: bool = False,
     ):
         self.app_id = app_id
         self.version = version
@@ -122,6 +123,7 @@ class Extension:
         self.description = description
         self.icon = icon
         self.actions_explicit = actions_explicit
+        self.system = system
         self.capabilities = capabilities or []
         self.migrations_dir = migrations_dir
         self._tools: dict[str, ToolDef] = {}

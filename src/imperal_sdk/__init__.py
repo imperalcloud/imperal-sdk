@@ -33,7 +33,7 @@ from imperal_sdk.validator_v1_6_0 import (
     validate_manifest_v1_6_0,
 )
 
-__version__ = "4.1.9"
+__version__ = "4.2.0"
 
 __all__ = [
     # Core

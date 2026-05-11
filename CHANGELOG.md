@@ -2,6 +2,42 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.0 — 2026-05-11
+
+### Added
+
+- **`Extension(system: bool = False)` kwarg** declares an extension as
+  a platform-managed system app. System apps are auto-installed for
+  every user on registration, never shown in marketplace listings, and
+  cannot be uninstalled. Federal contract additions:
+  - `I-SYSTEM-APPS-NEVER-UNINSTALLABLE` — uninstall on `system=true`
+    returns 403 at the auth-gw level.
+  - `I-MARKETPLACE-HIDES-SYSTEM` — `/v1/marketplace/*` SELECT queries
+    filter `system = FALSE` at the SQL layer.
+  - `I-SYSTEM-FLAG-RESERVED-FOR-IMPERAL` — only first-party Imperal
+    authors may set `system=True`; Dev Portal rejects 3rd-party
+    publishes at the author allowlist.
+- **Manifest field**: top-level `system: bool` is emitted by
+  `imperal build` whenever `Extension(system=…)` is set. `manifest.py`
+  and `manifest_schema.Manifest` both carry it; the JSON schema file
+  (`src/imperal_sdk/schemas/imperal.schema.json`) is regenerated.
+- **Validator V31**: local check that rejects `system=True` for
+  non-Imperal authors. Triggered by `IMPERAL_AUTHOR_ID` env var so
+  local dev without the env continues to pass (Dev Portal is the
+  authoritative gate at publish time). 4 new unit tests pinning the
+  contract.
+
+### Migration notes
+
+- The four first-party Imperal extensions (`admin`, `billing`,
+  `developer`, `automations`) should add `system=True` to their
+  `Extension(...)` declaration. Existing rows in `developer_apps.system`
+  were backfilled during the Sprint B platform deploy, so the live
+  marketplace already hides them — re-publishing them through the
+  Dev Portal will keep manifest and DB consistent.
+
+978 tests pass, 3 skipped.
+
 ## 4.1.9 — 2026-05-10
 
 ### Fixed

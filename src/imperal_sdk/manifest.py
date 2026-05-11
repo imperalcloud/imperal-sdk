@@ -126,6 +126,7 @@ def generate_manifest(ext: Extension) -> dict:
         "description": ext.description or "",
         "icon": ext.icon or "",
         "actions_explicit": ext.actions_explicit,
+        "system": bool(getattr(ext, "system", False)),
         "capabilities": ext.capabilities,
         "tools": tools,
         "signals": signals,

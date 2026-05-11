@@ -7,6 +7,7 @@ Returns structured report with errors, warnings, and info.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -705,5 +706,31 @@ def validate_extension(ext) -> ValidationReport:
                         "refresh functions, not read inline by handlers."
                     ),
                 ))
+
+    # V31 — `system=True` reserved for first-party Imperal extensions.
+    # System apps are auto-installed for every user, never shown in the
+    # marketplace, and cannot be uninstalled. Allowing a third-party
+    # developer to set this flag would let them slip past discovery and
+    # claim platform-level trust they have not been granted. The Dev Portal
+    # enforces an author allowlist server-side; this validator catches the
+    # mistake locally so the developer sees the error before publish.
+    if bool(getattr(ext, "system", False)):
+        author = (os.environ.get("IMPERAL_AUTHOR_ID") or "").strip()
+        IMPERAL_AUTHOR_IDS = {"imp_u_oPpbwTWjm-"}  # server@webhostmost.com
+        if author and author not in IMPERAL_AUTHOR_IDS:
+            report.issues.append(ValidationIssue(
+                rule="V31", level="ERROR",
+                message=(
+                    f"Extension(system=True) is reserved for first-party "
+                    f"Imperal extensions (admin / billing / developer / "
+                    f"automations). Author {author!r} is not in the Imperal "
+                    f"author allowlist."
+                ),
+                fix=(
+                    "Drop `system=True` from your Extension(...) call. "
+                    "Your app will publish through the normal marketplace "
+                    "flow and users will install it explicitly."
+                ),
+            ))
 
     return report

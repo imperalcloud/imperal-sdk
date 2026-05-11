@@ -284,6 +284,12 @@ class Manifest(BaseModel):
     icon_size_bytes: Optional[int] = None
     lifecycle_hooks: Optional[Dict[str, Dict[str, Any]]] = None
 
+    # Federal v4.2.0 — `system=True` marks platform-managed extensions
+    # (admin / billing / developer / automations). Auto-installed for every
+    # user on registration, hidden from marketplace, cannot be uninstalled.
+    # Reserved for first-party Imperal authors (validator V31).
+    system: Optional[bool] = None
+
     # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
     name: Optional[str] = None
     description: Optional[str] = None

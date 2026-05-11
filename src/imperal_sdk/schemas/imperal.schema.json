@@ -692,6 +692,18 @@
       "default": null,
       "title": "Lifecycle Hooks"
     },
+    "system": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "System"
+    },
     "name": {
       "anyOf": [
         {
