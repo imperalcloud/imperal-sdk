@@ -142,6 +142,36 @@ class Extension:
         # EXT-SECRETS-V1 (v4.2.2) — declared secrets emitted into manifest.secrets[]
         self._secrets: dict[str, "SecretSpec"] = {}
 
+        # EXT-SECRETS-V1 (v4.2.4) — auto-register synthetic 'secrets' panel
+        # unconditionally for every Extension. Empty state (no @ext.secret
+        # declared) renders developer guidance with code example. Federal
+        # contract enforced platform-side regardless of UI presence.
+        self._auto_register_secrets_panel()
+
+    def _auto_register_secrets_panel(self) -> None:
+        """Register the platform-provided 'secrets' panel.
+
+        Idempotent — only registers once per Extension instance. Slot
+        defaults to 'right' (least-used by typical extensions, lowest
+        collision risk with deploy-sync logic that keeps one panel per slot).
+        """
+        if "secrets" in self._panels:
+            return
+        try:
+            from imperal_sdk.secrets.panel_handler import (
+                builtin_secrets_panel_handler,
+            )
+        except Exception:
+            # If secrets package import fails, don't break Extension init.
+            return
+        self.panel(
+            "secrets",
+            slot="right",
+            title="Secrets",
+            icon="KeyRound",
+            refresh="manual",
+        )(builtin_secrets_panel_handler)
+
     def secret(
         self,
         name: str,
@@ -195,32 +225,10 @@ class Extension:
             )
         self._secrets[name] = spec
 
-        # EXT-SECRETS-V1 (v4.2.3): auto-register synthetic 'secrets' panel
-        # on first @ext.secret call so the Secrets tab appears alongside
-        # the extension's own tabs without the author writing panel code.
-        # The handler is shipped in imperal_sdk.secrets.panel_handler.
-        # Subsequent @ext.secret calls are no-ops here — registration is
-        # idempotent.
-        #
-        # Slot choice: ``right`` is defensively chosen. Most extensions
-        # use ``left`` (sidebar nav) and ``center`` (main content); ``right``
-        # is rarely-used so the synthetic Secrets tab is least likely to be
-        # overwritten by the deploy-sync logic in imperal-ext-developer
-        # which currently keeps only one panel per slot. If your extension
-        # already uses ``right``, your panel wins; users can still reach
-        # the Secrets UI via the chat-top ribbon and at /ext/{ext_id}/secrets.
-        if "secrets" not in self._panels:
-            from imperal_sdk.secrets.panel_handler import (
-                builtin_secrets_panel_handler,
-            )
-            # Call self.panel(...) the same way an extension author would.
-            self.panel(
-                "secrets",
-                slot="right",
-                title="Secrets",
-                icon="KeyRound",
-                refresh="manual",
-            )(builtin_secrets_panel_handler)
+        # EXT-SECRETS-V1 (v4.2.4): synthetic Secrets panel is now registered
+        # unconditionally in Extension.__init__ via _auto_register_secrets_panel.
+        # This call site is a no-op safety net for older bytecode paths.
+        self._auto_register_secrets_panel()
 
         def _decorator(target):
             return target  # syntactic anchor only — decorator is a no-op wrapper

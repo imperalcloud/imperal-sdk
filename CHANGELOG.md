@@ -2,6 +2,30 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.4 — 2026-05-13
+
+**EXT-SECRETS-V1 — unconditional synthetic Secrets panel**
+
+In v4.2.3 the synthetic Secrets panel was registered conditionally on the
+first `@ext.secret(...)` call, which meant extensions that did not declare
+secrets had no menu entry — leaving end-users without a discoverable place
+to manage credentials when developers later add declarations.
+
+This release flips the registration to **unconditional**: every Extension
+instance auto-registers the synthetic `secrets` panel in `__init__` (slot
+`right`, title `Secrets`, icon `KeyRound`). When the manifest has zero
+declared secrets, the panel renders an empty state with developer guidance
+(`@ext.secret(...)` code example + link to docs). When declarations exist,
+it renders one card per secret with `is_set` status + Manage button.
+
+### Migration notes
+
+- **No code changes required**. Bump your ext's SDK pin to `>= 4.2.4` and
+  redeploy via Dev Portal — the Secrets tab appears automatically.
+- Extensions that genuinely never need credentials still get the tab; this
+  is intentional for UX consistency. Federal V32 contract still requires
+  `@ext.secret` for any real credential access at runtime.
+
 ## 4.2.3 — 2026-05-13
 
 **EXT-SECRETS-V1 UX polish — synthetic `secrets` panel auto-injected**
