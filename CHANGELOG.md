@@ -2,6 +2,39 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.3 — 2026-05-13
+
+**EXT-SECRETS-V1 UX polish — synthetic `secrets` panel auto-injected**
+
+When an extension declares one or more `@ext.secret(...)` entries, the SDK
+now auto-registers a synthetic `secrets` panel (slot=`right`, title=`Secrets`,
+icon=`KeyRound`) so the user-facing Secrets manager appears alongside the
+extension's own tabs without the author writing any panel code.
+
+### Added
+
+- **Auto-injected `secrets` panel**: `Extension.secret(...)` on first call
+  registers a built-in handler from `imperal_sdk.secrets.panel_handler`. The
+  handler reads declared secrets + live is_set state from `ctx.secrets.list()`
+  and renders `ui.Card` rows with status badges + a `Manage` button that
+  routes to the dedicated `/ext/{ext_id}/secrets` page.
+- The synthetic panel uses **slot=`right`** defensively — most extensions use
+  `left` (sidebar nav) and `center` (main content); `right` is rarely-used so
+  the panel-sync logic in `imperal-ext-developer` won't overwrite it. If your
+  extension already declares a `right`-slot panel, your panel wins; users
+  still reach the Secrets UI via the chat-top ribbon and the direct
+  `/ext/{ext_id}/secrets` route.
+- Panel idempotent — multiple `@ext.secret(...)` calls register the panel
+  only once.
+
+### Migration notes
+
+- **No code changes required** to receive the synthetic panel. Bump your
+  ext's SDK pin to `>= 4.2.3` and redeploy via Dev Portal.
+- Once your extension is on v4.2.3+, the chat-top ribbon (added in Panel for
+  v4.2.2 discoverability) becomes redundant for that ext — synthetic panel
+  appears in the `right` slot as a proper tab.
+
 ## 4.2.2 — 2026-05-13
 
 ### Added — EXT-SECRETS-V1 (closes ARCH-D1 in compliance-posture.md)
