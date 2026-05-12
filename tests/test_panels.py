@@ -34,9 +34,12 @@ class TestPanelDecorator:
         async def left(ctx): pass
         @ext.panel("stats", slot="right", title="Right")
         async def right(ctx): pass
-        assert len(ext.panels) == 2
+        # +1 for the synthetic 'secrets' panel auto-injected by Extension.__init__
+        # (EXT-SECRETS-V1 v4.2.4) — see Extension._auto_register_secrets_panel.
+        assert len(ext.panels) == 3
         assert "sidebar" in ext.panels
         assert "stats" in ext.panels
+        assert "secrets" in ext.panels
 
     def test_default_slot(self):
         ext = Extension("test-app")

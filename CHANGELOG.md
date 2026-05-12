@@ -2,6 +2,32 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.5 — 2026-05-13
+
+**Fix: synthetic `__panel__*` tools excluded from validator tool_count + tests**
+
+v4.2.4 introduced an unconditional synthetic `secrets` panel via `Extension.__init__`,
+which auto-registers a `__panel__secrets` tool internally. The validator's `tool_count`
+logic was counting this synthetic tool as a user-authored tool, masking V3 ("at least
+one tool") error detection for extensions with zero user tools and inflating
+marketplace tool counts.
+
+### Fixed
+
+- **`validator.tool_count`** now excludes any tool whose name matches the
+  synthetic-prefix allowlist (`__panel__`, `__widget__`, `__tray__`, `__webhook__`).
+  These are platform-provided, not author-authored, and shouldn't count.
+- **`V3 "at least one tool"`** check now correctly fires for ext'ы with only
+  synthetic auto-registered tools.
+- `tests/test_panels.py::test_multiple_panels` updated to assert +1 for the
+  always-present synthetic `secrets` panel.
+
+### Notes
+
+- No behavior change for extensions with at least one real `@ext.tool` or
+  ChatExtension. Strict-tool-count-zero ext'ы now properly fail V3 again.
+- Marketplace tool counts shown to users no longer count synthetic panels.
+
 ## 4.2.4 — 2026-05-13
 
 **EXT-SECRETS-V1 — unconditional synthetic Secrets panel**
