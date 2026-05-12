@@ -13,6 +13,7 @@ from imperal_sdk.testing.mock_context import (
     MockStorage,
     MockStore,
 )
+from imperal_sdk.testing.mock_secrets import MockSecretStore
 
 __all__ = [
     "MockContext",
@@ -25,4 +26,5 @@ __all__ = [
     "MockHTTP",
     "MockConfig",
     "MockExtensions",
+    "MockSecretStore",
 ]

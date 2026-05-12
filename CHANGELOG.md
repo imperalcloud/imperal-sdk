@@ -2,6 +2,61 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.2 — 2026-05-13
+
+### Added — EXT-SECRETS-V1 (closes ARCH-D1 in compliance-posture.md)
+
+- **`@ext.secret(name, description, ...)`** declarative decorator. Extensions
+  declare what user-supplied credentials they need (API keys, OAuth tokens,
+  webhook signing secrets). Each declaration carries `required`,
+  `write_mode` (`user` / `extension` / `both`), `max_bytes`, optional
+  `rotation_hint_days`. Manifest emits `secrets[]` as an additive optional
+  field (manifest schema v3 stays — back-compat).
+
+- **`ctx.secrets`** accessor on `KernelContext` (resolved kernel-side; SDK
+  ships `SecretClient` HTTP proxy to auth-gw `/v1/secrets/*`). Methods:
+  `get(name)` → plaintext or None; `set(name, value)` → raises
+  `SecretWriteForbidden` for `write_mode='user'`; `delete(name)`;
+  `is_set(name)` (cheap metadata, no audit); `list()` (descriptions +
+  is_set, never values).
+
+- **Dev mode** (`IMPERAL_DEV_MODE=true`): `get(name)` reads
+  `IMPERAL_SECRET_<UPPER_NAME>` env var; set/delete are no-ops with WARN
+  log. Manifest contract still enforced (I-SECRETS-CONTRACT-DECLARED —
+  undeclared names raise even in dev).
+
+- **`imperal_sdk.testing.MockSecretStore`** for pytest fixtures. Optional
+  `declared` set to mirror SecretNotDeclaredError semantics.
+
+- **Federal invariants enforced SDK-side**:
+  - `I-SECRETS-HANDLER-SCOPE-MEMORY` — no module/class-level plaintext
+    cache in `SecretClient`; source-inspection-friendly
+  - `I-SECRETS-CONTRACT-DECLARED` — runtime read/write of undeclared
+    name raises `SecretNotDeclaredError`; manifest is single source of truth
+  - `I-SECRETS-VAULT-DEPENDENCY` — auth-gw 503 → `SecretVaultUnavailable`
+
+- **Federal invariants enforced auth-gw-side** (live in production
+  whm-gateway since 2026-05-13):
+  - `I-SECRETS-USER-SCOPED` — cross-user 403
+  - `I-SECRETS-NEVER-LOGGED` — `action_ledger` row stores length +
+    sha256-prefix-8 only, never the value
+  - `I-SECRETS-EXT-SCOPED` — extension token's `ext_id` claim must
+    match URL `{ext_id}`
+  - `I-SECRETS-AUDIT-FOREVER` — every op writes
+    `retention_class='security_forever'`
+
+- **New JWT claims**: `actor_kind` (`'user'` or `'extension'`) and `ext_id`
+  (extension tokens only). `build_session_claims` and
+  `build_extension_claims` helpers in `app.auth.claims` on the auth-gw side.
+
+### Notes
+
+- Migration of existing plaintext-stored credentials (BYOLLM keys, OAuth
+  refresh tokens, etc.) is at extension-author pace; no automated migration.
+  The V32 publish-time validator blocks *new* extensions that read
+  credential-like fields without an `@ext.secret` declaration
+  (validator implementation deferred).
+
 ## 4.2.1 — 2026-05-11
 
 ### Fixed

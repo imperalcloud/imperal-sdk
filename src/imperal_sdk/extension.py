@@ -139,6 +139,71 @@ class Extension:
         self._panels: dict[str, dict] = {}
         self._tray: dict[str, "TrayDef"] = {}
         self._cache_models: dict[str, type] = {}
+        # EXT-SECRETS-V1 (v4.2.2) — declared secrets emitted into manifest.secrets[]
+        self._secrets: dict[str, "SecretSpec"] = {}
+
+    def secret(
+        self,
+        name: str,
+        description: str,
+        *,
+        required: bool = False,
+        write_mode: str = "user",
+        max_bytes: int = 4096,
+        rotation_hint_days: int | None = None,
+    ):
+        """Declare a secret the extension needs.
+
+        Federal EXT-SECRETS-V1 contract — manifest.secrets[] is the single
+        source of truth for what an extension may touch via ``ctx.secrets``.
+
+        Usage::
+
+            ext.secret(
+                name="spotify_api_key",
+                description="Your Spotify API key (from developer.spotify.com)",
+                required=True,
+                write_mode="user",       # user pastes in Panel UI
+                max_bytes=200,
+            )(lambda: None)
+
+            # OAuth refresh tokens are written by the ext after authorize
+            ext.secret(
+                name="spotify_refresh_token",
+                description="OAuth refresh token written by ext after authorize",
+                write_mode="extension",
+                rotation_hint_days=30,
+            )(lambda: None)
+
+        Returns an identity decorator — the wrapped target is unchanged.
+        The call itself registers the SecretSpec on the Extension.
+        """
+        from imperal_sdk.secrets.spec import SecretSpec
+        from imperal_sdk.secrets.exceptions import SecretDeclarationConflict
+
+        spec = SecretSpec(
+            name=name,
+            description=description,
+            required=required,
+            write_mode=write_mode,
+            max_bytes=max_bytes,
+            rotation_hint_days=rotation_hint_days,
+        )
+        if name in self._secrets:
+            raise SecretDeclarationConflict(
+                f"@ext.secret name={name!r} declared twice on app_id={self.app_id!r}"
+            )
+        self._secrets[name] = spec
+
+        def _decorator(target):
+            return target  # syntactic anchor only — decorator is a no-op wrapper
+
+        return _decorator
+
+    @property
+    def secrets(self) -> dict[str, "SecretSpec"]:
+        """Read-only view of declared secrets keyed by name."""
+        return dict(self._secrets)
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""

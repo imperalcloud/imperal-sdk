@@ -33,7 +33,13 @@ from imperal_sdk.validator_v1_6_0 import (
     validate_manifest_v1_6_0,
 )
 
-__version__ = "4.2.1"
+from imperal_sdk.secrets import (
+    SecretSpec, SecretClient, SecretStatus,
+    SecretNotDeclaredError, SecretWriteForbidden, SecretVaultUnavailable,
+    SecretValueTooLarge, SecretDeclarationConflict,
+)
+
+__version__ = "4.2.2"
 
 __all__ = [
     # Core

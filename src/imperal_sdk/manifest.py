@@ -176,6 +176,13 @@ def generate_manifest(ext: Extension) -> dict:
     if ext.config_defaults:
         manifest["config_defaults"] = ext.config_defaults
 
+    # EXT-SECRETS-V1 (v4.2.2) — emit declared secrets[]. Optional field;
+    # backwards-compatible (extensions without @ext.secret omit it).
+    if getattr(ext, "_secrets", None):
+        manifest["secrets"] = [
+            s.to_manifest_dict() for s in ext._secrets.values()
+        ]
+
     return manifest
 
 
