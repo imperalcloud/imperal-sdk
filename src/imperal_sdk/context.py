@@ -218,7 +218,14 @@ class Context:
             try:
                 from imperal_sdk.cache.client import CacheClient
                 self._cache = CacheClient(
-                    app_id=getattr(self._extension, "app_id", self._extension_id),
+                    # 2026-05-13: kernel-authoritative app_id (folder/manifest
+                    # name passed by ContextFactory). ext.app_id is the Python
+                    # runtime value and can drift from the deployed app_id
+                    # (e.g. Extension("spotify-extension") in app.py while
+                    # /opt/extensions/spotify/ + Dev Portal row are "spotify"
+                    # — auth-gw extcache 401'd every request). Fall back to
+                    # ext.app_id only when factory didn't pass _extension_id.
+                    app_id=self._extension_id or getattr(self._extension, "app_id", ""),
                     user_id=self.user.imperal_id,
                     gw_url=gw,
                     service_token=svc,
@@ -288,6 +295,39 @@ class Context:
         import logging
         logger = logging.getLogger(f"ext.{self._extension_id}")
         getattr(logger, level, logger.info)(message)
+
+    def webhook_url(self, path: str) -> str:
+        """Build the public OAuth/webhook callback URL for this extension.
+
+        Returns the URL the extension author must register in the OAuth
+        provider's developer console (Spotify, GitHub, Google, etc.).
+
+        Path is the same string passed to ``@ext.webhook("/path")``. Both
+        forms work — leading slash is normalised:
+
+            ctx.webhook_url("/callback")     # → .../webhook/callback
+            ctx.webhook_url("callback")      # → .../webhook/callback
+            ctx.webhook_url("/oauth/return") # → .../webhook/oauth/return
+
+        Host comes from the ``IMPERAL_PUBLIC_HOST`` env var (default
+        ``panel.imperal.io``). Path-component ``{app_id}`` comes from the
+        kernel-authoritative ``_extension_id`` (folder/manifest name),
+        not from ``ext.app_id`` (Python runtime, can drift).
+
+        Use this instead of hardcoding the URL in ``spotify_config.py``
+        et al. — that pattern is what caused the 2026-05-13 Spotify 401
+        class (auth-gw never saw the drifted `spotify-extension` row).
+        """
+        import os as _os_wh
+        host = _os_wh.environ.get("IMPERAL_PUBLIC_HOST", "panel.imperal.io")
+        clean_path = (path or "").lstrip("/")
+        app_id = self._extension_id or getattr(self._extension, "app_id", "")
+        if not app_id:
+            raise RuntimeError(
+                "ctx.webhook_url() called without an extension_id — "
+                "kernel must build ctx via ContextFactory."
+            )
+        return f"https://{host}/v1/ext/{app_id}/webhook/{clean_path}"
 
     def as_user(self, user_id: str) -> "Context":
         """Return scoped Context for target user_id.

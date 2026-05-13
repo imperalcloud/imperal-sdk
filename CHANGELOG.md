@@ -2,6 +2,83 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.7 — 2026-05-13
+
+**OAuth callback infrastructure + `ctx.webhook_url()` helper**
+
+Closes the architectural gap that made `@ext.webhook("/callback", method="GET")`
+non-functional for OAuth providers (Spotify, GitHub, Google). Before this
+release: hardcoded redirect URIs in `*_config.py` landed users on a Next.js
+404 (no nginx route for `/v1/ext/*`), and even if they reached auth-gw the
+`ext_router` was POST-only.
+
+### Added
+
+- **`Context.webhook_url(path)`** — builds the canonical public callback
+  URL from kernel-authoritative `_extension_id` (folder/manifest name, not
+  the drift-prone Python `Extension("X", ...)` value). Returns
+  `https://{IMPERAL_PUBLIC_HOST}/v1/ext/{app_id}/webhook/{path}` — default
+  host `panel.imperal.io`. Path leading slash is normalised. Use this
+  instead of hardcoding the URL in config files; hardcoded URLs are the
+  #1 cause of OAuth-callback drift bugs.
+
+- **Federal `ctx.secrets` inject moved to `ContextFactory._build_context`** —
+  every dispatch path (chat tool, panel, skeleton, schedule, webhook,
+  lifecycle, health check) now gets `ctx.secrets` uniformly. Previously
+  the inject lived in `pipeline/extension_runner.py` and only fired for
+  chat tool dispatch; panel handlers and others crashed with
+  `AttributeError` when reading `ctx.secrets` despite the documented
+  federal contract. `_HealthCheckCtx` gained a `_StubSecrets` graceful
+  no-op so `@ext.health_check` handlers that read `ctx.secrets` don't
+  crash with `AttributeError`.
+
+- **Kernel-authoritative `app_id` in `ctx.cache`** — `CacheClient` is now
+  constructed with `self._extension_id` (kernel parameter) instead of
+  `getattr(self._extension, "app_id", ...)` (Python runtime). Fixes the
+  401 class observed in production when an ext author writes
+  `Extension("X-extension", ...)` while the deployed folder/manifest is
+  `X` — auth-gw extcache row uses the deployed app_id and would never
+  authorise the drifted Python value.
+
+### Platform changes (live, not in the package)
+
+- **nginx** on `panel.imperal.io` now routes `/v1/ext/*` to Imperal Auth
+  Gateway (was: caught by Next.js catch-all → 404). Renamed config from
+  `sharelock-panel*` → `imperal-panel`.
+- **Auth-gw `ext_router`** accepts both `GET` (OAuth callbacks,
+  verification challenges) and `POST` (server-to-server hooks) on the
+  same `/v1/ext/{app_id}/webhook/{path}` endpoint.
+- **Auth-gw `marketplace/router.py`** new public endpoint
+  `GET /v1/marketplace/apps/{app_id}/webhooks` returns `[{path, method}]`
+  for each declared `@ext.webhook`. Strips `secret_header`.
+- **Imperal Panel** Secrets tab renders a blue info card listing every
+  webhook URL with Copy buttons so end-users know what to paste into
+  OAuth provider developer consoles.
+- **Dev Portal App Details** gained a Webhooks tab (`imperal-ext-developer`
+  v1.3.0) showing the per-app callback URLs with method badges.
+
+### Migration notes
+
+- Replace `SP_REDIRECT_URI = "https://..."` hardcodes with
+  `ctx.webhook_url("/callback")` at runtime. Existing hardcoded URLs that
+  match the canonical shape keep working — but new extensions should
+  prefer the helper. No SDK-blocking change in this release.
+- `@ext.health_check` handlers that call `await ctx.secrets.list()` /
+  `.get(...)` now receive a graceful no-op stub instead of
+  `AttributeError`. Reads return `None`/`[]`/`False`; writes raise
+  `RuntimeError` (health checks have no per-user context).
+- All shadow patches applied on 2026-05-13 to platform-worker and
+  session-worker venvs are superseded by this release. Run
+  `pip install --upgrade imperal-sdk==4.2.7` to clear them.
+
+### Federal invariants
+
+| Invariant | What it pins |
+|---|---|
+| `I-SECRETS-HANDLER-SCOPE-MEMORY` | Already pinned; the ContextFactory move preserves it — plaintext stays a local variable in the handler call. |
+| `I-EXT-CACHE-APP-ID-KERNEL-AUTHORITATIVE` | (new) `CacheClient.app_id` sourced from kernel `_extension_id`, never from Python `ext.app_id`. |
+| `I-WEBHOOK-URL-CANONICAL` | (new) `ctx.webhook_url(path)` returns `https://{IMPERAL_PUBLIC_HOST}/v1/ext/{kernel-authoritative-app_id}/webhook/{path}`. Source-inspection-friendly: env var lookup + no Python-instance attribute drift. |
+
 ## 4.2.6 — 2026-05-13
 
 **New: `ui.Password` primitive + `ui.Input(type=)` kwarg**
