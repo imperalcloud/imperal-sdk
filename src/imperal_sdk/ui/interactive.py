@@ -73,9 +73,23 @@ def Tooltip(content: str, children: UINode | None = None) -> UINode:
     return UINode(type="Tooltip", props=props)
 
 
-def Link(label: str, href: str = "", on_click: UIAction | None = None) -> UINode:
-    """Hyperlink — navigates via href or fires on_click action."""
-    props: dict[str, Any] = {"label": label}
+def Link(
+    label: str = "",
+    href: str = "",
+    on_click: UIAction | None = None,
+    *,
+    text: str = "",
+) -> UINode:
+    """Hyperlink — navigates via href or fires on_click action.
+
+    The visible text can be passed as either ``label`` (canonical) or
+    ``text`` (alias matching the HTML/JSX `<a>text</a>` mental model).
+    Exactly one must be provided; ``label`` wins if both are set.
+    """
+    resolved = label or text
+    if not resolved:
+        raise TypeError("ui.Link requires a 'label' (or 'text' alias)")
+    props: dict[str, Any] = {"label": resolved}
     if href: props["href"] = href
     if on_click: props["on_click"] = on_click
     return UINode(type="Link", props=props)

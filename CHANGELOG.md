@@ -2,6 +2,29 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.11 — 2026-05-13
+
+**Fix: `ui.Link(text=...)` no longer breaks panel render**
+
+`ui.Link` now accepts the visible text via either `label=` (canonical) or
+`text=` (alias matching the HTML/JSX `<a>text</a>` mental model). Before
+v4.2.11, passing `text=` raised `TypeError: Link() got an unexpected
+keyword argument 'text'` at panel-render time, which killed the right
+panel for any extension that used the natural-looking kwarg.
+
+```python
+# All three are now equivalent
+ui.Link("Read docs", href="https://docs.imperal.io")           # positional
+ui.Link(label="Read docs", href="https://docs.imperal.io")     # canonical kwarg
+ui.Link(text="Read docs",  href="https://docs.imperal.io")     # alias kwarg
+```
+
+Calling `ui.Link()` with neither `label` nor `text` raises a clear
+`TypeError("ui.Link requires a 'label' (or 'text' alias)")` instead of
+silently rendering an empty anchor. `label` wins if both are passed.
+
+No migration required — existing `label=` callers are unchanged.
+
 ## 4.2.10 — 2026-05-13
 
 **Feat: `@chat.function` default `chain_callable=True` for ALL action_types (was write/destructive only)**
