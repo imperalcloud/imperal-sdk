@@ -240,6 +240,26 @@ class TrayDecl(BaseModel):
     tooltip: Optional[str] = None
 
 
+class SecretDecl(BaseModel):
+    """One entry in `manifest['secrets']` — EXT-SECRETS-V1 (v4.2.2+).
+
+    Mirrors :class:`imperal_sdk.secrets.spec.SecretSpec` after
+    ``to_manifest_dict()``. The Pydantic model exists so
+    :func:`validate_manifest_dict` round-trips the emitted shape — closes
+    the `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift gap that lived
+    silently from v4.2.2 → v4.2.7.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., pattern=r"^[a-z][a-z0-9_]{0,62}$")
+    description: str = Field(..., min_length=1)
+    required: bool = False
+    write_mode: Literal["user", "extension", "both"] = "user"
+    max_bytes: int = Field(default=4096, ge=1, le=65536)
+    rotation_hint_days: Optional[int] = Field(default=None, ge=1)
+
+
 # === Root model =======================================================
 
 class Manifest(BaseModel):
@@ -289,6 +309,14 @@ class Manifest(BaseModel):
     # user on registration, hidden from marketplace, cannot be uninstalled.
     # Reserved for first-party Imperal authors (validator V31).
     system: Optional[bool] = None
+
+    # Federal v4.2.2 — EXT-SECRETS-V1. Optional array of per-user encrypted
+    # credential declarations the extension reads via ``ctx.secrets.get()``.
+    # Closes the `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift where the
+    # emitter wrote `secrets[]` from v4.2.2 onwards but this Pydantic model
+    # had no matching field (extra="forbid" would have rejected — but
+    # publish-time validators didn't gate through here).
+    secrets: Optional[List[SecretDecl]] = None
 
     # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
     name: Optional[str] = None

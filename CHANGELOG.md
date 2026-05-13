@@ -2,6 +2,42 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.8 — 2026-05-13
+
+**Fix: `secrets[]` finally in `Manifest` Pydantic schema**
+
+EXT-SECRETS-V1 manifest emitter has been writing `manifest["secrets"] = [...]`
+since v4.2.2, but the `Manifest` Pydantic model in `manifest_schema.py` had
+no matching field. With `model_config = ConfigDict(extra="forbid")`, this
+should have caused `validate_manifest_dict()` to reject every manifest that
+declared secrets — but publish-time validators didn't gate through this
+schema, so the drift lived silently for six PATCH releases.
+
+### Added
+
+- **`SecretDecl` Pydantic model** in `manifest_schema.py` — mirrors
+  `imperal_sdk.secrets.spec.SecretSpec.to_manifest_dict()`. Validates
+  `name` regex (`^[a-z][a-z0-9_]{0,62}$`), `write_mode` in
+  `{user, extension, both}`, `max_bytes` in `[1, 65536]`,
+  `rotation_hint_days >= 1` when present, non-empty `description`.
+- **`Manifest.secrets: Optional[List[SecretDecl]]`** field — additive,
+  back-compatible with manifests that don't declare any secrets.
+
+### Federal invariants
+
+| Invariant | What it pins |
+|---|---|
+| `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` | (already declared in v4.1.6 canary roundtrip test) Now actually holds for `secrets[]` — emitter and schema agree. |
+
+### Migration notes
+
+- **No code change required** in any extension. Existing manifests with
+  `secrets[]` (emitted since v4.2.2) now pass strict Pydantic validation
+  instead of relying on validators that didn't gate through the schema.
+- Manifests with malformed secret entries (e.g. `name` with uppercase or
+  invalid `write_mode`) will now fail `validate_manifest_dict()` at
+  publish time. Previously they slipped through.
+
 ## 4.2.7 — 2026-05-13
 
 **OAuth callback infrastructure + `ctx.webhook_url()` helper**
