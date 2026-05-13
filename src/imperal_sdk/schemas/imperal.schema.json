@@ -224,6 +224,63 @@
       "title": "Schedule",
       "type": "object"
     },
+    "SecretDecl": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['secrets']` — EXT-SECRETS-V1 (v4.2.2+).\n\nMirrors :class:`imperal_sdk.secrets.spec.SecretSpec` after\n``to_manifest_dict()``. The Pydantic model exists so\n:func:`validate_manifest_dict` round-trips the emitted shape — closes\nthe `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift gap that lived\nsilently from v4.2.2 → v4.2.7.",
+      "properties": {
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "write_mode": {
+          "default": "user",
+          "enum": [
+            "user",
+            "extension",
+            "both"
+          ],
+          "title": "Write Mode",
+          "type": "string"
+        },
+        "max_bytes": {
+          "default": 4096,
+          "maximum": 65536,
+          "minimum": 1,
+          "title": "Max Bytes",
+          "type": "integer"
+        },
+        "rotation_hint_days": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation Hint Days"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "SecretDecl",
+      "type": "object"
+    },
     "Signal": {
       "additionalProperties": false,
       "description": "One entry in `manifest['signals']`.",
@@ -254,7 +311,7 @@
     },
     "Tool": {
       "additionalProperties": false,
-      "description": "One entry in `manifest['tools']`.\n\nFederal v4.0.0 \u2014 typed dispatch fields (action_type, chain_callable,\neffects, params_schema, return_schema, event) declared at top level so\nthe kernel chain planner can route deterministically without\nre-deriving from extension code.",
+      "description": "One entry in `manifest['tools']`.\n\nFederal v4.0.0 — typed dispatch fields (action_type, chain_callable,\neffects, params_schema, return_schema, event) declared at top level so\nthe kernel chain planner can route deterministically without\nre-deriving from extension code.",
       "properties": {
         "name": {
           "minLength": 1,
@@ -703,6 +760,21 @@
       ],
       "default": null,
       "title": "System"
+    },
+    "secrets": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SecretDecl"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Secrets"
     },
     "name": {
       "anyOf": [

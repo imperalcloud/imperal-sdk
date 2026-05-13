@@ -2,6 +2,19 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.9 — 2026-05-13
+
+**Fix: regenerate `src/imperal_sdk/schemas/imperal.schema.json` after SecretDecl addition**
+
+v4.2.8 added the `SecretDecl` Pydantic model + `Manifest.secrets` field but
+forgot to regenerate the committed static JSON Schema mirror. CI gate
+`test_spec_validation.py::test_static_schema_matches_runtime_export[imperal]`
+caught the drift — runtime Pydantic schema (with `SecretDecl` + `secrets[]`)
+no longer matched the committed file.
+
+This release ships the regenerated `imperal.schema.json` so the static
+artifact equals the runtime model again. No public API change.
+
 ## 4.2.8 — 2026-05-13
 
 **Fix: `secrets[]` finally in `Manifest` Pydantic schema**
