@@ -24,7 +24,7 @@ from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider, 
 from .interactive import Button, Card, Menu, Dialog, Tooltip, Link, SlideOver
 from .feedback import Alert, Progress, Chart, Loading, Error
 from .input_components import (
-    Input, Form, Select, MultiSelect, Toggle,
+    Input, Password, Form, Select, MultiSelect, Toggle,
     Slider, DatePicker, FileUpload, TextArea, RichEditor, TagInput,
 )
 from .graph import Graph
@@ -44,7 +44,7 @@ __all__ = [
     # Feedback
     "Alert", "Progress", "Chart", "Loading", "Error",
     # Input
-    "Input", "Form", "Select", "MultiSelect", "Toggle",
+    "Input", "Password", "Form", "Select", "MultiSelect", "Toggle",
     "Slider", "DatePicker", "FileUpload", "TextArea", "RichEditor", "TagInput",
     # Graph (Cytoscape-backed)
     "Graph",

@@ -2,6 +2,40 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.6 — 2026-05-13
+
+**New: `ui.Password` primitive + `ui.Input(type=)` kwarg**
+
+Adds a browser-blind credential-entry primitive for EXT-SECRETS-V1 Panel UIs.
+Renders as `<input type="password" autocomplete="new-password" spellcheck="false">`
+so values are visually masked while the user types and don't get saved into
+the browser's autofill database.
+
+### Added
+
+- **`ui.Password(placeholder=, on_submit=, value=, param_name=)`** — canonical
+  credential-entry component. Federal EXT-SECRETS-V1 entry surfaces (Dev Portal
+  Secrets tab, Panel SecretManagerCard equivalents) MUST use this instead of
+  `ui.Input` for write_mode='user'/'both' secrets.
+- **`ui.Input(type=)` kwarg** — accepts `"text"` (default), `"password"`,
+  `"email"`, `"number"`, `"url"`. Backward-compatible: existing `ui.Input(...)`
+  calls without `type=` continue rendering as text. The `type` prop is only
+  emitted into manifest when != `"text"`.
+
+### Panel rendering
+
+`DInput.tsx` now reads `type` from props and applies to the native
+`<input type={...}>` element. When `type === "password"` it also sets
+`autoComplete="new-password"` (suppresses browser autofill/save prompts) and
+`spellCheck={false}` (no red squiggle on opaque base64 / hex values).
+
+### Federal note
+
+`type="password"` is a defence against shoulder-surfing, not a security
+control. The plaintext still travels in the POST body to the server, which
+is the only correctness boundary. Audit chokepoint + Vault transit are what
+make this federal-grade — see EXT-SECRETS-V1 spec for the contract.
+
 ## 4.2.5 — 2026-05-13
 
 **Fix: synthetic `__panel__*` tools excluded from validator tool_count + tests**

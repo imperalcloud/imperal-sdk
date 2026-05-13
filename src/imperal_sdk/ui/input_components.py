@@ -10,11 +10,50 @@ def Input(
     on_submit: UIAction | None = None,
     value: str = "",
     param_name: str = "value",
+    type: str = "text",
 ) -> UINode:
-    """Text input field. on_submit fires on Enter, value merged as param_name."""
+    """Text input field. on_submit fires on Enter, value merged as param_name.
+
+    ``type`` (v4.2.6+) is a hint to the Panel renderer for native HTML input
+    behaviour: ``"text"`` (default), ``"password"`` (browser-blind, no echo),
+    ``"email"``, ``"number"``, ``"url"``. Prefer ``ui.Password(...)`` for
+    credential entry — it's a thin convenience wrapper that pins type for
+    federal EXT-SECRETS-V1 UIs.
+    """
     props: dict[str, Any] = {"placeholder": placeholder, "value": value, "param_name": param_name}
+    if type and type != "text":
+        props["type"] = type
     if on_submit: props["on_submit"] = on_submit
     return UINode(type="Input", props=props)
+
+
+def Password(
+    placeholder: str = "paste value…",
+    on_submit: UIAction | None = None,
+    value: str = "",
+    param_name: str = "value",
+) -> UINode:
+    """Password input — browser-blind, no echo, autocomplete='new-password'.
+
+    EXT-SECRETS-V1 (federal v4.2.6+) — the canonical credential-entry primitive.
+    Renders as ``<input type="password" autocomplete="new-password">`` in the
+    Panel UI so values are visually masked while the user types. Submitted
+    value rides into the action as ``param_name`` (default ``"value"``); use
+    inside ``ui.Form(defaults={...})`` to attach hidden context fields like
+    ``app_id`` and ``name``.
+
+    Federal note: type=password is a defence against shoulder-surfing, NOT a
+    security control. The plaintext still travels in the POST body to the
+    server, which is the only correctness boundary. Audit chokepoint + Vault
+    transit are what make this federal-grade.
+    """
+    return Input(
+        placeholder=placeholder,
+        on_submit=on_submit,
+        value=value,
+        param_name=param_name,
+        type="password",
+    )
 
 
 def Form(
