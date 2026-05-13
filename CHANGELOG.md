@@ -2,6 +2,31 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.10 — 2026-05-13
+
+**Feat: `@chat.function` default `chain_callable=True` for ALL action_types (was write/destructive only)**
+
+V19 federal default: `chain_callable` now defaults to `True` for read
+action_types too, not just `write` / `destructive`. This closes the
+wrapper-LLM paraphrase risk for typed read handlers (`list_*`,
+`search_*`, `get_*`) — when the classifier picks a read with concrete
+args, the kernel `chain_executor._resolve_typed_dispatch` dispatches
+the typed call directly instead of routing through the ChatExtension
+BYOLLM tool-use loop.
+
+Authors who need the wrapper-LLM tool-use loop for their handler
+(conversational catch-all like `case_chat`) must explicitly set
+`chain_callable=False`. The change is backward-compatible — existing
+manifests with explicit `True` / `False` are unaffected; only the
+implicit default for reads flips.
+
+Migration: run `imperal build` to regenerate manifests; read functions
+without explicit `chain_callable` will now emit `chain_callable: true`.
+
+Federal invariant: closes the wrapper-LLM paraphrase risk class for
+read intents, completing the `I-CHAT-FUNCTION-VERBATIM-PARAMS`
+structural enforcement.
+
 ## 4.2.9 — 2026-05-13
 
 **Fix: regenerate `src/imperal_sdk/schemas/imperal.schema.json` after SecretDecl addition**

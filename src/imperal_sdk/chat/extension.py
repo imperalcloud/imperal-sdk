@@ -147,7 +147,16 @@ class ChatExtension:
                 ``archive_drafts_in_project``.
         """
         if chain_callable is None:
-            chain_callable = action_type in ("write", "destructive")
+            # V19 (federal v4.2.10, 2026-05-13): default True for ALL
+            # action_types — reads also typed-dispatch when the classifier
+            # picked them, closing the wrapper-LLM paraphrase risk on
+            # `list_*`, `search_*`, `get_*` style handlers. Authors who
+            # need the wrapper-LLM tool-use loop (catch-all conversational
+            # handlers like `case_chat`) must set `chain_callable=False`
+            # explicitly. Pre-v4.2.10 default kept `False` for reads;
+            # backward-compatible because action_type in ("write",
+            # "destructive") already returned True and continues to.
+            chain_callable = True
 
         def decorator(func: Callable) -> Callable:
             # Auto-detect Pydantic BaseModel params + return type
