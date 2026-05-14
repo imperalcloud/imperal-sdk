@@ -226,7 +226,7 @@
     },
     "SecretDecl": {
       "additionalProperties": false,
-      "description": "One entry in `manifest['secrets']` — EXT-SECRETS-V1 (v4.2.2+).\n\nMirrors :class:`imperal_sdk.secrets.spec.SecretSpec` after\n``to_manifest_dict()``. The Pydantic model exists so\n:func:`validate_manifest_dict` round-trips the emitted shape — closes\nthe `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift gap that lived\nsilently from v4.2.2 → v4.2.7.",
+      "description": "One entry in `manifest['secrets']` \u2014 EXT-SECRETS-V1 (v4.2.2+).\n\nMirrors :class:`imperal_sdk.secrets.spec.SecretSpec` after\n``to_manifest_dict()``. The Pydantic model exists so\n:func:`validate_manifest_dict` round-trips the emitted shape \u2014 closes\nthe `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift gap that lived\nsilently from v4.2.2 \u2192 v4.2.7.",
       "properties": {
         "name": {
           "pattern": "^[a-z][a-z0-9_]{0,62}$",
@@ -311,7 +311,7 @@
     },
     "Tool": {
       "additionalProperties": false,
-      "description": "One entry in `manifest['tools']`.\n\nFederal v4.0.0 — typed dispatch fields (action_type, chain_callable,\neffects, params_schema, return_schema, event) declared at top level so\nthe kernel chain planner can route deterministically without\nre-deriving from extension code.",
+      "description": "One entry in `manifest['tools']`.\n\nFederal v4.0.0 \u2014 typed dispatch fields (action_type, chain_callable,\neffects, params_schema, return_schema, event) declared at top level so\nthe kernel chain planner can route deterministically without\nre-deriving from extension code.",
       "properties": {
         "name": {
           "minLength": 1,
@@ -393,6 +393,30 @@
           ],
           "default": null,
           "title": "Return Schema"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Background"
+        },
+        "long_running": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Long Running"
         },
         "event": {
           "anyOf": [

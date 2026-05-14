@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.14 — 2026-05-14
+
+**Fix: regenerate static `imperal.schema.json` to match runtime `Manifest` model**
+
+v4.2.13 added `background` + `long_running` to the `Tool` Pydantic model
+in `manifest_schema.py` but forgot to regenerate the committed
+`src/imperal_sdk/schemas/imperal.schema.json` static mirror. The CI
+gate `test_static_schema_file_in_sync` caught the drift on the v4.2.13
+release commit (same pattern as the v4.2.8 → v4.2.9 fix).
+
+### Fixed
+
+- Regenerated `src/imperal_sdk/schemas/imperal.schema.json` from runtime
+  `manifest_schema.get_schema()`. Static artifact equals runtime model
+  again.
+
+No public API change. Single-file fix paired with v4.2.13.
+
 ## 4.2.13 — 2026-05-14
 
 **Feat: `@chat.function(background=True)` declarative flag**
