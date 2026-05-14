@@ -236,7 +236,36 @@ async def _execute_function(
 
     while True:
         try:
-            if _func_def._pydantic_model and _func_def._pydantic_param:
+            # LONGRUN-V1 Component D (v4.2.13+) — declarative background-task sugar.
+            # When the handler is decorated with @chat.function(background=True),
+            # the SDK auto-wraps the call in ctx.background_task() and returns an
+            # immediate ack envelope to the LLM. The actual handler runs detached;
+            # the platform delivers its returned ActionResult as a fresh bot turn.
+            if getattr(_func_def, "background", False):
+                _bg_pydantic_model = _func_def._pydantic_model
+                _bg_pydantic_param = _func_def._pydantic_param
+                _bg_input = current_tu.input or {}
+                _bg_fn = _func_def.func
+
+                async def _bg_coro():
+                    if _bg_pydantic_model and _bg_pydantic_param:
+                        _mi = _bg_pydantic_model(**_bg_input)
+                        return await _bg_fn(ctx, **{_bg_pydantic_param: _mi})
+                    return await _bg_fn(ctx, **_bg_input)
+
+                _bg_task_id = await ctx.background_task(
+                    _bg_coro(),
+                    long_running=bool(getattr(_func_def, "long_running", False)),
+                    name=current_tu.name,
+                )
+                result = ActionResult.success(
+                    summary=(
+                        f"Started '{current_tu.name}' in background — "
+                        "the result will be sent to chat when it finishes."
+                    ),
+                    data={"task_id": _bg_task_id, "background": True},
+                )
+            elif _func_def._pydantic_model and _func_def._pydantic_param:
                 _model_instance = _func_def._pydantic_model(**(current_tu.input or {}))
                 result = await _func_def.func(ctx, **{_func_def._pydantic_param: _model_instance})
             else:

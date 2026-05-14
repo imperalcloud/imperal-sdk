@@ -58,6 +58,12 @@ class FunctionDef:
     chain_callable: bool = True  # federal v4.0.0 — kernel uses typed dispatch
     effects: list[str] = field(default_factory=list)  # ["create:note", "delete:folder", ...]
     id_projection: str = ""  # federal v4.1.2 — params field carrying resolved target id
+    # LONGRUN-V1 Component D (v4.2.13+) — declarative sugar over ctx.background_task.
+    # When background=True, the SDK chat handler auto-wraps the function call in
+    # ctx.background_task(); the LLM sees an immediate ack with task_id and the
+    # platform delivers the handler's ActionResult as a fresh bot turn when done.
+    background: bool = False
+    long_running: bool = False
     _pydantic_model: type | None = None  # auto-detected Pydantic BaseModel class
     _pydantic_param: str = ""  # parameter name that receives the model instance
     _return_model: type | None = None  # auto-detected return Pydantic model
@@ -115,7 +121,9 @@ class ChatExtension:
                  event_schema: type | None = None,
                  chain_callable: bool | None = None,
                  effects: list[str] | None = None,
-                 id_projection: str | None = None):
+                 id_projection: str | None = None,
+                 background: bool = False,
+                 long_running: bool = False):
         """Register a chat function (federal v4.0.0 contract).
 
         Args:
@@ -218,6 +226,8 @@ class ChatExtension:
                 chain_callable=chain_callable,
                 effects=list(effects or []),
                 id_projection=id_projection or "",
+                background=background,
+                long_running=long_running,
                 _pydantic_model=_detected_model, _pydantic_param=_detected_param,
                 _return_model=_detected_return_model,
             )

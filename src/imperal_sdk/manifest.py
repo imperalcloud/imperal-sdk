@@ -102,6 +102,8 @@ def generate_manifest(ext: Extension) -> dict:
                 "params_schema": params_schema,
                 "return_schema": return_schema,
                 "event": fn_def.event or "",
+                "background": bool(getattr(fn_def, "background", False)),
+                "long_running": bool(getattr(fn_def, "long_running", False)),
                 "scopes": [],
                 "owner_chat_tool": chat_tool_name,
             })

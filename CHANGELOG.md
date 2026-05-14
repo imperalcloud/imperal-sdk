@@ -2,6 +2,59 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.13 — 2026-05-14
+
+**Feat: `@chat.function(background=True)` declarative flag**
+
+Sugar over `ctx.background_task(coro, ...)` from v4.2.12 — author writes
+one handler body, the SDK auto-wraps the call in `ctx.background_task()`
+when the flag is set.
+
+### Added
+
+- **`@chat.function(..., background=True, long_running=False)`** — when
+  `background=True`, the SDK chat handler wraps the function call in
+  `ctx.background_task()` instead of running the handler synchronously.
+  The LLM receives an immediate ack envelope carrying `task_id`; the
+  platform delivers the handler's returned `ActionResult` as a fresh
+  bot turn when the work finishes. `long_running=True` raises the
+  federal 180-second cap to 1800 seconds.
+
+  ```python
+  @chat.function(
+      "refine_output",
+      description="Refine the given text via AI completion.",
+      action_type="write",
+      event="text_refined",
+      background=True,        # auto-wrap in ctx.background_task
+      long_running=False,     # default cap 180s; True → 1800s
+  )
+  async def refine_output(ctx, params: RefineParams) -> ActionResult:
+      # Body runs detached. No inner _work() wrapper, no manual task_id.
+      await ctx.progress(50, "Generating with AI")
+      resp = await ctx.http.post(api_url, json={...}, timeout=120)
+      return ActionResult.success(
+          summary="Refined output ready!",
+          data={"text": resp.body["text"]},
+      )
+  ```
+
+- **Manifest emission** — tools in `imperal.json` now carry `background`
+  and `long_running` booleans. Strict `Manifest.Tool` schema gains
+  matching optional fields.
+
+### Trade-offs vs. explicit `ctx.background_task(coro)`
+
+- **Sugar** is best for handlers whose entire body is the long work.
+- **Explicit** stays preferred when you need to return a custom
+  acknowledgement summary, choose `background_task()` conditionally at
+  runtime, or run mixed sync + background work in the same handler.
+
+### Migration
+
+None required — `background` defaults to `False`. Existing
+`@chat.function` handlers work unchanged.
+
 ## 4.2.12 — 2026-05-14
 
 **Feat: LONGRUN-V1 Session 1 — long-running operations primitives**

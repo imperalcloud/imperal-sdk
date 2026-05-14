@@ -102,6 +102,12 @@ class Tool(BaseModel):
     effects: List[str] = Field(default_factory=list)
     params_schema: Optional[Dict[str, Any]] = None
     return_schema: Optional[Dict[str, Any]] = None
+    # LONGRUN-V1 Component D (v4.2.13+) — declarative background-task sugar.
+    # When background=True, the SDK chat handler auto-wraps invocations of
+    # this tool in ctx.background_task(). long_running=True raises the
+    # federal 180s cap to 1800s.
+    background: Optional[bool] = None
+    long_running: Optional[bool] = None
     event: Optional[str] = None
     owner_chat_tool: Optional[str] = None
     synthetic: Optional[bool] = None
