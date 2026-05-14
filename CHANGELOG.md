@@ -2,6 +2,54 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.12 — 2026-05-14
+
+**Feat: LONGRUN-V1 Session 1 — long-running operations primitives**
+
+Three new SDK surfaces for ops that exceed the 30s `ctx.http` ceiling:
+
+### Added
+
+- **`ctx.http.{get,post,put,patch,delete}(..., timeout=N)` per-call kwarg.**
+  Federal cap 180s (`I-LONGRUN-HTTP-CAP-180S`). Anything larger raises
+  `ValueError("ctx.http timeout {N}s exceeds federal cap (180s)...")` —
+  use `ctx.background_task()` for longer ops.
+
+- **`ctx.background_task(coro, *, long_running=False, name="") -> str`**
+  — explicit opt-in for the kernel's auto-promote path. Coro runs detached
+  via `asyncio.create_task`; kernel auto-delivers its returned
+  `ActionResult` as a fresh bot message to the user's chat when done.
+  `long_running=True` raises the 180s cap to 1800s
+  (`LONG_RUNNING_TASK_S`). Returns task_id immediately.
+
+- **`ctx.deliver_chat_message(text, *, msg_type="response", refresh_panels=None)`**
+  — public API for extension-initiated bot turn injection. Posts to
+  auth-gw `/v1/internal/chat/inject`. Text truncated to 64KB with marker.
+  `msg_type` ∈ `{response, system, tool_result}`.
+
+### Federal invariants (new)
+
+- `I-LONGRUN-HTTP-CAP-180S` — per-call timeout federal cap
+- `I-LONGRUN-BG-CORO-RETURNS-ACTIONRESULT` — coro contract enforced
+  kernel-side via `_explicit_background_task_completion` isinstance
+  check; violation writes critical audit row + delivers fallback error.
+- `I-LONGRUN-BG-USER-SCOPED` — task bound to `(ext_id, user_id)` at
+  creation (existing `util/task_manager.py` invariant).
+- `I-LONGRUN-CHAT-INJECT-USER-SCOPED` — `X-Acting-User` header must
+  match `body.user_id` (auth-gw 403 on mismatch).
+- `I-LONGRUN-CHAT-INJECT-AUDIT-EVERY` — every inject writes an
+  `action_ledger` row through the `write_audit` chokepoint.
+
+### Spec
+
+`superpowers/specs/2026-05-13-longrun-v1-design.md`. Sessions 2 (Sharelock
+canary migration) and 3 (docs + observability) ship after 24h soak.
+
+### Migration
+
+None required — all additions are additive opt-in. Existing extensions
+work unchanged.
+
 ## 4.2.11 — 2026-05-13
 
 **Fix: `ui.Link(text=...)` no longer breaks panel render**
