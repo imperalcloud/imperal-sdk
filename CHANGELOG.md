@@ -23,22 +23,21 @@ Three new SDK surfaces for ops that exceed the 30s `ctx.http` ceiling:
   (`LONG_RUNNING_TASK_S`). Returns task_id immediately.
 
 - **`ctx.deliver_chat_message(text, *, msg_type="response", refresh_panels=None)`**
-  — public API for extension-initiated bot turn injection. Posts to
-  auth-gw `/v1/internal/chat/inject`. Text truncated to 64KB with marker.
-  `msg_type` ∈ `{response, system, tool_result}`.
+  — public API for extension-initiated bot turn injection. Text truncated
+  to 64KB with marker. `msg_type` ∈ `{response, system, tool_result}`.
 
 ### Federal invariants (new)
 
-- `I-LONGRUN-HTTP-CAP-180S` — per-call timeout federal cap
-- `I-LONGRUN-BG-CORO-RETURNS-ACTIONRESULT` — coro contract enforced
-  kernel-side via `_explicit_background_task_completion` isinstance
-  check; violation writes critical audit row + delivers fallback error.
-- `I-LONGRUN-BG-USER-SCOPED` — task bound to `(ext_id, user_id)` at
-  creation (existing `util/task_manager.py` invariant).
-- `I-LONGRUN-CHAT-INJECT-USER-SCOPED` — `X-Acting-User` header must
-  match `body.user_id` (auth-gw 403 on mismatch).
-- `I-LONGRUN-CHAT-INJECT-AUDIT-EVERY` — every inject writes an
-  `action_ledger` row through the `write_audit` chokepoint.
+- `I-LONGRUN-HTTP-CAP-180S` — per-call timeout federal cap.
+- `I-LONGRUN-BG-CORO-RETURNS-ACTIONRESULT` — the coroutine MUST return
+  `ActionResult`; non-ActionResult return triggers a critical audit row
+  and delivers a fallback error to chat.
+- `I-LONGRUN-BG-USER-SCOPED` — every background task is bound to
+  `(ext_id, user_id)` at creation; cross-user cancel/status returns 403.
+- `I-LONGRUN-CHAT-INJECT-USER-SCOPED` — chat inject scoped to
+  `(ext_id, user_id)`; cross-user inject returns 403.
+- `I-LONGRUN-CHAT-INJECT-AUDIT-EVERY` — every chat inject writes an
+  audit row.
 
 ### Migration
 
