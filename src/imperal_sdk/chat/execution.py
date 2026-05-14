@@ -23,6 +23,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from imperal_sdk.chat.filters import trim_tool_result
 from imperal_sdk.chat.action_result import ActionResult
+from imperal_sdk.chat.exceptions import TaskCancelled
 from imperal_sdk.chat.retry import (
     format_pydantic_for_llm,
     _emit_retry_outcome,

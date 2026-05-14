@@ -56,9 +56,11 @@ from imperal_sdk.chat.retry import (
 )
 
 
-class TaskCancelled(Exception):
-    """Raised by ctx.progress() when user cancels a task."""
-    pass
+# v5-27 follow-up (2026-05-14): TaskCancelled moved to chat.exceptions so
+# execution.py can import without a circular dep. Re-export here for
+# back-compat — callers doing `from imperal_sdk.chat.handler import
+# TaskCancelled` continue to work.
+from imperal_sdk.chat.exceptions import TaskCancelled  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
