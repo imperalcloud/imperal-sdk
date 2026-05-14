@@ -2,6 +2,52 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.15 — 2026-05-14
+
+**Feat: federal placeholder-args guard (I-PARAMS-NO-PLACEHOLDER-VALUES)**
+
+New ChatExtension guard that rejects any tool call whose arg values look
+like LLM-emitted placeholder sentinels — e.g. `<UNKNOWN>`, `<TODO>`,
+`<MISSING>`, `<EMAIL>`, `<PASSWORD>`, `<USER_ID>`. Runs **before**
+write-arg-bleed, target-scope, and 2-step confirmation guards so the
+dispatch is short-circuited before any billing-charged work or audit-ledger
+pollution. Friendly instruction-to-LLM rejection text feeds back through
+the chat loop as a synthetic tool_result so the LLM can self-correct
+and ask the user a clarifying question.
+
+Motivating incident (2026-05-14): admin extension's `tool_admin_chat`
+ChatExtension wrapper LLM produced `create_user({'email': '<UNKNOWN>',
+'password': '<UNKNOWN>'})` when the user had not yet provided concrete
+values. The anti-fab response-side layer correctly caught the drift
+(`server did not reflect 'email': requested '<UNKNOWN>', got None`) but by
+then the dispatch had already wasted billing, polluted `action_ledger`
+with `target=<UNKNOWN>` rows, and produced an opaque user-visible failure.
+This guard fails fast on the request side.
+
+### Added
+
+- **`check_placeholder_args(tu, action_type) -> str | None`** in
+  `imperal_sdk.chat.guards` — recursive scan of `tu.input` (dict/list/str)
+  for values matching `^<[A-Z][A-Z0-9_]*>$`. Tight regex — narrow
+  false-positive surface: matches only uppercase-ASCII sentinel tokens,
+  ignores prose containing `<UNKNOWN>` as a substring (e.g. error message
+  bodies). Whitespace-tolerant via `.strip()`.
+
+- **`_PLACEHOLDER_RE`** and **`_scan_for_placeholders(value)`** helpers
+  (module-private; recursive over dict values and list/tuple items).
+
+- Integration into `check_guards()` orchestrator before
+  `check_write_arg_bleed`. Federal invariant
+  **I-PARAMS-NO-PLACEHOLDER-VALUES** registered in kernel
+  `tests/federal/_invariant_assertions.py`.
+
+### Why a PATCH bump (not MINOR)
+
+Strictly additive — new guard with default-allow surface. Existing
+extensions emit no placeholder sentinels in legitimate flows, so the
+guard is a no-op for every real call. No manifest schema change, no API
+break, no rebuild required for downstream extensions.
+
 ## 4.2.14 — 2026-05-14
 
 **Fix: regenerate static `imperal.schema.json` to match runtime `Manifest` model**

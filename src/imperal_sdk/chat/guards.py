@@ -118,6 +118,22 @@ def check_guards(
         # Do not append to _functions_called; do not return a verdict — fall
         # through to target_scope + confirmation guards below.
 
+    # ── Placeholder-args guard (I-PARAMS-NO-PLACEHOLDER-VALUES) ───
+    # Defence-in-depth: reject ANY tool call whose arg values are LLM-emitted
+    # placeholder sentinels (`<UNKNOWN>`, `<TODO>`, `<MISSING>`, etc).
+    # Runs BEFORE write-arg-bleed + target-scope + confirmation guards so
+    # we fail fast on poisoned inputs and never waste a billing-charged
+    # dispatch or pollute the audit ledger with `target=<UNKNOWN>` rows.
+    # See federal invariant **I-PARAMS-NO-PLACEHOLDER-VALUES**.
+    placeholder_reason = check_placeholder_args(tu, action_type)
+    if placeholder_reason is not None:
+        chat_ext._functions_called.append({
+            "name": tu.name, "params": tu.input,
+            "action_type": action_type, "success": False, "intercepted": False,
+            "event": "", "result": None,
+        })
+        return json.dumps({"RESULT": "BLOCKED", "error": placeholder_reason})
+
     # ── Write-arg-bleed guard (I-WRITE-ARG-NO-BLEED) ──────────────
     # Defence-in-depth: reject any write/destructive call whose args contain
     # substrings of prior ERROR_TAXONOMY codes, even if the LLM paraphrased
@@ -143,6 +159,92 @@ def check_guards(
         return intercepted
 
     return None
+
+
+# Federal invariant **I-PARAMS-NO-PLACEHOLDER-VALUES** sentinel pattern.
+# Matches LLM-emitted placeholder values of the form `<NAME>` where NAME is
+# uppercase ASCII + digits + underscores (e.g. `<UNKNOWN>`, `<TODO>`,
+# `<MISSING>`, `<EMAIL>`, `<PASSWORD>`, `<USER_ID>`). The pattern is
+# deliberately tight — narrow false-positive surface — and only flags values
+# that are EXACTLY one sentinel token after `.strip()`. Real prose containing
+# `<UNKNOWN>` as a substring (e.g. error messages, comments) does NOT match.
+_PLACEHOLDER_RE = re.compile(r"^<[A-Z][A-Z0-9_]*>$")
+
+
+def _scan_for_placeholders(value: Any, _path: str = "") -> list[tuple[str, str]]:
+    """Recursive scan for placeholder values.
+
+    Returns a list of ``(json-path, matched-value)`` tuples; empty list when
+    nothing matched. Recurses into dict values and list/tuple items. Caps
+    recursion depth implicitly via JSON shape (no cycles in tool_use input).
+    """
+    hits: list[tuple[str, str]] = []
+    if isinstance(value, str):
+        s = value.strip()
+        if _PLACEHOLDER_RE.match(s):
+            hits.append((_path or "$", s))
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            hits.extend(_scan_for_placeholders(v, f"{_path}.{k}" if _path else str(k)))
+    elif isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            hits.extend(_scan_for_placeholders(v, f"{_path}[{i}]"))
+    return hits
+
+
+def check_placeholder_args(tu, action_type: str) -> str | None:
+    """Reject any tool call whose arg values look like LLM-emitted placeholder
+    sentinels (e.g. ``<UNKNOWN>``, ``<TODO>``, ``<MISSING>``).
+
+    Federal invariant **I-PARAMS-NO-PLACEHOLDER-VALUES**: when the LLM does
+    not have a real value for a required field, it sometimes substitutes a
+    placeholder token instead of asking the user. The downstream anti-fab
+    layer catches the drift on the response side (``server did not reflect
+    'email': requested '<UNKNOWN>', got None``), but by then the dispatch has
+    already wasted billing tokens, polluted the audit ledger with
+    ``target=<UNKNOWN>`` rows, and produced an opaque user-visible failure.
+    This guard fails fast on the request side and surfaces a friendly ask
+    back to the LLM so it can clarify with the user.
+
+    Applies to **all** ``action_type`` values (read/write/destructive) —
+    placeholder values are never legitimate.
+
+    Returns
+    -------
+    str | None
+        ``None`` to allow the dispatch through, or a human-readable rejection
+        reason that the caller wraps into the standard
+        ``{"RESULT": "BLOCKED", "error": ...}`` envelope. The reason is
+        deliberately framed as an instruction to the LLM (not the end user)
+        because the SDK chat loop feeds it back as a synthetic tool_result so
+        the LLM can self-correct and emit a clarifying question.
+    """
+    payload = getattr(tu, "input", None)
+    if not payload:
+        return None
+    try:
+        hits = _scan_for_placeholders(payload)
+    except Exception:
+        # Defensive — never block on the scanner itself raising on exotic
+        # payloads. Real placeholder values are str-scalar and trivially
+        # serialisable; if scan blows up it is on something that cannot
+        # contain a placeholder anyway.
+        return None
+    if not hits:
+        return None
+    field_list = ", ".join(f"`{f}`" for f, _ in hits[:5])
+    log.warning(
+        f"ChatExtension guard: PLACEHOLDER_ARGS blocked {getattr(tu, 'name', '?')} "
+        f"action={action_type} fields={[f for f, _ in hits]}"
+    )
+    return (
+        f"PLACEHOLDER_ARGS rejected: tool call '{getattr(tu, 'name', '?')}' "
+        f"contains placeholder value(s) in: {field_list}. The user did not "
+        f"provide concrete values for these fields and you emitted sentinel "
+        f"tokens (e.g. <UNKNOWN>) instead. Do not dispatch with placeholders. "
+        f"Ask the user a clarifying question to obtain the missing values, "
+        f"then retry with the real data."
+    )
 
 
 def check_write_arg_bleed(
