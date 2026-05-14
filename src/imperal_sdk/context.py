@@ -290,6 +290,47 @@ class Context:
         if cb:
             await cb(percent, message)
 
+    async def background_task(
+        self,
+        coro,
+        *,
+        long_running: bool = False,
+        name: str = "",
+    ) -> str:
+        """Spawn a coroutine in the background; return task_id immediately.
+
+        The kernel detaches ``coro`` via ``asyncio.create_task`` and tracks
+        it as an explicit-opt-in background task (federal task lifecycle in
+        ``util/task_manager.py``). When ``coro`` completes, the kernel
+        auto-delivers its returned ``ActionResult`` as a fresh bot message
+        in the user's chat via the existing ``_deliver_to_chat`` pipeline.
+
+        Args:
+            coro: A coroutine returning ``ActionResult``. Required.
+            long_running: ``False`` (default) → 180s federal cap.
+                          ``True`` → 1800s cap (``LONG_RUNNING_TASK_S``).
+            name: Human-readable name for UI/audit (default ``"background"``).
+
+        Returns:
+            task_id (str) — federal Redis key ``imperal:task:{task_id}``.
+
+        Raises:
+            RuntimeError: if ``ctx`` lacks kernel-injected spawn hook
+                (e.g. dev mode or non-extension dispatch context).
+
+        Federal: ``I-LONGRUN-BG-CORO-RETURNS-ACTIONRESULT`` — ``coro`` MUST
+        return ``ActionResult``; non-ActionResult return triggers a critical
+        audit row and delivers a fallback error to chat.
+        """
+        spawn = getattr(self, "_background_task_spawn", None)
+        if spawn is None:
+            raise RuntimeError(
+                "ctx.background_task not available in this context — the "
+                "Context was constructed without a kernel-injected spawn "
+                "hook. This is typically a test harness or dev-mode issue."
+            )
+        return await spawn(coro, long_running=long_running, name=name or "background")
+
     async def log(self, message: str, level: str = "info") -> None:
         """Structured log visible in extension dashboard."""
         import logging
