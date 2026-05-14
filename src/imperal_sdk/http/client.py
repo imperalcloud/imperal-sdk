@@ -15,7 +15,6 @@ def _wrap(resp: httpx.Response) -> HTTPResponse:
         except Exception:
             body = resp.text
     elif resp.content:
-        # Return text for text/* or small responses; bytes otherwise
         try:
             body = resp.text
         except Exception:
@@ -26,26 +25,62 @@ def _wrap(resp: httpx.Response) -> HTTPResponse:
 
 
 class HTTPClient:
-    def __init__(self, timeout: int = 30, max_redirects: int = 5):
+    """Federal HTTP client.
+
+    Per-call ``timeout=`` kwarg overrides the instance default. Federal
+    cap is 180 seconds (``I-LONGRUN-HTTP-CAP-180S``) — anything longer
+    must use :func:`ctx.background_task` instead.
+    """
+
+    def __init__(
+        self,
+        timeout: float = 30,
+        max_redirects: int = 5,
+        max_timeout: float = 180,
+    ):
         self._timeout = timeout
+        self._max_timeout = max_timeout
         self._max_redirects = max_redirects
 
-    async def get(self, url: str, **kwargs) -> HTTPResponse:
-        async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True, max_redirects=self._max_redirects) as client:
-            return _wrap(await client.get(url, **kwargs))
+    def _resolve_timeout(self, override: float | None) -> float:
+        if override is None:
+            return self._timeout
+        if override <= 0:
+            raise ValueError(f"ctx.http timeout must be > 0; got {override}")
+        if override > self._max_timeout:
+            raise ValueError(
+                f"ctx.http timeout {override}s exceeds federal cap "
+                f"({self._max_timeout}s). For >180s use ctx.background_task() "
+                f"— see concepts/long-running-operations."
+            )
+        return override
 
-    async def post(self, url: str, **kwargs) -> HTTPResponse:
-        async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True, max_redirects=self._max_redirects) as client:
-            return _wrap(await client.post(url, **kwargs))
+    async def get(self, url: str, *, timeout: float | None = None, **kwargs) -> HTTPResponse:
+        t = self._resolve_timeout(timeout)
+        async with httpx.AsyncClient(timeout=t, follow_redirects=True,
+                                     max_redirects=self._max_redirects) as c:
+            return _wrap(await c.get(url, **kwargs))
 
-    async def put(self, url: str, **kwargs) -> HTTPResponse:
-        async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True, max_redirects=self._max_redirects) as client:
-            return _wrap(await client.put(url, **kwargs))
+    async def post(self, url: str, *, timeout: float | None = None, **kwargs) -> HTTPResponse:
+        t = self._resolve_timeout(timeout)
+        async with httpx.AsyncClient(timeout=t, follow_redirects=True,
+                                     max_redirects=self._max_redirects) as c:
+            return _wrap(await c.post(url, **kwargs))
 
-    async def patch(self, url: str, **kwargs) -> HTTPResponse:
-        async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True, max_redirects=self._max_redirects) as client:
-            return _wrap(await client.patch(url, **kwargs))
+    async def put(self, url: str, *, timeout: float | None = None, **kwargs) -> HTTPResponse:
+        t = self._resolve_timeout(timeout)
+        async with httpx.AsyncClient(timeout=t, follow_redirects=True,
+                                     max_redirects=self._max_redirects) as c:
+            return _wrap(await c.put(url, **kwargs))
 
-    async def delete(self, url: str, **kwargs) -> HTTPResponse:
-        async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True, max_redirects=self._max_redirects) as client:
-            return _wrap(await client.delete(url, **kwargs))
+    async def patch(self, url: str, *, timeout: float | None = None, **kwargs) -> HTTPResponse:
+        t = self._resolve_timeout(timeout)
+        async with httpx.AsyncClient(timeout=t, follow_redirects=True,
+                                     max_redirects=self._max_redirects) as c:
+            return _wrap(await c.patch(url, **kwargs))
+
+    async def delete(self, url: str, *, timeout: float | None = None, **kwargs) -> HTTPResponse:
+        t = self._resolve_timeout(timeout)
+        async with httpx.AsyncClient(timeout=t, follow_redirects=True,
+                                     max_redirects=self._max_redirects) as c:
+            return _wrap(await c.delete(url, **kwargs))
