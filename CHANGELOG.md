@@ -40,11 +40,6 @@ Three new SDK surfaces for ops that exceed the 30s `ctx.http` ceiling:
 - `I-LONGRUN-CHAT-INJECT-AUDIT-EVERY` — every inject writes an
   `action_ledger` row through the `write_audit` chokepoint.
 
-### Spec
-
-`superpowers/specs/2026-05-13-longrun-v1-design.md`. Sessions 2 (Sharelock
-canary migration) and 3 (docs + observability) ship after 24h soak.
-
 ### Migration
 
 None required — all additions are additive opt-in. Existing extensions
