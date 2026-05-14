@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+import httpx
+
 from imperal_sdk.types.identity import UserContext, TenantContext
 
 if TYPE_CHECKING:
@@ -330,6 +332,65 @@ class Context:
                 "hook. This is typically a test harness or dev-mode issue."
             )
         return await spawn(coro, long_running=long_running, name=name or "background")
+
+    async def deliver_chat_message(
+        self,
+        text: str,
+        *,
+        msg_type: str = "response",
+        refresh_panels: list[str] | None = None,
+    ) -> None:
+        """Inject a bot message into user's chat at any time.
+
+        Mirrors the existing kernel auto-promote chat-injection path
+        (``pipeline/task_delivery.py:_deliver_to_chat``) but is callable
+        explicitly from extension code. Use cases:
+          - Background task multi-stage announcements before final result
+          - Webhook acknowledgements ("Spotify connected!")
+          - Any one-off bot message that skeleton-alert polling can't model
+
+        Args:
+            text: Bot message body (Markdown). Truncated to 64KB if larger.
+            msg_type: ``"response"`` (default — bot turn),
+                      ``"system"`` (italicized notice),
+                      ``"tool_result"`` (formatted as tool execution).
+            refresh_panels: optional list of panel_ids to re-render after.
+
+        Federal: ``I-LONGRUN-CHAT-INJECT-USER-SCOPED`` — inject scoped to
+        ``(ext_id, user_id)``; cross-user inject returns 403.
+        ``I-LONGRUN-CHAT-INJECT-AUDIT-EVERY`` — every inject writes an
+        audit row in ``action_ledger``.
+        """
+        MAX_BYTES = 64 * 1024
+        if len(text.encode("utf-8")) > MAX_BYTES:
+            text = text.encode("utf-8")[:MAX_BYTES].decode("utf-8", errors="ignore") + "...(truncated)"
+
+        ext_id = getattr(self, "_extension_id", None)
+        user_id = getattr(self, "_user_id", None) or getattr(self.user, "imperal_id", None)
+        gateway_url = getattr(self, "_gateway_url", None)
+        service_token = getattr(self, "_service_token", None)
+        if not all([ext_id, user_id, gateway_url, service_token]):
+            raise RuntimeError(
+                "ctx.deliver_chat_message requires kernel-injected (ext_id, "
+                "user_id, gateway_url, service_token). Not available in this "
+                "context (likely a test harness or dev-mode dispatch)."
+            )
+
+        url = f"{gateway_url.rstrip('/')}/v1/internal/chat/inject"
+        body = {
+            "ext_id": ext_id,
+            "user_id": user_id,
+            "text": text,
+            "msg_type": msg_type,
+        }
+        if refresh_panels:
+            body["refresh_panels"] = refresh_panels
+        headers = {
+            "X-Service-Token": service_token,
+            "X-Acting-User": user_id,
+        }
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            await c.post(url, json=body, headers=headers)
 
     async def log(self, message: str, level: str = "info") -> None:
         """Structured log visible in extension dashboard."""
