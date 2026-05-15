@@ -137,6 +137,57 @@ async def test_unknown_sub_function_surfaces_error_code(chat_ext_factory):
 
 
 @pytest.mark.asyncio
+async def test_unknown_function_log_line_carries_will_reject_marker(chat_ext_factory, caplog):
+    """v4.2.16 — when LLM hallucinates a tool name not in _functions,
+    the log line in the tool-use loop MUST carry ' UNKNOWN_FUNCTION(will-reject)'
+    marker so operators can distinguish hallucinations from real tool calls
+    in journals.
+    """
+    import logging
+    import imperal_sdk.runtime.llm_provider as _llm_provider_mod
+
+    cx, _ext = chat_ext_factory()
+    ctx = _make_ctx()
+
+    # Register one real function so the tool list is non-empty and handle_message
+    # enters the tool-use loop instead of returning "No functions registered" early.
+    @cx.function("real_fn", "A real function", action_type="read")
+    async def real_fn(ctx):  # noqa: ARG001
+        return {"ok": True}
+
+    # Round 1: LLM returns one hallucinated tool_use (not in cx._functions).
+    response_with_unknown_tu = _fake_tool_use_response(
+        [("nonexistent_fn", {"x": 1}, "tu-unknown-1")]
+    )
+    # Round 2: LLM returns plain text → loop exits.
+    response_terminal_text = _NameSpace(
+        content=[_NameSpace(type="text", text="Done.")],
+    )
+
+    fake_client = _NameSpace(
+        create_message=AsyncMock(side_effect=[response_with_unknown_tu, response_terminal_text])
+    )
+    original = _llm_provider_mod.get_llm_provider
+    _llm_provider_mod.get_llm_provider = lambda: fake_client
+    try:
+        with caplog.at_level(logging.INFO, logger="imperal_sdk.chat.handler"):
+            await handle_message(cx, ctx, message="trigger")
+    finally:
+        _llm_provider_mod.get_llm_provider = original
+
+    log_lines = [r.getMessage() for r in caplog.records]
+    matching = [ln for ln in log_lines if "nonexistent_fn" in ln and "ChatExtension" in ln]
+    assert matching, (
+        f"expected at least one ChatExtension log line mentioning the "
+        f"hallucinated nonexistent_fn; got log lines: {log_lines}"
+    )
+    assert any("UNKNOWN_FUNCTION(will-reject)" in ln for ln in matching), (
+        f"expected ' UNKNOWN_FUNCTION(will-reject)' marker in the log line "
+        f"for hallucinated tool name; got matching lines: {matching}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_pydantic_validation_error_surfaces_VALIDATION_MISSING_FIELD(chat_ext_factory):
     cx, _ext = chat_ext_factory()
     ctx = _make_ctx()
