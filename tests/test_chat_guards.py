@@ -86,6 +86,7 @@ import pytest
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy LLM router removed in v5.0.0; _execute_function deleted with handler.py — ported test pending")
 async def test_handler_intercepts_fabricated_message_id():
     """End-to-end: _execute_function returns FABRICATED_ID_SHAPE envelope."""
     from imperal_sdk.chat.handler import _execute_function

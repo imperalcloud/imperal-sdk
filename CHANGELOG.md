@@ -2,6 +2,18 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.0.0 — 2026-05-15 — Unified Chain Orchestrator
+
+**BREAKING:**
+- `ChatExtension._route_with_llm` and the SDK-internal LLM router loop removed. All multi-tool reasoning now routes through kernel `chain_executor`.
+- `ChatExtension.__init__` kwargs `tool_name=` and `system_prompt=` deprecated (no-op with WARN; removed in 5.1.0).
+- Manifest emitter no longer produces `tool_<ext>_chat` orchestrator-tool entries.
+- New validator V25 (ERROR severity): rejects manifests containing `tool_*_chat` entries.
+
+**Migration:** Move content from `ChatExtension(system_prompt=...)` into `Extension(description=...)` and per-`@chat.function(description=...)`. Required kernel: 5.0.0+.
+
+Closes a class of fabrication bugs in multi-tool dispatches where the SDK LLM router aggregated N inner tool calls into one DispatchResult with cloned `.data`, producing identical structured records for distinct tool functions.
+
 ## 4.2.16 — 2026-05-15
 
 Enriched tool_use log with `UNKNOWN_FUNCTION(will-reject)` marker when the

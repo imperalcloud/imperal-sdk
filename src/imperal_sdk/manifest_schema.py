@@ -48,6 +48,9 @@ SCOPE_PATTERN = re.compile(
 
 # 5-field cron or @-keyword (matches croniter / standard unix).
 _CRON_5FIELD = re.compile(r"^\S+(?:\s+\S+){4}$")
+
+# V25 — federal: I-MANIFEST-NO-ORCHESTRATOR-TOOL
+_ORCH_TOOL_RE = re.compile(r"^tool_.+_chat$")
 _CRON_KEYWORD = re.compile(
     r"^@(?:hourly|daily|weekly|monthly|yearly|annually|reboot)$"
 )
@@ -284,6 +287,8 @@ class Manifest(BaseModel):
     # SDK contract version emitted by `generate_manifest`; consumed by
     # validator_v1_6_0.SDK-VERSION-1 to detect extensions that pre-date
     # the v1.6.0 cache + skeleton contract.
+    # Federal I-LOADER-REJECTS-LEGACY-LLM-ROUTER: kernel rejects loads
+    # with sdk_version < 5.0.0 (unified-chain minimum).
     sdk_version: Optional[str] = None
     app_id: str
     version: str
@@ -472,6 +477,24 @@ def validate_manifest_dict(data: Any) -> List["ValidationIssue"]:
             raise ValueError(
                 f"M8.2 exposed[].name duplicate — names must be unique: {names}"
             )
+
+    # V25 — federal: I-MANIFEST-NO-ORCHESTRATOR-TOOL
+    # Manifests MUST NOT contain `tool_<ext>_chat` orchestrator-tool entries.
+    # These were emitted by ChatExtension's now-removed LLM router (SDK <5.0.0).
+    # Extensions rebuilt against SDK 5.0.0+ no longer produce them.
+    for tool in data.get("tools") or []:
+        name = tool.get("name", "") if isinstance(tool, dict) else ""
+        if _ORCH_TOOL_RE.match(name):
+            # federal: I-MANIFEST-NO-ORCHESTRATOR-TOOL — V25 rule emit site
+            issues.append(ValidationIssue(
+                rule="V25", level="ERROR",
+                message=(
+                    f"manifest contains orchestrator-tool '{name}' — "
+                    f"this was emitted by ChatExtension LLM router (SDK <5.0.0). "
+                    f"Rebuild against imperal-sdk>=5.0.0 to remove."
+                ),
+                fix="Remove the tool_*_chat entry and rebuild with imperal-sdk>=5.0.0.",
+            ))
 
     return issues
 

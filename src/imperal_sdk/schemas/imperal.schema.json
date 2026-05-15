@@ -567,7 +567,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Shape of the `imperal.json` file produced by `imperal_sdk.manifest.generate_manifest()` and consumed by the Imperal Cloud Registry. Validated at deploy-time by `imperal_sdk.manifest_schema.validate_manifest_dict`.",
+  "description": "Schema for `imperal.json`.\n\nBase fields (produced by `generate_manifest`) are required; marketplace\nfields merged from disk are optional. Unknown top-level keys are\nrejected \u2014 typos like `\"schedule\"` (singular) would otherwise silently\ndisable scheduled tasks.",
   "properties": {
     "manifest_schema_version": {
       "anyOf": [
@@ -930,7 +930,6 @@
     "app_id",
     "version"
   ],
-  "title": "Imperal Extension Manifest",
-  "type": "object",
-  "$id": "https://imperal.io/schemas/imperal.schema.json"
+  "title": "Manifest",
+  "type": "object"
 }
