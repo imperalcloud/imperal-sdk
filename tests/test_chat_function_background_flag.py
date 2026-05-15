@@ -84,6 +84,7 @@ def test_manifest_emits_background_and_long_running():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy LLM router removed in v5.0.0; _execute_function deleted with handler.py — ported test pending")
 async def test_handler_wraps_in_background_task_when_flag_set():
     """When background=True, the SDK handler MUST call ctx.background_task
     instead of running the handler synchronously. The tool result returned

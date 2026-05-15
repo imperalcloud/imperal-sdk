@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
-"""ChatExtension — single entry point with LLM routing for extensions."""
+"""ChatExtension — extension registration and typed dispatch surface."""
 from __future__ import annotations
 import logging
 import re
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from imperal_sdk.context import Context as _Context
 
 from imperal_sdk.chat.action_result import ActionResult
-from imperal_sdk.chat.handler import handle_message, TaskCancelled
+from imperal_sdk.chat.exceptions import TaskCancelled
 from imperal_sdk.chat.prompt import build_system_prompt, build_messages, inject_language
 
 log = logging.getLogger(__name__)
@@ -323,11 +323,4 @@ class ChatExtension:
     def _build_messages(self, history, message, context_window=20, keep_recent=6):
         return build_messages(history, message, context_window, keep_recent)
 
-    async def _handle(self, ctx: _Context, message: str = "", **kwargs) -> dict:
-        # ICNLI v7 — propagate SM slice from kernel-supplied skeleton to ctx attr.
-        try:
-            if isinstance(getattr(ctx, "skeleton", None), dict) and "_session_memory_slice" in ctx.skeleton:
-                setattr(ctx, "session_memory_slice", ctx.skeleton["_session_memory_slice"])
-        except Exception:
-            pass
-        return await handle_message(self, ctx, message, **kwargs)
+
