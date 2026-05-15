@@ -107,14 +107,22 @@ class ChatExtension:
                 "Use a neutral capability description instead. "
                 "Example: 'Notes module — manage user notes and folders.'"
             )
+        # v5.0.0 (federal: I-MANIFEST-NO-ORCHESTRATOR-TOOL): orchestrator-tool
+        # auto-registration REMOVED. ChatExtension is now purely a @chat.function
+        # bundle declaration — kernel chain_executor dispatches each function
+        # directly via typed dispatch. tool_name kwarg retained for back-compat
+        # but emits DeprecationWarning. Will be removed in 5.1.0.
+        import warnings as _warnings
+        _warnings.warn(
+            f"ChatExtension(tool_name={tool_name!r}): kwarg deprecated in SDK 5.0.0 "
+            "(orchestrator-tool auto-registration removed). Move classifier-readable "
+            "text into Extension(description=...) + per-@chat.function(description=...). "
+            "Will be removed in 5.1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         ext._chat_extensions = getattr(ext, "_chat_extensions", {})
-        ext._chat_extensions[tool_name] = self
-        # SCOPES MIGRATION (session 27): auto-registered chat entry tool no longer injects
-        # wildcard. Granted capability set = union(Extension.capabilities, per-tool scopes).
-        # If developer declares neither, loader falls back to ["*"] with WARN — migration signal.
-        @ext.tool(tool_name, scopes=[], description=description)
-        async def _entry_point(ctx, message="", **kwargs):
-            return await _self._handle(ctx, message, **kwargs)
+        ext._chat_extensions[tool_name] = self  # registry walk still iterates this
 
     def function(self, name: str, description: str, params: dict | None = None,
                  action_type: str = "read", event: str = "",
