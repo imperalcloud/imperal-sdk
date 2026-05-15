@@ -87,6 +87,18 @@ class ValidationIssue:
     line: int = 0
     fix: str = ""
 
+    def get(self, key: str, default=None):
+        """Dict-style .get() for compatibility with manifest-rule consumers.
+
+        Aliases:
+          ``severity`` → ``level``   (manifest rules use "severity" key)
+          ``detail``   → ``message`` (manifest rules use "detail" key)
+        All other keys map to the matching attribute name.
+        """
+        _ALIASES = {"severity": "level", "detail": "message"}
+        attr = _ALIASES.get(key, key)
+        return getattr(self, attr, default)
+
 
 @dataclass
 class ValidationReport:
@@ -743,3 +755,10 @@ def validate_extension(ext) -> ValidationReport:
             ))
 
     return report
+
+
+# Re-export for consumers that import from imperal_sdk.validator directly.
+# validate_manifest_dict lives in manifest_schema.py (avoids circular import
+# at module load time — manifest_schema already defers its own ValidationIssue
+# import inside the function body).
+from imperal_sdk.manifest_schema import validate_manifest_dict  # noqa: E402,F401
