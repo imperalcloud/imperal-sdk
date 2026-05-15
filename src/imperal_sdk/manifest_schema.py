@@ -287,6 +287,8 @@ class Manifest(BaseModel):
     # SDK contract version emitted by `generate_manifest`; consumed by
     # validator_v1_6_0.SDK-VERSION-1 to detect extensions that pre-date
     # the v1.6.0 cache + skeleton contract.
+    # Federal I-LOADER-REJECTS-LEGACY-LLM-ROUTER: kernel rejects loads
+    # with sdk_version < 5.0.0 (unified-chain minimum).
     sdk_version: Optional[str] = None
     app_id: str
     version: str
