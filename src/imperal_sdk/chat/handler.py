@@ -345,7 +345,8 @@ async def handle_message(chat_ext: ChatExtension, ctx: _Context, message: str = 
             tool_results = []
             for tu in tool_uses:
                 action_type = chat_ext._get_action_type(tu.name)
-                log.info(f"ChatExtension {chat_ext.tool_name} (round {_round+1}): {tu.name}({tu.input}) [action_type={action_type}]")
+                _marker = "" if tu.name in chat_ext._functions else " UNKNOWN_FUNCTION(will-reject)"
+                log.info(f"ChatExtension {chat_ext.tool_name} (round {_round+1}): {tu.name}({tu.input}) [action_type={action_type}{_marker}]")
 
                 guard_content = check_guards(chat_ext, ctx, tu, action_type, confirmation_required)
                 if guard_content is not None:
