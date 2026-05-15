@@ -2,6 +2,22 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 4.2.16 — 2026-05-15
+
+Enriched tool_use log with `UNKNOWN_FUNCTION(will-reject)` marker when the
+LLM hallucinates a tool name not in the extension's `_functions` schema.
+Caught at `handler.py:185` guard with `UNKNOWN_SUB_FUNCTION` error_code;
+this change makes the rejection visible operator-side. Soak monitoring
+can grep `UNKNOWN_FUNCTION(will-reject)` to track LLM hallucination rate.
+
+Behavior change: log line format only. No federal contract impact. No
+SDK API surface change.
+
+Closes: sql-db isolation investigation false-positive (operator reading
+journals saw `tool_sql_db_chat (round 2): send(...)` and assumed an
+isolation breach; actual cause was LLM hallucination caught by existing
+UNKNOWN_SUB_FUNCTION guard).
+
 ## 4.2.15 — 2026-05-14
 
 **Feat: federal placeholder-args guard (I-PARAMS-NO-PLACEHOLDER-VALUES)**
