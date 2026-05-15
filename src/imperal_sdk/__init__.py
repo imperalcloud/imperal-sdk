@@ -39,7 +39,7 @@ from imperal_sdk.secrets import (
     SecretValueTooLarge, SecretDeclarationConflict,
 )
 
-__version__ = "4.2.16"
+__version__ = "5.0.0"
 
 __all__ = [
     # Core
