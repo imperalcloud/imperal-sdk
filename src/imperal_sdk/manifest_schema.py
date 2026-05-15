@@ -48,6 +48,9 @@ SCOPE_PATTERN = re.compile(
 
 # 5-field cron or @-keyword (matches croniter / standard unix).
 _CRON_5FIELD = re.compile(r"^\S+(?:\s+\S+){4}$")
+
+# V25 — federal: I-MANIFEST-NO-ORCHESTRATOR-TOOL
+_ORCH_TOOL_RE = re.compile(r"^tool_.+_chat$")
 _CRON_KEYWORD = re.compile(
     r"^@(?:hourly|daily|weekly|monthly|yearly|annually|reboot)$"
 )
@@ -473,14 +476,14 @@ def validate_manifest_dict(data: Any) -> List["ValidationIssue"]:
                 f"M8.2 exposed[].name duplicate — names must be unique: {names}"
             )
 
-    # V25 (federal `I-MANIFEST-NO-ORCHESTRATOR-TOOL`):
+    # V25 — federal: I-MANIFEST-NO-ORCHESTRATOR-TOOL
     # Manifests MUST NOT contain `tool_<ext>_chat` orchestrator-tool entries.
     # These were emitted by ChatExtension's now-removed LLM router (SDK <5.0.0).
     # Extensions rebuilt against SDK 5.0.0+ no longer produce them.
-    _ORCH_TOOL_RE = re.compile(r"^tool_.+_chat$")
     for tool in data.get("tools") or []:
         name = tool.get("name", "") if isinstance(tool, dict) else ""
         if _ORCH_TOOL_RE.match(name):
+            # federal: I-MANIFEST-NO-ORCHESTRATOR-TOOL — V25 rule emit site
             issues.append(ValidationIssue(
                 rule="V25", level="ERROR",
                 message=(
