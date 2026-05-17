@@ -142,11 +142,14 @@ class Extension:
         # EXT-SECRETS-V1 (v4.2.2) — declared secrets emitted into manifest.secrets[]
         self._secrets: dict[str, "SecretSpec"] = {}
 
-        # EXT-SECRETS-V1 (v4.2.4) — auto-register synthetic 'secrets' panel
-        # unconditionally for every Extension. Empty state (no @ext.secret
-        # declared) renders developer guidance with code example. Federal
-        # contract enforced platform-side regardless of UI presence.
-        self._auto_register_secrets_panel()
+        # v5.0.1 UX fix: synthetic 'secrets' panel is now registered LAZILY
+        # — only when the extension calls @ext.secret(...) for the first
+        # time. Previously the panel was added unconditionally to every
+        # Extension and appeared as an empty placeholder in the right slot
+        # of every chat session even for extensions that declare zero
+        # secrets. Lazy registration happens in ``secret()`` below; the
+        # synthetic Secrets panel UI is identical when the extension
+        # actually has secrets to show.
 
     def _auto_register_secrets_panel(self) -> None:
         """Register the platform-provided 'secrets' panel.

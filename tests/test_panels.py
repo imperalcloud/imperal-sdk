@@ -34,12 +34,28 @@ class TestPanelDecorator:
         async def left(ctx): pass
         @ext.panel("stats", slot="right", title="Right")
         async def right(ctx): pass
-        # +1 for the synthetic 'secrets' panel auto-injected by Extension.__init__
-        # (EXT-SECRETS-V1 v4.2.4) — see Extension._auto_register_secrets_panel.
-        assert len(ext.panels) == 3
+        # v5.0.1: synthetic 'secrets' panel is now lazily registered only
+        # when the extension calls @ext.secret(...). Extensions without
+        # secrets get only the panels they explicitly declared.
+        assert len(ext.panels) == 2
         assert "sidebar" in ext.panels
         assert "stats" in ext.panels
-        assert "secrets" in ext.panels
+        assert "secrets" not in ext.panels
+
+    def test_secrets_panel_lazy_registered_only_with_declared_secret(self):
+        """v5.0.1 — synthetic Secrets panel is lazy-registered."""
+        ext = Extension("no-secret-app")
+        assert "secrets" not in ext.panels
+
+        ext_with = Extension("has-secret-app")
+        ext_with.secret(
+            name="api_key",
+            description="API key for upstream service",
+            required=True,
+        )(lambda: None)
+        assert "secrets" in ext_with.panels
+        assert ext_with.panels["secrets"]["slot"] == "right"
+        assert ext_with.panels["secrets"]["title"] == "Secrets"
 
     def test_default_slot(self):
         ext = Extension("test-app")

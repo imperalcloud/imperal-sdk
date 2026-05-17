@@ -1,8 +1,8 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the AGPL-3.0 License. See LICENSE file for details.
-"""Extension validator — checks V1-V16 rules.
+"""Extension validator — checks V1-V24 + V31 rules.
 
-Used by `imperal validate` CLI and kernel loader.
+Used by ``imperal validate`` CLI and the Dev Portal publish gate.
 Returns structured report with errors, warnings, and info.
 """
 from __future__ import annotations
@@ -17,8 +17,7 @@ VALID_ACTION_TYPES = {"read", "write", "destructive"}
 _FN_PREFIX = "fn_"
 
 
-
-# === PEP 563 / forward-reference helper (task #73) =====================
+# === PEP 563 / forward-reference helper =================================
 # Validator inspects function annotations. Under
 # ``from __future__ import annotations`` (the Python 3.10+ default style)
 # every annotation is a STRING, not a class. ``typing.get_type_hints``
@@ -29,7 +28,7 @@ _FN_PREFIX = "fn_"
 def _resolve_hints(func) -> dict:
     """Return ``typing.get_type_hints(func)`` or ``{}`` on failure.
 
-    Never raises. Failures are silent -- callers fall back to raw
+    Never raises. Failures are silent — callers fall back to raw
     ``__annotations__`` when the hint dict is missing the key they need.
     """
     try:
@@ -38,7 +37,7 @@ def _resolve_hints(func) -> dict:
     except Exception:
         # Common failure modes: circular imports, forward refs to private
         # classes, string annotations referencing modules not imported in
-        # this context. None of them are validator bugs -- we degrade to
+        # this context. None of them are validator bugs — we degrade to
         # substring fallback and keep running.
         return {}
 
@@ -48,19 +47,17 @@ def _looks_like_action_result(value) -> bool:
 
     Accepts class references (after PEP 563 resolution) AND string
     annotations (pre-resolution fallback). Substring match on 'ActionResult'
-    is intentionally lenient -- subclasses, aliased re-exports, and
+    is intentionally lenient — subclasses, aliased re-exports, and
     typing.Union / Optional wrappers are all acceptable.
     """
     if value is None:
         return False
-    # Class-level identity check (preferred -- strict).
     try:
         from imperal_sdk.chat.action_result import ActionResult as _AR
         if isinstance(value, type) and issubclass(value, _AR):
             return True
     except Exception:
         pass
-    # String / str(value) fallback (substring -- lenient but correct).
     if "ActionResult" in str(value):
         return True
     return False
@@ -124,7 +121,7 @@ class ValidationReport:
 
 
 def validate_extension(ext) -> ValidationReport:
-    """Validate an Extension instance against V1-V16 rules.
+    """Validate an Extension instance against V1-V24 + V31 rules.
 
     Args:
         ext: An Extension instance (with app_id, version, tools, etc.)
@@ -159,9 +156,9 @@ def validate_extension(ext) -> ValidationReport:
 
     # Count registered @ext.tool entries. Exclude synthetic tools that the
     # SDK auto-registers internally (e.g. __panel__secrets from the
-    # EXT-SECRETS-V1 unconditional synthetic Secrets panel, v4.2.4) — those
-    # are platform-provided, not user-authored, and shouldn't count toward
-    # V3 "at least one tool" or marketplace tool counts.
+    # EXT-SECRETS-V1 unconditional synthetic Secrets panel) — those are
+    # platform-provided, not user-authored, and shouldn't count toward V3
+    # "at least one tool" or marketplace tool counts.
     _all_tools = getattr(ext, "_tools", {})
     _SYNTHETIC_PREFIXES = ("__panel__", "__widget__", "__tray__", "__webhook__")
     tools = {
@@ -202,11 +199,7 @@ def validate_extension(ext) -> ValidationReport:
                 fix=f"Add action_type='read' (or 'write'/'destructive') to @chat.function('{fname}')",
             ))
 
-        # V5: must return ActionResult -- PEP 563 safe.
-        # Resolve hints first (handles string annotations); if that
-        # fails or the hint dict lacks 'return', fall back to raw
-        # __annotations__ substring check so V5 still fires on missing
-        # annotations entirely.
+        # V5: must return ActionResult — PEP 563 safe.
         func = getattr(fdef, "func", None)
         if func:
             _v5_hints = _resolve_hints(func)
@@ -223,10 +216,6 @@ def validate_extension(ext) -> ValidationReport:
                 ))
 
         # V6: params should be Pydantic BaseModel (WARN for now, ERROR in v2)
-        # PEP 563 safe: resolve annotations via typing.get_type_hints so
-        # string annotations (Python 3.10+ default with
-        # `from __future__ import annotations`) are resolved to real
-        # classes before isinstance/issubclass checks.
         if func:
             import inspect
             sig = inspect.signature(func)
@@ -237,8 +226,6 @@ def validate_extension(ext) -> ValidationReport:
             _v6_hints = _resolve_hints(func)
             has_pydantic_param = False
             for p in params_list:
-                # Prefer resolved hint; fall back to raw annotation if
-                # get_type_hints failed for this param (uncommon).
                 resolved = _v6_hints.get(p.name, p.annotation)
                 if resolved is inspect.Parameter.empty:
                     continue
@@ -258,7 +245,6 @@ def validate_extension(ext) -> ValidationReport:
         # V10: write/destructive without event=
         event = getattr(fdef, "event", "")
         if action_type in ("write", "destructive") and not event:
-            # Build suggested event name without backslash in f-string
             short_name = fname[len(_FN_PREFIX):] if fname.startswith(_FN_PREFIX) else fname
             suggested_event = f"{app_id}.{short_name}"
             report.issues.append(ValidationIssue(
@@ -325,12 +311,8 @@ def validate_extension(ext) -> ValidationReport:
         ))
 
     # V13: tool names starting with "refresh_" that are NOT prefixed
-    # "skeleton_refresh_" will not be picked up by the kernel's auto-derive
-    # skeleton_sections convention. They'll run only if the Registry has an
-    # explicit skeleton_sections row pointing at them — easy to forget.
-    # Recommend renaming via @ext.skeleton("<section>") sugar or @ext.tool
-    # with the skeleton_refresh_ prefix so the platform auto-wires them.
-    # See skeleton.md §"Skeleton Refresh Tools".
+    # "skeleton_refresh_" will not be picked up by the platform's auto-derive
+    # skeleton_sections convention.
     _tools = getattr(ext, "_tools", {})
     for tool_name in _tools.keys():
         if not isinstance(tool_name, str):
@@ -341,7 +323,7 @@ def validate_extension(ext) -> ValidationReport:
                 rule="V13", level="WARN",
                 message=(
                     f"Tool {tool_name!r} looks like a skeleton refresh but lacks "
-                    f"the 'skeleton_refresh_' prefix required by the kernel's "
+                    f"the 'skeleton_refresh_' prefix required by the platform's "
                     f"auto-derive convention"
                 ),
                 fix=(
@@ -350,8 +332,6 @@ def validate_extension(ext) -> ValidationReport:
                     f"convention automatically"
                 ),
             ))
-        # Likewise for alert counterparts — kernel expects skeleton_alert_<X>
-        # as the paired alert activity when a refresh section has alert_on_change.
         if tool_name.startswith("alert_") and not tool_name.startswith("skeleton_alert_"):
             suggested = tool_name[len("alert_"):]
             report.issues.append(ValidationIssue(
@@ -361,14 +341,14 @@ def validate_extension(ext) -> ValidationReport:
                     f"the 'skeleton_alert_' prefix"
                 ),
                 fix=(
-                    f"Rename to 'skeleton_alert_{suggested}' so the kernel "
+                    f"Rename to 'skeleton_alert_{suggested}' so the platform "
                     f"auto-wires it when refresh section has alert_on_change=True"
                 ),
             ))
 
-    # === Federal v4.0.0 contract — V14-V24 =============================
-    # Goal: every extension that passes these is GUARANTEED to work with
-    # the kernel's typed-dispatch chain pipeline. No silent write failures,
+    # === V14-V22 contract ===============================================
+    # Every extension that passes these is guaranteed to work with the
+    # platform's typed-dispatch chain pipeline. No silent write failures,
     # no LLM-router guessing, no hallucinated capabilities.
 
     display_name = getattr(ext, "display_name", "") or ""
@@ -377,8 +357,6 @@ def validate_extension(ext) -> ValidationReport:
     actions_explicit = getattr(ext, "actions_explicit", True)
 
     def _ext_functions(chat_ext):
-        """Backward-compat accessor — real ChatExtension exposes a
-        ``.functions`` property; older test fixtures only have ``_functions``."""
         funcs = getattr(chat_ext, "functions", None)
         if funcs is None:
             funcs = getattr(chat_ext, "_functions", {})
@@ -394,12 +372,12 @@ def validate_extension(ext) -> ValidationReport:
             ),
             fix=(
                 "Set Extension(description=...) to a sentence describing what "
-                "the extension does. Webbee shows this in 'что я умею?' — "
-                "without it the user sees a bare slug. Federal V14."
+                "the extension does. Webbee shows this in 'what can you do?' — "
+                "without it the user sees a bare slug."
             ),
         ))
 
-    # V15 — extension display_name ≥3 chars, ≠ app_id (case-sensitive verbatim)
+    # V15 — extension display_name ≥3 chars, ≠ app_id
     if not display_name or len(display_name.strip()) < 3:
         report.issues.append(ValidationIssue(
             rule="V15", level="ERROR",
@@ -409,7 +387,7 @@ def validate_extension(ext) -> ValidationReport:
             ),
             fix=(
                 "Set Extension(display_name='Notes') — human-readable, "
-                "NOT the slug. Federal V15."
+                "NOT the slug."
             ),
         ))
     elif display_name.strip() == app_id:
@@ -428,7 +406,7 @@ def validate_extension(ext) -> ValidationReport:
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
         for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
-                continue  # synthetic skip
+                continue
             fn_desc = (getattr(fn_def, "description", "") or "").strip()
             if len(fn_desc) < 20:
                 report.issues.append(ValidationIssue(
@@ -440,7 +418,7 @@ def validate_extension(ext) -> ValidationReport:
                     fix=(
                         "Set @chat.function(description='...') to a sentence "
                         "describing inputs, outputs, and when to use it. The "
-                        "LLM uses this to choose tools. Federal V16."
+                        "LLM uses this to choose tools."
                     ),
                 ))
 
@@ -454,7 +432,7 @@ def validate_extension(ext) -> ValidationReport:
                     rule="V17", level="ERROR",
                     message=(
                         f"@chat.function {fn_name!r} must declare a Pydantic "
-                        f"BaseModel param (federal V17 — no **kwargs, no Any)"
+                        f"BaseModel param (V17 — no **kwargs, no Any)"
                     ),
                     fix=(
                         "Define `class XParams(BaseModel): ...` and use it as "
@@ -463,10 +441,7 @@ def validate_extension(ext) -> ValidationReport:
                     ),
                 ))
 
-    # V18 — every @chat.function declares a typed return annotation. Accepts
-    # ActionResult (or subclass) AND Pydantic BaseModel — uses the existing
-    # ``_looks_like_action_result`` + ``_resolve_hints`` helpers so the Generic-
-    # based ActionResult class is properly recognised.
+    # V18 — every @chat.function declares a typed return annotation.
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
         for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
@@ -474,7 +449,6 @@ def validate_extension(ext) -> ValidationReport:
             hints = _resolve_hints(fn_def.func)
             ret = hints.get("return") if hints else None
             if ret is None:
-                # Fallback for PEP 563 string annotations that didn't resolve.
                 ret = (getattr(fn_def.func, "__annotations__", {}) or {}).get("return")
             ok = (
                 _looks_like_action_result(ret)
@@ -490,8 +464,7 @@ def validate_extension(ext) -> ValidationReport:
                     ),
                     fix=(
                         "Annotate the handler return as ``-> ActionResult``. "
-                        "Federal V18 — kernel reads return_schema from manifest "
-                        "for typed dispatch."
+                        "Platform reads return_schema from manifest for typed dispatch."
                     ),
                 ))
 
@@ -500,13 +473,12 @@ def validate_extension(ext) -> ValidationReport:
         report.issues.append(ValidationIssue(
             rule="V19", level="ERROR",
             message=(
-                f"Extension {app_id!r} must set actions_explicit=True "
-                f"(federal v4.0.0 default)"
+                f"Extension {app_id!r} must set actions_explicit=True"
             ),
             fix=(
                 "Set Extension(actions_explicit=True). Declares that every "
                 "write/destructive @chat.function is chain-callable as a typed "
-                "structured call — closes the chain_planner BYOLLM-router gap."
+                "structured call — closes the chain-planner BYOLLM-router gap."
             ),
         ))
     else:
@@ -529,8 +501,8 @@ def validate_extension(ext) -> ValidationReport:
                         ),
                     ))
 
-    # V20 — every write/destructive @chat.function declares effects (info-level
-    # for v4.0.0, error-level v5.0.0). Effects power the audit ledger + narrator.
+    # V20 — every write/destructive @chat.function declares effects (warn-level
+    # for v4.0.0, error-level v5.0.0+). Effects power the audit ledger + narrator.
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
         for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
@@ -542,8 +514,7 @@ def validate_extension(ext) -> ValidationReport:
                     rule="V20", level="WARN",
                     message=(
                         f"@chat.function {fn_name!r} ({_fn_action20}) "
-                        f"should declare effects=['create:resource'] etc. "
-                        f"(federal V20, error in v5.0.0)"
+                        f"should declare effects=['create:resource'] etc."
                     ),
                     fix=(
                         "Pass effects=['create:note'] or ['delete:folder'] etc. "
@@ -551,16 +522,13 @@ def validate_extension(ext) -> ValidationReport:
                     ),
                 ))
 
-    # V21 — required SVG icon. Validates via ``xml.etree`` parser — checks
-    # the actual SVG document structure rather than substring-scanning.
-    # Catches wrong root element, missing viewBox attribute, and embedded
-    # base64 raster via real attribute lookup.
+    # V21 — required SVG icon.
     if not icon_path:
         report.issues.append(ValidationIssue(
             rule="V21", level="ERROR",
             message=(
                 f"Extension {app_id!r} must declare icon='icon.svg' "
-                f"(federal V21 — required SVG marketplace icon)"
+                f"(V21 — required SVG marketplace icon)"
             ),
             fix=(
                 "Add an icon.svg file to your extension dir + set "
@@ -572,7 +540,7 @@ def validate_extension(ext) -> ValidationReport:
         report.issues.append(ValidationIssue(
             rule="V21", level="ERROR",
             message=f"Extension icon {icon_path!r} must be SVG (.svg extension)",
-            fix="Federal V21 — only SVG icons accepted. Convert raster to SVG.",
+            fix="V21 — only SVG icons accepted. Convert raster to SVG.",
         ))
     else:
         import os as _os
@@ -596,22 +564,19 @@ def validate_extension(ext) -> ValidationReport:
             try:
                 tree = _ET.parse(candidate)
                 root = tree.getroot()
-                # Strip XML namespace from tag for comparison.
                 local_tag = root.tag.rsplit("}", 1)[-1]
                 if local_tag != "svg":
                     report.issues.append(ValidationIssue(
                         rule="V21", level="ERROR",
                         message=f"Icon {icon_path!r} root element is <{local_tag}>, must be <svg>",
-                        fix="Federal V21 — root element must be <svg>.",
+                        fix="V21 — root element must be <svg>.",
                     ))
                 if not root.attrib.get("viewBox"):
                     report.issues.append(ValidationIssue(
                         rule="V21", level="ERROR",
                         message=f"Icon {icon_path!r} missing viewBox attribute on <svg>",
-                        fix="Federal V21 — viewBox required for multi-size rendering.",
+                        fix="V21 — viewBox required for multi-size rendering.",
                     ))
-                # Walk all <image> elements + check href / xlink:href for base64
-                # data URIs. Real attribute lookup beats substring scan.
                 for img in root.iter():
                     img_local = img.tag.rsplit("}", 1)[-1]
                     if img_local != "image":
@@ -628,21 +593,21 @@ def validate_extension(ext) -> ValidationReport:
                                 f"Icon {icon_path!r} contains embedded base64 "
                                 f"raster in <image href=...>"
                             ),
-                            fix="Federal V21 — pure SVG only, no embedded PNG/JPEG.",
+                            fix="V21 — pure SVG only, no embedded PNG/JPEG.",
                         ))
                         break
             except _ET.ParseError as exc:
                 report.issues.append(ValidationIssue(
                     rule="V21", level="ERROR",
                     message=f"Icon {icon_path!r} is not valid XML: {exc}",
-                    fix="Federal V21 — must parse as well-formed SVG XML.",
+                    fix="V21 — must parse as well-formed SVG XML.",
                 ))
 
     # V22 — lifecycle hook signatures match SDK contract
     _LIFECYCLE_REQUIRED_KW = {
         "on_install": set(),
         "on_uninstall": set(),
-        "on_refresh": {"message"},  # added in SDK 3.x; closes the on_refresh(message=) TypeError class
+        "on_refresh": {"message"},
         "on_upgrade": {"from_version"},
     }
     lifecycle = getattr(ext, "_lifecycle", {}) or {}
@@ -655,7 +620,6 @@ def validate_extension(ext) -> ValidationReport:
             sig = _insp.signature(hook_def.func)
             params = set(sig.parameters.keys())
             missing = required - params
-            # Allow **kwargs to absorb everything
             has_var_kw = any(
                 p.kind == _insp.Parameter.VAR_KEYWORD
                 for p in sig.parameters.values()
@@ -665,8 +629,7 @@ def validate_extension(ext) -> ValidationReport:
                     rule="V22", level="ERROR",
                     message=(
                         f"Lifecycle hook {hook_name!r} missing required kwargs: "
-                        f"{sorted(missing)}. Closes the TypeError class where kernel "
-                        f"passes message= but extension didn't expect it."
+                        f"{sorted(missing)}."
                     ),
                     fix=(
                         f"Add {', '.join(sorted(missing))}=None to the hook signature, "
@@ -676,13 +639,9 @@ def validate_extension(ext) -> ValidationReport:
         except (ValueError, TypeError):
             pass
 
-    # V23 — DROPPED. ``manifest_schema.SCOPE_PATTERN`` already enforces scope
-    # shape via Pydantic validation. Federal capability registry validation is
-    # a kernel-side concern (scope chokepoint), not the SDK's job.
-
     # V24 — handler bodies must NOT access ``ctx.skeleton.*``. Skeleton is the
-    # LLM context cache; handlers use ``ctx.api`` for real backend ops. Federal
-    # AST walk catches actual ``ctx.skeleton`` attribute access expressions and
+    # LLM context cache; handlers use ``ctx.api`` for real backend ops. AST
+    # walk catches actual ``ctx.skeleton`` attribute access expressions and
     # ignores incidental matches inside string literals or comments.
     import ast as _ast
     import inspect as _insp
@@ -714,12 +673,12 @@ def validate_extension(ext) -> ValidationReport:
             visitor.visit(tree)
             if visitor.hits:
                 report.issues.append(ValidationIssue(
-                    rule="V24", level="ERROR",
+                    rule="V24-AST", level="ERROR",
                     message=(
                         f"@chat.function {fn_name!r} accesses ctx.skeleton at "
-                        f"line(s) {visitor.hits} — federal V24 forbids this. "
-                        f"Skeleton is the LLM context cache (read by "
-                        f"router/narrator), not a data source."
+                        f"line(s) {visitor.hits} — forbidden. Skeleton is the "
+                        f"LLM context cache (read by router/narrator), not a "
+                        f"data source."
                     ),
                     fix=(
                         "Use ctx.api.<...>() to fetch from the real backend. "
@@ -728,7 +687,7 @@ def validate_extension(ext) -> ValidationReport:
                     ),
                 ))
 
-    # V31 — `system=True` reserved for first-party Imperal extensions.
+    # V31 — ``system=True`` reserved for first-party platform extensions.
     # System apps are auto-installed for every user, never shown in the
     # marketplace, and cannot be uninstalled. Allowing a third-party
     # developer to set this flag would let them slip past discovery and
@@ -737,28 +696,96 @@ def validate_extension(ext) -> ValidationReport:
     # mistake locally so the developer sees the error before publish.
     if bool(getattr(ext, "system", False)):
         author = (os.environ.get("IMPERAL_AUTHOR_ID") or "").strip()
-        IMPERAL_AUTHOR_IDS = {"imp_u_oPpbwTWjm-"}  # server@webhostmost.com
-        if author and author not in IMPERAL_AUTHOR_IDS:
+        # Allowlist is sourced from env at install time; empty default means
+        # the SDK does not ship an embedded list of first-party authors.
+        _allowlist_raw = (os.environ.get("IMPERAL_FIRSTPARTY_AUTHOR_IDS") or "").strip()
+        _allowlist = {a.strip() for a in _allowlist_raw.split(",") if a.strip()}
+        if author and _allowlist and author not in _allowlist:
             report.issues.append(ValidationIssue(
                 rule="V31", level="ERROR",
                 message=(
                     f"Extension(system=True) is reserved for first-party "
-                    f"Imperal extensions (admin / billing / developer / "
-                    f"automations). Author {author!r} is not in the Imperal "
-                    f"author allowlist."
+                    f"platform extensions. Author {author!r} is not in the "
+                    f"first-party allowlist."
                 ),
                 fix=(
-                    "Drop `system=True` from your Extension(...) call. "
+                    "Drop ``system=True`` from your Extension(...) call. "
                     "Your app will publish through the normal marketplace "
                     "flow and users will install it explicitly."
                 ),
             ))
 
+    # === V23 + V24 — Federal Typed Return Contract (v5.0.1) ============
+    #
+    # V23: every @chat.function(action_type="read", ...) MUST declare
+    #      ``data_model`` (or ``-> ActionResult[T]`` / ``-> SomeBaseModel``)
+    #      so the platform can validate ``$REF`` paths against schema and
+    #      prevent naming drift between input/output field names.
+    #
+    # V24: write/destructive tools SHOULD declare ``data_model`` — WARN-only;
+    #      can be promoted post-soak.
+    #
+    # Soak severity is env-toggled via IMPERAL_VALIDATOR_V23_SEVERITY
+    # (default "warn"; flip to "error" after third-party adoption).
+    try:
+        _chat_exts = getattr(ext, "_chat_extensions", {}) or {}
+        for _tool_name, _chat_ext in _chat_exts.items():
+            _fns = getattr(_chat_ext, "_functions", {}) or {}
+            _v23_v24_check_data_model_presence(report, [ext], _fns)
+    except Exception:
+        # Defensive: never let the new check block existing V1-V22+V31.
+        pass
+
     return report
 
 
+def _v23_v24_check_data_model_presence(report, extensions, functions):
+    """Apply V23 (read) + V24 (write/destructive) ``data_model`` rules to each
+    @chat.function in the given functions dict (name -> FunctionDef)."""
+    _v23_severity = os.environ.get("IMPERAL_VALIDATOR_V23_SEVERITY", "warn").lower()
+    _v23_level = "ERROR" if _v23_severity == "error" else "WARN"
+    for fn_name, fn_def in (functions or {}).items():
+        _action_type = getattr(fn_def, "action_type", "read")
+        _return_model = getattr(fn_def, "_return_model", None)
+        if _return_model is not None:
+            continue
+        if _action_type == "read":
+            report.issues.append(ValidationIssue(
+                rule="V23", level=_v23_level,
+                message=(
+                    f"@chat.function {fn_name!r} (action_type=read) is "
+                    f"missing data_model declaration. Read tools must "
+                    f"declare typed return shape so the platform can "
+                    f"validate $REF paths and prevent naming drift."
+                ),
+                fix=(
+                    "Add `data_model=YourEntityRecord` kwarg to the "
+                    "@chat.function decorator OR change return annotation "
+                    "to `-> ActionResult[YourEntityRecord]`. Define "
+                    "YourEntityRecord as a Pydantic BaseModel with field "
+                    "names mirroring your input *Params model for "
+                    "round-trip symmetry."
+                ),
+            ))
+        elif _action_type in ("write", "destructive"):
+            report.issues.append(ValidationIssue(
+                rule="V24", level="WARN",
+                message=(
+                    f"@chat.function {fn_name!r} (action_type="
+                    f"{_action_type}) lacks data_model declaration. "
+                    f"Recommended: typing write/destructive returns so "
+                    f"narrator + audit ledger see the resulting entity "
+                    f"shape."
+                ),
+                fix=(
+                    "Add `data_model=YourEntityRecord` kwarg or use "
+                    "`-> ActionResult[YourEntityRecord]` return annotation."
+                ),
+            ))
+
+
 # Re-export for consumers that import from imperal_sdk.validator directly.
-# validate_manifest_dict lives in manifest_schema.py (avoids circular import
-# at module load time — manifest_schema already defers its own ValidationIssue
-# import inside the function body).
+# ``validate_manifest_dict`` lives in ``manifest_schema.py`` (avoids circular
+# import at module load time — manifest_schema already defers its own
+# ``ValidationIssue`` import inside the function body).
 from imperal_sdk.manifest_schema import validate_manifest_dict  # noqa: E402,F401

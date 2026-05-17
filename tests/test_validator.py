@@ -313,24 +313,34 @@ class TestV7NoDirectImports:
 
 
 class TestV31SystemFlag:
-    """V31 — Extension(system=True) reserved for first-party Imperal authors."""
+    """V31 — Extension(system=True) reserved for first-party platform authors.
+
+    SDK v5.0.1: allowlist is env-driven via ``IMPERAL_FIRSTPARTY_AUTHOR_IDS``
+    (comma-separated). The SDK ships with no embedded list — the Dev Portal
+    is the authoritative server-side enforcement; this validator catches the
+    mistake locally when both ``IMPERAL_AUTHOR_ID`` and the allowlist env
+    are set.
+    """
 
     def test_system_default_false_no_v31(self, monkeypatch):
         monkeypatch.setenv("IMPERAL_AUTHOR_ID", "imp_u_random_dev")
+        monkeypatch.setenv("IMPERAL_FIRSTPARTY_AUTHOR_IDS", "imp_u_firstparty_a,imp_u_firstparty_b")
         ext = Extension("hello-3rd", version="1.0.0", display_name="Hello", description="x" * 60, icon="icon.svg")
         report = validate_extension(ext)
         assert not [i for i in report.errors if i.rule == "V31"]
 
     def test_third_party_system_true_blocked(self, monkeypatch):
         monkeypatch.setenv("IMPERAL_AUTHOR_ID", "imp_u_random_dev")
+        monkeypatch.setenv("IMPERAL_FIRSTPARTY_AUTHOR_IDS", "imp_u_firstparty_a,imp_u_firstparty_b")
         ext = Extension("rogue", version="1.0.0", display_name="Rogue", description="x" * 60, icon="icon.svg", system=True)
         report = validate_extension(ext)
         v31 = [i for i in report.errors if i.rule == "V31"]
         assert len(v31) == 1
         assert "reserved for first-party" in v31[0].message
 
-    def test_imperal_author_system_true_allowed(self, monkeypatch):
-        monkeypatch.setenv("IMPERAL_AUTHOR_ID", "imp_u_oPpbwTWjm-")
+    def test_first_party_author_system_true_allowed(self, monkeypatch):
+        monkeypatch.setenv("IMPERAL_AUTHOR_ID", "imp_u_firstparty_a")
+        monkeypatch.setenv("IMPERAL_FIRSTPARTY_AUTHOR_IDS", "imp_u_firstparty_a,imp_u_firstparty_b")
         ext = Extension("billing", version="1.0.0", display_name="Billing", description="x" * 60, icon="icon.svg", system=True)
         report = validate_extension(ext)
         assert not [i for i in report.errors if i.rule == "V31"]
@@ -339,6 +349,17 @@ class TestV31SystemFlag:
         # Local dev without IMPERAL_AUTHOR_ID set should not fail validation —
         # Dev Portal enforces author allowlist server-side at publish time.
         monkeypatch.delenv("IMPERAL_AUTHOR_ID", raising=False)
+        monkeypatch.setenv("IMPERAL_FIRSTPARTY_AUTHOR_IDS", "imp_u_firstparty_a")
+        ext = Extension("anything", version="1.0.0", display_name="x", description="x" * 60, icon="icon.svg", system=True)
+        report = validate_extension(ext)
+        assert not [i for i in report.errors if i.rule == "V31"]
+
+    def test_no_allowlist_env_does_not_block(self, monkeypatch):
+        # Without IMPERAL_FIRSTPARTY_AUTHOR_IDS the SDK has no embedded
+        # list, so locally it skips the check; Dev Portal still enforces
+        # server-side at publish time.
+        monkeypatch.setenv("IMPERAL_AUTHOR_ID", "imp_u_random_dev")
+        monkeypatch.delenv("IMPERAL_FIRSTPARTY_AUTHOR_IDS", raising=False)
         ext = Extension("anything", version="1.0.0", display_name="x", description="x" * 60, icon="icon.svg", system=True)
         report = validate_extension(ext)
         assert not [i for i in report.errors if i.rule == "V31"]

@@ -108,3 +108,39 @@ class ActionResult(Generic[T]):
             retryable=d.get("retryable", False),
             refresh_panels=d.get("refresh_panels", None),
         )
+
+    def validate_against(self, model_class):
+        """Validate ``self.data`` against a Pydantic ``BaseModel`` class.
+
+        Used by the platform dispatch boundary when
+        ``FunctionDef._return_model`` is declared. Extension authors can
+        also call this explicitly for early type assurance.
+
+        Behavior:
+          - If ``self.data`` is already an instance of ``model_class`` →
+            return ``self`` (no-op, already validated by Pydantic construction).
+          - If ``self.data`` is a dict → attempt
+            ``model_class.model_validate(data)``. On mismatch, logs a
+            structured warning with offending fields and returns ``self``
+            unmodified (warn-only in v5.0.1; hard fail post-soak).
+          - On any other type or validation error → returns ``self`` unmodified.
+
+        Contract: the platform cross-references ``model_class`` fields
+        against ``$REF`` paths in chain steps; mismatches between declared
+        ``model_class`` and actual emitted data ARE bugs. This helper
+        surfaces them.
+        """
+        if self.data is None:
+            return self
+        if isinstance(self.data, model_class):
+            return self
+        if isinstance(self.data, dict):
+            try:
+                model_class.model_validate(self.data)
+            except Exception as _err:
+                import logging as _logging
+                _logging.getLogger("imperal_sdk.action_result").warning(
+                    "data_model mismatch model=%s offending_fields=%s",
+                    getattr(model_class, "__name__", "?"), str(_err)[:300],
+                )
+        return self

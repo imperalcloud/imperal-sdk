@@ -2,6 +2,187 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.0.1 — 2026-05-17 — Federal Typed Return Contract
+
+**Additive (no breaking changes).** Adds typed return contract for
+`@chat.function` handlers so the platform can validate `$REF` paths in
+multi-step chains against a declared schema and prevent input/output
+field-name drift. Extensions built against 5.0.0 continue to work
+unmodified — V23 ships as **WARN** in 5.0.1 and may promote to **ERROR**
+in a future minor after third-party adoption (env-toggle:
+`IMPERAL_VALIDATOR_V23_SEVERITY=error`).
+
+### What's new
+
+- **`@chat.function(data_model=...)` kwarg.** Declare the Pydantic
+  `BaseModel` subclass that describes `ActionResult.data` for this tool.
+  When declared, the SDK populates `FunctionDef._return_model` directly,
+  emits a `return_schema` field into the manifest, and the platform uses
+  the schema to:
+  1. Validate `$REF:<app_id>[<n>].path` references in chain steps against
+     real field names (closes the "next step references field that doesn't
+     exist" class).
+  2. Render `return_fields` in the classifier envelope so the LLM knows
+     what shape it can read.
+  3. Run `data.model_validate(...)` at emit time (warn-only in 5.0.1).
+- **`ActionResult[T]` generic auto-detection.** `-> ActionResult[NoteRecord]`
+  return annotations now populate `_return_model=NoteRecord` automatically.
+  Resolution priority for `_return_model`:
+  1. Explicit `data_model=` kwarg — wins.
+  2. Direct `-> SomeBaseModel` return annotation.
+  3. `-> ActionResult[T]` generic extraction.
+  4. None of the above → `_return_model = None`.
+- **`ActionResult.validate_against(model_class)` method.** Validates
+  `self.data` against a Pydantic model class, logs a structured warning
+  on mismatch, never raises. Useful for early type assurance in handler
+  code.
+- **Validator V23 (read tools, WARN by default).** Every
+  `@chat.function(action_type="read", ...)` SHOULD declare `data_model=`
+  (or use `-> ActionResult[T]` / `-> SomeBaseModel`). Toggle via
+  `IMPERAL_VALIDATOR_V23_SEVERITY=warn|error`.
+- **Validator V24 (write/destructive tools, WARN).** Same rule as V23
+  but advisory — declaring `data_model` on writes lets the chain narrator
+  and audit ledger describe the resulting entity shape without
+  re-deriving from text.
+- **`V31` first-party allowlist is now env-driven.** The SDK no longer
+  ships with an embedded allowlist. Set `IMPERAL_FIRSTPARTY_AUTHOR_IDS`
+  (comma-separated) at validation time to enable the local check; the
+  Dev Portal continues to enforce server-side at publish.
+- **Synthetic `Secrets` panel is lazy-registered.** Previously every
+  `Extension` got a synthetic `__panel__secrets` entry on the right slot
+  of the chat UI — even when the extension declared zero secrets, the
+  user saw an empty placeholder titled "Secrets" with developer-guidance
+  text. As of 5.0.1 the panel is registered ONLY when the extension
+  calls `@ext.secret(...)` for the first time. Extensions with secrets
+  see the same UI as before; extensions without secrets no longer ship
+  an empty placeholder panel. No code change required for ext authors;
+  no platform-side contract change (the federal secrets contract is
+  enforced manifest-side and is independent of UI presence).
+
+### Migration for extension authors
+
+**Reads (V23).** Add `data_model=...` to every `@chat.function(action_type="read", ...)`:
+
+```python
+from pydantic import BaseModel
+from imperal_sdk import Extension
+from imperal_sdk.chat import ChatExtension
+from imperal_sdk.chat.action_result import ActionResult
+
+class NoteRecord(BaseModel):
+    note_id: str
+    title: str
+    content: str
+    folder_id: str | None = None
+
+class ListNotesParams(BaseModel):
+    folder_id: str | None = None
+    limit: int = 50
+
+@chat.function(
+    name="list_notes",
+    description="List notes — paginated, optionally filtered by folder.",
+    action_type="read",
+    data_model=NoteRecord,
+)
+async def list_notes(ctx, params: ListNotesParams) -> ActionResult:
+    notes = await ctx.api.notes.list(folder_id=params.folder_id, limit=params.limit)
+    return ActionResult.success(data={"notes": notes}, summary=f"{len(notes)} notes")
+```
+
+Equivalent using the `ActionResult[T]` generic (no `data_model` kwarg
+needed):
+
+```python
+async def list_notes(ctx, params: ListNotesParams) -> ActionResult[NoteRecord]:
+    ...
+```
+
+**Field-name symmetry.** Use the **same field names** in your
+`data_model` as in the corresponding input `*Params` model. Closes a real
+drift class where input was `content_text` but the record exposed
+`content`, so chain steps referencing `$REF:notes[0].content_text` silently
+got `None`. If your input uses `content_text`, your `data_model` should
+expose `content_text` too (or vice versa — pick one and be consistent).
+
+**Writes (V24).** Same `data_model=` kwarg, recommended but not required:
+
+```python
+@chat.function(
+    name="create_note",
+    description="Create a new note with title, content, optional folder.",
+    action_type="write",
+    event="notes.created",
+    data_model=NoteRecord,  # what the call returns
+)
+async def create_note(ctx, params: CreateNoteParams) -> ActionResult:
+    note = await ctx.api.notes.create(params.model_dump())
+    return ActionResult.success(data=note, summary=f"Created {note['title']!r}")
+```
+
+### Skeleton contract reminder
+
+The skeleton layer is the **LLM context cache** read by the classifier
+and narrator — handlers must NOT read from it (V24-AST enforces this).
+Conventions when authoring an extension:
+
+1. **Refresh tools** that populate the skeleton MUST be named
+   `skeleton_refresh_<section>` (or use the `@ext.skeleton("<section>")`
+   decorator, which applies the convention automatically). The platform
+   auto-derives `skeleton_sections` rows from these names; tools named
+   `refresh_<section>` are NOT auto-wired (validator V13 WARN).
+2. **Alert tools** that fire when a refreshed section changes MUST be
+   named `skeleton_alert_<section>` (V13 INFO when prefix is missing).
+3. **Skeleton data is read-only to your handlers.** Never write
+   `ctx.skeleton.X = ...` or read `ctx.skeleton.X` inside a
+   `@chat.function` body — validator V24-AST hard-rejects it. Use
+   `ctx.api` to talk to the real backend; skeleton is refreshed
+   automatically after writes via your refresh tools.
+4. **Skeleton sections SHOULD have stable, typed shapes.** Document the
+   shape in a Pydantic model and serialise via `model_dump()` before
+   returning from your refresh tool — this keeps the LLM context cache
+   parseable and helps the classifier hint at what fields it can rely
+   on.
+
+### Dev Portal enforcement (publish gate)
+
+The Dev Portal runs `imperal_sdk.validator.validate_extension` against
+every submitted build. To make V23 a hard publish gate after third-party
+adoption, set the env var on the Dev Portal validator process:
+
+```
+IMPERAL_VALIDATOR_V23_SEVERITY=error
+```
+
+V23 then promotes from WARN to ERROR; submissions missing `data_model`
+on any `read` tool will be rejected at publish with a structured fix-hint
+pointing at the offending function.
+
+### Tests
+
+15 new tests covering:
+
+- `data_model=` kwarg propagation to `FunctionDef._return_model`.
+- Precedence: `data_model=` wins over `-> ActionResult[T]`.
+- `-> ActionResult[T]` generic auto-detection when `data_model` is absent.
+- V23 WARN (default) and ERROR (`IMPERAL_VALIDATOR_V23_SEVERITY=error`)
+  modes for read tools missing `data_model`.
+- V23 passes when `data_model=` declared OR `-> ActionResult[T]` used.
+- V24 WARN for write + destructive tools missing `data_model`.
+- V24 passes when `data_model=` declared.
+- `ActionResult.validate_against` passes / warns / no-ops correctly.
+- Synthetic `Secrets` panel: not registered when no secrets declared,
+  registered after first `@ext.secret(...)` call (lazy registration).
+
+### Compatibility
+
+- **No breaking change.** SDK 5.0.0 extensions continue to load and run
+  unmodified; V23 will surface as WARNs in the validation report but
+  publish stays green by default.
+- **Required platform.** Kernel that ingests `return_schema` from
+  manifests for `$REF` path validation: 5.0.1+. Earlier kernels ignore
+  the new field gracefully.
+
 ## 5.0.0 — 2026-05-15 — Unified Chain Orchestrator
 
 **BREAKING:**
