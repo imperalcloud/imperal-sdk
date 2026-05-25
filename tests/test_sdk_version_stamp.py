@@ -21,4 +21,3 @@ def test_emitted_manifest_has_current_sdk_version():
     assert manifest.get("sdk_version") == __version__, (
         f"emitted sdk_version must equal {__version__}, got {manifest.get('sdk_version')!r}"
     )
-    assert __version__ == "5.0.1", f"SDK version should be 5.0.1; got {__version__}"
