@@ -2,6 +2,30 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.0.2 — 2026-05-26 — Federal source-cite hygiene
+
+**Docs-only release. No behavior change. No new APIs.** Adds two federal-contract
+citation comments in source so the kernel's federal source-cite test gates
+(`I-SDK-DECORATOR-DATA-MODEL-KWARG` + `I-SDK-RETURN-DATA-VALIDATED-AT-EMIT`)
+stay green across SDK reinstalls.
+
+### Touched files
+
+- `src/imperal_sdk/chat/extension.py` — `data_model` kwarg docstring now cites
+  `I-SDK-DECORATOR-DATA-MODEL-KWARG`.
+- `src/imperal_sdk/types/action_result.py` — `validate_against` docstring now
+  cites `I-SDK-RETURN-DATA-VALIDATED-AT-EMIT`.
+
+### Why
+
+The kernel federal suite asserts the literal invariant IDs appear in SDK
+source. 5.0.1 shipped without the comments; the kernel's 2 source-cite
+tests stayed pinned green by an in-place edit of the venv `site-packages`
+copy which would not survive a future `pip install -U`. 5.0.2 closes that
+durability gap.
+
+No federal contracts changed, no public API changes, no schema drift.
+
 ## 5.0.1 — 2026-05-17 — Federal Typed Return Contract
 
 **Additive (no breaking changes).** Adds typed return contract for
