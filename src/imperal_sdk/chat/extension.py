@@ -145,7 +145,8 @@ class ChatExtension:
                 ``delete_notes_from_folder``).
             data_model: **v5.0.1 — Federal Typed Return Contract.** Explicit
                 Pydantic ``BaseModel`` subclass declaring the shape of
-                ``ActionResult.data`` for this tool. When declared, it
+                ``ActionResult.data`` for this tool. Federal contract:
+                I-SDK-DECORATOR-DATA-MODEL-KWARG. When declared, it
                 populates ``FunctionDef._return_model`` directly, takes
                 precedence over return-annotation auto-detect, and triggers:
 

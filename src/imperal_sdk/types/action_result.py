@@ -112,6 +112,8 @@ class ActionResult(Generic[T]):
     def validate_against(self, model_class):
         """Validate ``self.data`` against a Pydantic ``BaseModel`` class.
 
+        Federal contract: I-SDK-RETURN-DATA-VALIDATED-AT-EMIT.
+
         Used by the platform dispatch boundary when
         ``FunctionDef._return_model`` is declared. Extension authors can
         also call this explicitly for early type assurance.
