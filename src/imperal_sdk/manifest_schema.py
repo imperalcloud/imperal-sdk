@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 
 # === Regex contracts ==================================================
@@ -321,6 +321,17 @@ class Manifest(BaseModel):
     # Reserved for first-party Imperal authors (validator V31).
     system: Optional[bool] = None
 
+    # Federal I-EXT-MANIFEST-HIDDEN-SIDEBAR-SYSTEM-ONLY (2026-05-27) —
+    # `hidden_in_sidebar=True` instructs the Imperal Panel sidebar to NOT
+    # render the icon for this extension. Functionality is preserved
+    # (chat tools still work, skeleton still runs, lifecycle still fires)
+    # — only the visual sidebar tile is suppressed.
+    #
+    # Restricted to system apps (`system=True`) — third-party extensions
+    # MUST NOT hide themselves from the user-facing sidebar. Enforced by
+    # `validate_manifest_dict` (V32) and the root model_validator below.
+    hidden_in_sidebar: Optional[bool] = None
+
     # Federal v4.2.2 — EXT-SECRETS-V1. Optional array of per-user encrypted
     # credential declarations the extension reads via ``ctx.secrets.get()``.
     # Closes the `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift where the
@@ -371,6 +382,22 @@ class Manifest(BaseModel):
                     f"'ns:action', 'ns:*', or legacy 'ns.action'"
                 )
         return v
+
+    @model_validator(mode="after")
+    def _hidden_in_sidebar_requires_system(self) -> "Manifest":
+        """Federal I-EXT-MANIFEST-HIDDEN-SIDEBAR-SYSTEM-ONLY.
+
+        Third-party extensions MUST NOT hide themselves from the user-facing
+        Imperal Panel sidebar. The hidden_in_sidebar flag is reserved for
+        first-party Imperal system apps (system=True).
+        """
+        if self.hidden_in_sidebar is True and self.system is not True:
+            raise ValueError(
+                "hidden_in_sidebar=True requires system=True "
+                "(federal I-EXT-MANIFEST-HIDDEN-SIDEBAR-SYSTEM-ONLY — "
+                "third-party extensions cannot hide themselves from the sidebar)"
+            )
+        return self
 
 
 # === Public API =======================================================
