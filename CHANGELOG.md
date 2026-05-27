@@ -2,6 +2,50 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.0.3 — 2026-05-27 — Manifest `hidden_in_sidebar` field (system-only)
+
+System apps may opt out of the Imperal Panel sidebar tile by declaring
+`hidden_in_sidebar: true` in their `imperal.json`. Chat tools, lifecycle
+hooks, skeleton refreshes, and audit ledger continue to function — only
+the visual sidebar icon is suppressed.
+
+### Federal contract — `I-EXT-MANIFEST-HIDDEN-SIDEBAR-SYSTEM-ONLY`
+
+`hidden_in_sidebar=true` is only honoured when `system=true` is also set.
+Third-party extensions MUST NOT hide themselves from the user-facing
+sidebar. A new root model validator on `Manifest` rejects any manifest
+that pairs `hidden_in_sidebar=true` with `system=false`/`None`:
+
+```text
+hidden_in_sidebar=True requires system=True (federal
+I-EXT-MANIFEST-HIDDEN-SIDEBAR-SYSTEM-ONLY — third-party extensions
+cannot hide themselves from the sidebar)
+```
+
+### Runtime flow (kernel + auth-gw, shipped 2026-05-27)
+
+1. SDK validates the manifest at `imperal build` / publish time.
+2. Kernel scans `/opt/extensions/*/imperal.json` on worker boot and on
+   Registry catalog invalidation, publishes the set of opted-out
+   `app_id`s to Redis SET `imperal:hidden_in_sidebar_apps`.
+3. `imperal-auth-gateway` `GET /v1/users/{user_id}/extensions` reads the
+   set via a second Redis client (`kernel_shared_redis_url`) and drops
+   matching tiles from the response so the Imperal Panel sidebar never
+   renders the icon.
+
+### Touched files
+
+- `src/imperal_sdk/manifest_schema.py` — adds
+  `Manifest.hidden_in_sidebar: Optional[bool] = None` next to `system`
+  and a `model_validator(mode="after")` that enforces the system-only
+  rule. `validate_manifest_dict` surfaces violations as `M4`
+  ValidationIssues.
+- `src/imperal_sdk/schemas/imperal.schema.json` — regenerated to include
+  the new field (static-vs-runtime gate in
+  `tests/test_manifest_schema.py` and `tests/test_spec_validation.py`).
+
+No other public API changes. No schema-version bump (still v3).
+
 ## 5.0.2 — 2026-05-26 — Federal source-cite hygiene
 
 **Docs-only release. No behavior change. No new APIs.** Adds two federal-contract
