@@ -127,8 +127,9 @@ class MockBilling:
             status="active",
         )
 
-    async def track_usage(self, tokens: int, resource: str = "llm") -> None:
-        self.balance = max(0, self.balance - tokens)
+    async def track_usage(self, meter: str, amount: int = 1, user=None) -> bool:
+        self.balance = max(0, self.balance - amount)
+        return True
 
     async def get_balance(self) -> BalanceInfo:
         return BalanceInfo(balance=self.balance, plan=self.plan, cap=250000)

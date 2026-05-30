@@ -193,14 +193,15 @@ class TestMockBilling:
     @pytest.mark.asyncio
     async def test_track_usage_reduces_balance(self):
         ctx = MockContext()
-        await ctx.billing.track_usage(100)
+        result = await ctx.billing.track_usage("llm", 100)
+        assert result is True
         balance = await ctx.billing.get_balance()
         assert balance.balance == 49900
 
     @pytest.mark.asyncio
     async def test_balance_floor_at_zero(self):
         ctx = MockContext()
-        await ctx.billing.track_usage(999999)
+        await ctx.billing.track_usage("llm", 999999)
         balance = await ctx.billing.get_balance()
         assert balance.balance == 0
 
