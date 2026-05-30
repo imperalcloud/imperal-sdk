@@ -501,9 +501,9 @@ def validate_extension(ext) -> ValidationReport:
                         ),
                     ))
 
-    # V20 — every write/destructive @chat.function declares effects (warn-level
-    # for v4.0.0, error-level v5.0.0+). effects is advisory declared-intent
-    # metadata retained for ext convention; the kernel does not consume it today.
+    # V20 — every write/destructive @chat.function should declare effects
+    # (WARN-level). effects is advisory declared-intent metadata retained for
+    # ext convention; the kernel does not consume it today.
     for chat_tool_name, chat_ext in (chat_extensions or {}).items():
         for fn_name, fn_def in _ext_functions(chat_ext).items():
             if fn_name.startswith("__"):
