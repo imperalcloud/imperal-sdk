@@ -30,9 +30,9 @@ class FunctionDef:
 
     The platform reads ``chain_callable`` from the manifest to pick typed
     dispatch (direct ``app/func(args)`` call) vs. legacy ChatExtension
-    LLM-router delegation. Default ``True`` for any ``action_type`` other
-    than ``"read"`` so the platform can deterministically execute writes
-    without giving the LLM a chance to summarise instead.
+    LLM-router delegation. Defaults to ``True`` for ALL ``action_type``
+    values since v4.2.10, so the platform can deterministically execute the
+    typed tool without giving the LLM a chance to summarise instead.
 
     ``effects`` declares the *intended* side-effect surface
     (``["create:note"]``, ``["delete:folder"]``, …). **Reserved /
@@ -159,7 +159,6 @@ class ChatExtension:
                   2. Platform catalog ingestion of ``return_model``.
                   3. Classifier envelope rendering of ``return_fields``.
                   4. ``$REF`` resolver path validation against the schema.
-                  5. Runtime ``data.model_validate`` on emit.
 
                 **MUST** be present for ``action_type="read"`` (V23 —
                 initially WARN, ERROR after soak via
