@@ -27,15 +27,32 @@ _DECORATOR_ROLES = {
     "long_running": "advisory",
 }
 
+# HTTP payload field-sets the SDK billing client actually sends, per route.
+# Cross-checked against the kernel/gateway request model by the Phase 1b
+# contract guard (wire layer b). Sourced from billing/client.py::track_usage,
+# which posts {"meter", "quantity"} and adds {"user_id", "tenant_id"} when a
+# user is bound. The corrected field is 'quantity' (the 2026-05-30 fix); the
+# stale 'amount' field must never reappear here.
+_HTTP_PAYLOADS: dict[str, list[str]] = {
+    "POST /v1/billing/internal/usage/track": ["meter", "quantity", "user_id", "tenant_id"],
+}
+
 
 def generate_claims() -> dict:
+    import imperal_sdk
     from imperal_sdk.extensions.client import MAX_CALL_DEPTH
     return {
+        # The SDK version these claims were generated from. The kernel-side
+        # guard compares this against the installed imperal_sdk to detect a
+        # deployed-vs-validated drift — so a stale artifact snapshot can never
+        # read green against a different SDK than the one actually deployed.
+        "_sdk_version": imperal_sdk.__version__,
         "constants": {
             # SDK call_stack INCLUDES the root (starts at len 1), so counts_root=True.
             "max_call_depth": {"value": MAX_CALL_DEPTH, "counts_root": True},
         },
         "decorator_roles": dict(_DECORATOR_ROLES),
+        "http_payloads": {k: list(v) for k, v in _HTTP_PAYLOADS.items()},
     }
 
 

@@ -68,3 +68,29 @@ async def test_track_usage_without_uid_payload_is_flagged():
     findings = check_wire_payload(ROUTE, set(captured), CONTRACT)
     assert any("user_id" in f.detail or "tenant_id" in f.detail for f in findings), \
         f"guard should flag the no-uid payload missing required fields; got {findings}"
+
+
+@respx.mock
+async def test_http_payloads_artifact_matches_live_client():
+    """The exported http_payloads claim (the artifact the kernel-side guard
+    reads) must equal the field-set the live client actually sends with a bound
+    user. Guards against the hand-maintained _HTTP_PAYLOADS list silently
+    drifting from track_usage — the exact failure mode the guard exists to
+    prevent (e.g. an 'amount' regression the static list wouldn't reflect)."""
+    captured: dict = {}
+
+    def _capture(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"message": "tracked"})
+
+    respx.post("http://gw.test/v1/billing/internal/usage/track").mock(side_effect=_capture)
+
+    from imperal_sdk.billing.client import BillingClient
+    client = BillingClient(gateway_url="http://gw.test", auth_token="t",
+                           service_token="svc", user_id="u1")
+    await client.track_usage("llm", 100)
+
+    claimed = set(CLAIMS["http_payloads"][ROUTE])
+    assert set(captured) == claimed, (
+        f"http_payloads claim {sorted(claimed)} != live track_usage payload "
+        f"{sorted(captured)} — regenerate/sync _HTTP_PAYLOADS with the client")

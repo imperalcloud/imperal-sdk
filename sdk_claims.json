@@ -1,0 +1,27 @@
+{
+  "_sdk_version": "5.1.0",
+  "constants": {
+    "max_call_depth": {
+      "counts_root": true,
+      "value": 4
+    }
+  },
+  "decorator_roles": {
+    "action_type": "consumed",
+    "background": "advisory",
+    "chain_callable": "consumed",
+    "data_model": "consumed",
+    "effects": "advisory",
+    "event": "consumed",
+    "id_projection": "consumed",
+    "long_running": "advisory"
+  },
+  "http_payloads": {
+    "POST /v1/billing/internal/usage/track": [
+      "meter",
+      "quantity",
+      "user_id",
+      "tenant_id"
+    ]
+  }
+}
