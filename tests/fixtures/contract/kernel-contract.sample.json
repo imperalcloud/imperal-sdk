@@ -1,0 +1,28 @@
+{
+  "version": "5.x-sample",
+  "request_models": {
+    "POST /v1/billing/internal/usage/track": {
+      "fields": {
+        "user_id":      {"type": "str",        "required": true},
+        "tenant_id":    {"type": "str",        "required": true},
+        "meter":        {"type": "str",        "required": true},
+        "quantity":     {"type": "int",        "required": false},
+        "extension_id": {"type": "str | None", "required": false}
+      }
+    }
+  },
+  "constants": {
+    "hub_dispatch": {
+      "max_depth": {"value": 3, "counts_root": false, "effective_nested_calls": 3, "reject_when": "depth >= value"}
+    }
+  },
+  "sdk_version_floor": "5.0.0",
+  "consumed_decorator_fields": ["action_type", "chain_callable", "data_model", "event", "id_projection"],
+  "ctx_surface": {
+    "ai": ["complete"],
+    "billing": ["check_limits", "get_balance", "get_subscription", "track_usage"],
+    "config": ["all", "get", "get_section"],
+    "skeleton": ["get"]
+  },
+  "emit_time_validation": {"action_result_data": false}
+}
