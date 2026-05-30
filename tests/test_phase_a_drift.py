@@ -26,3 +26,22 @@ def test_config_require_removed():
     assert not hasattr(ConfigProtocol, "require")
     assert not hasattr(MockConfig, "require")
     assert hasattr(ConfigProtocol, "get") and hasattr(ConfigProtocol, "all")
+
+
+def test_mock_skeleton_is_read_only():
+    from imperal_sdk.testing.mock_context import MockSkeleton
+    assert not hasattr(MockSkeleton, "update")   # client/protocol read-only since v1.6.0
+    assert hasattr(MockSkeleton, "_seed")        # test-only loader
+
+
+async def test_mock_skeleton_seed_then_get():
+    from imperal_sdk.testing.mock_context import MockSkeleton
+    s = MockSkeleton()
+    s._seed("rules", {"x": 1})
+    assert await s.get("rules") == {"x": 1}
+
+
+def test_mock_skeleton_satisfies_protocol():
+    from imperal_sdk.context import SkeletonProtocol
+    from imperal_sdk.testing.mock_context import MockSkeleton
+    assert isinstance(MockSkeleton(), SkeletonProtocol)

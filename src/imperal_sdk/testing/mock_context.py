@@ -144,7 +144,10 @@ class MockSkeleton:
     async def get(self, section: str) -> dict | None:
         return self._sections.get(section)
 
-    async def update(self, section: str, data: dict) -> None:
+    def _seed(self, section: str, data: dict) -> None:
+        """Test-only: preload a skeleton section. NOT part of SkeletonProtocol
+        (the real client is read-only since v1.6.0; kernel skeleton_save_section
+        is the sole writer)."""
         self._sections[section] = data
 
 
