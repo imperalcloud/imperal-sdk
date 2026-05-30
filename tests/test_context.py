@@ -10,7 +10,6 @@ def test_context_creation():
     ctx = Context(user=user)
     assert ctx.user.imperal_id == "imp_u_123"
     assert ctx.store is None
-    assert ctx.db is None
     assert ctx.ai is None
     assert ctx.billing is None
 

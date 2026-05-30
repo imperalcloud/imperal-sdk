@@ -18,3 +18,17 @@ def test_function_decorator_event_schema_removed():
     assert "long_running" in sig.parameters
     assert "effects" in sig.parameters
     assert "data_model" in sig.parameters
+
+
+def test_ctx_db_surface_removed():
+    from imperal_sdk.context import Context
+    from dataclasses import fields
+    assert "db" not in {f.name for f in fields(Context)}
+    import importlib, pytest
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("imperal_sdk.db")
+    try:
+        from imperal_sdk.context import DBProtocol  # noqa
+        assert False, "DBProtocol should be removed"
+    except ImportError:
+        pass

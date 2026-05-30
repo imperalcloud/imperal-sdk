@@ -27,12 +27,6 @@ class StoreProtocol(Protocol):
 
 
 @runtime_checkable
-class DBProtocol(Protocol):
-    async def acquire(self): ...
-    async def session(self): ...
-
-
-@runtime_checkable
 class AIProtocol(Protocol):
     async def complete(self, prompt: str, model: str = "", **kwargs) -> CompletionResult: ...
 
@@ -157,7 +151,6 @@ class Context:
     user: "UserContext"
     tenant: "TenantContext | None" = None
     store: StoreProtocol | None = None
-    db: DBProtocol | None = None
     ai: AIProtocol | None = None
     # ``skeleton`` is a raw :class:`SkeletonProtocol` implementation supplied
     # by the kernel. In v1.6.0 it is wrapped by :class:`_SkeletonAccessGuard`
@@ -477,7 +470,6 @@ class Context:
             billing=new_billing,
             # Reused — not user-scoped
             ai=self.ai,
-            db=self.db,
             storage=self.storage,
             http=self.http,
             tools=self.tools,
