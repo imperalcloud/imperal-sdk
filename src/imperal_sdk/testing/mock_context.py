@@ -18,7 +18,7 @@ from typing import Any
 
 from imperal_sdk.types.identity import UserContext
 from imperal_sdk.context import Context, TimeContext
-from imperal_sdk.errors import ExtensionError, ValidationError
+from imperal_sdk.errors import ExtensionError
 from imperal_sdk.types.models import (
     BalanceInfo, CompletionResult, Document, FileInfo,
     HTTPResponse, LimitsResult, SubscriptionInfo,
@@ -252,12 +252,6 @@ class MockConfig:
 
     def get_section(self, section: str) -> dict:
         return dict(self._data.get(section, {}))
-
-    def require(self, key: str) -> Any:
-        val = self.get(key)
-        if val is None:
-            raise ValidationError(key, "Required config key not found")
-        return val
 
     def all(self) -> dict:
         return dict(self._data)

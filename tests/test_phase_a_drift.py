@@ -18,3 +18,11 @@ def test_billing_track_usage_matches_client():
     assert list(msig.parameters)[1] == "meter"
     assert msig.parameters["amount"].default == 1
     assert "user" in msig.parameters
+
+
+def test_config_require_removed():
+    from imperal_sdk.context import ConfigProtocol
+    from imperal_sdk.testing.mock_context import MockConfig
+    assert not hasattr(ConfigProtocol, "require")
+    assert not hasattr(MockConfig, "require")
+    assert hasattr(ConfigProtocol, "get") and hasattr(ConfigProtocol, "all")

@@ -395,16 +395,6 @@ class TestMockConfig:
         ctx = MockContext()
         assert ctx.config.get("missing") is None
 
-    def test_require_raises_on_missing(self):
-        ctx = MockContext()
-        from imperal_sdk.errors import ValidationError
-        with pytest.raises(ValidationError):
-            ctx.config.require("missing_key")
-
-    def test_require_returns_value(self):
-        ctx = MockContext(config={"key": "value"})
-        assert ctx.config.require("key") == "value"
-
     def test_get_section(self):
         ctx = MockContext(config={"db": {"host": "localhost", "port": 5432}})
         section = ctx.config.get_section("db")
