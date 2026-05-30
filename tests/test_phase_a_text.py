@@ -29,6 +29,16 @@ def test_data_model_docstring_no_emit_validate_claim():
     assert "Runtime ``data.model_validate`` on emit" not in doc
 
 
+def test_api_surface_no_skeleton_update_no_db():
+    import json
+    import pathlib
+    p = pathlib.Path(__file__).resolve().parents[1] / "api_surface.json"
+    s = json.loads(p.read_text())
+    assert "update" not in s.get("skeleton", [])   # SkeletonClient read-only since v1.6.0
+    assert "db" not in s                            # ctx.db removed in Phase A
+    assert s.get("skeleton") == ["get"]             # the only skeleton method
+
+
 def test_chain_callable_docstring_unconditional_true():
     doc = FunctionDef.__doc__ or ""
     before_id_projection = doc.split("id_projection")[0]

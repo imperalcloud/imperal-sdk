@@ -24,8 +24,7 @@
     "send"
   ],
   "skeleton": [
-    "get",
-    "update"
+    "get"
   ],
   "storage": [
     "delete",
