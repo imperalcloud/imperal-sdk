@@ -9,7 +9,7 @@ Exit codes:
     2 — script error (file not found, parse error)
 
 Usage:
-    python -m imperal_sdk.tools.validate_identity_contract \\
+    python -m imperal_sdk.devtools.validate_identity_contract \\
         --authgw-path=/opt/imperal-auth-gateway/releases/initial/app
 """
 from __future__ import annotations

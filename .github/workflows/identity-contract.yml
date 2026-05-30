@@ -77,7 +77,7 @@ jobs:
         if: steps.authgw_checkout.outcome == 'success'
         working-directory: sdk
         run: |
-          python -m imperal_sdk.tools.validate_identity_contract \
+          python -m imperal_sdk.devtools.validate_identity_contract \
             --authgw-path=../auth-gw/releases/initial/app
 
       - name: Note when auth-gw parity skipped

@@ -7,7 +7,7 @@ Consumed by kernel-side ``docs_vs_api_linter`` (see spec §4.1) to detect
 comments/docstrings referencing non-existent ``ctx.<ns>.<method>()`` calls.
 
 Regenerated via:
-    python -m imperal_sdk.tools.generate_api_surface --output api_surface.json
+    python -m imperal_sdk.devtools.generate_api_surface --output api_surface.json
 
 Run by SDK pre-commit hook + at every release (Task 10b).
 """
