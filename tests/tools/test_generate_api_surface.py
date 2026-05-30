@@ -7,7 +7,7 @@ Ensures core methods never silently disappear from the public surface
 """
 from __future__ import annotations
 
-from imperal_sdk.tools.generate_api_surface import generate_surface
+from imperal_sdk.devtools.generate_api_surface import generate_surface
 
 
 CORE_STORE = {"get", "set", "delete", "query", "count", "list_users"}

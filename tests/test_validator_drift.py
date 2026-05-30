@@ -1,6 +1,6 @@
 """W1 — Identity contract drift validator tests.
 
-Verifies imperal_sdk.tools.validate_identity_contract correctly:
+Verifies imperal_sdk.devtools.validate_identity_contract correctly:
 - Detects field-set mismatches between SDK Pydantic and SQLAlchemy DB columns
 - Honors EXCLUDED_FROM_API allowlist (password_hash, id, db_config)
 - Verifies subset invariants (UserContext ⊂ User, TenantContext ⊂ Tenant)
@@ -51,7 +51,7 @@ class Tenant(Base):
 
 
 def test_validator_passes_aligned_user_schema(tmp_path):
-    from imperal_sdk.tools.validate_identity_contract import validate_user_against_db
+    from imperal_sdk.devtools.validate_identity_contract import validate_user_against_db
     p = tmp_path / "user.py"
     p.write_text(_ALIGNED_USER_PY)
     errors = validate_user_against_db(str(p))
@@ -59,7 +59,7 @@ def test_validator_passes_aligned_user_schema(tmp_path):
 
 
 def test_validator_passes_aligned_tenant_schema(tmp_path):
-    from imperal_sdk.tools.validate_identity_contract import validate_tenant_against_db
+    from imperal_sdk.devtools.validate_identity_contract import validate_tenant_against_db
     p = tmp_path / "tenant.py"
     p.write_text(_ALIGNED_TENANT_PY)
     errors = validate_tenant_against_db(str(p))
@@ -67,7 +67,7 @@ def test_validator_passes_aligned_tenant_schema(tmp_path):
 
 
 def test_validator_catches_extra_field_in_db(tmp_path):
-    from imperal_sdk.tools.validate_identity_contract import validate_user_against_db
+    from imperal_sdk.devtools.validate_identity_contract import validate_user_against_db
     drifted = _ALIGNED_USER_PY.replace(
         "    is_active: Mapped[bool] = mapped_column(Boolean)\n",
         "    is_active: Mapped[bool] = mapped_column(Boolean)\n"
@@ -80,7 +80,7 @@ def test_validator_catches_extra_field_in_db(tmp_path):
 
 
 def test_validator_catches_missing_field_in_db(tmp_path):
-    from imperal_sdk.tools.validate_identity_contract import validate_user_against_db
+    from imperal_sdk.devtools.validate_identity_contract import validate_user_against_db
     drifted = _ALIGNED_USER_PY.replace(
         "    cases_user_id: Mapped[int | None] = mapped_column(Integer)\n",
         "",
@@ -92,13 +92,13 @@ def test_validator_catches_missing_field_in_db(tmp_path):
 
 
 def test_validator_excludes_password_hash_and_id():
-    from imperal_sdk.tools.validate_identity_contract import EXCLUDED_FROM_API
+    from imperal_sdk.devtools.validate_identity_contract import EXCLUDED_FROM_API
     assert "password_hash" in EXCLUDED_FROM_API["User"]
     assert "id" in EXCLUDED_FROM_API["User"]
     assert "db_config" in EXCLUDED_FROM_API["Tenant"]
 
 
 def test_validator_subset_invariant_passes_currently():
-    from imperal_sdk.tools.validate_identity_contract import validate_subset_invariants
+    from imperal_sdk.devtools.validate_identity_contract import validate_subset_invariants
     errors = validate_subset_invariants()
     assert errors == [], f"Subset invariants must hold: {errors}"

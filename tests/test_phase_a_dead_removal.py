@@ -32,3 +32,12 @@ def test_ctx_db_surface_removed():
         assert False, "DBProtocol should be removed"
     except ImportError:
         pass
+
+
+def test_ctx_tools_surface_removed():
+    from imperal_sdk.context import Context
+    from dataclasses import fields
+    assert "tools" not in {f.name for f in fields(Context)}
+    import importlib, pytest
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("imperal_sdk.tools")

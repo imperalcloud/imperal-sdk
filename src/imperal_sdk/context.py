@@ -81,12 +81,6 @@ class HTTPProtocol(Protocol):
 
 
 @runtime_checkable
-class ToolsProtocol(Protocol):
-    async def discover(self, query: str, top_k: int = 3) -> list: ...
-    async def call(self, activity_name: str, params: dict) -> Any: ...
-
-
-@runtime_checkable
 class ConfigProtocol(Protocol):
     def get(self, key: str, default: Any = None) -> Any: ...
     def get_section(self, section: str) -> dict: ...
@@ -161,7 +155,6 @@ class Context:
     notify: NotifyProtocol | None = None
     storage: StorageProtocol | None = None
     http: HTTPProtocol | None = None
-    tools: ToolsProtocol | None = None
     config: ConfigProtocol | None = None
     extensions: ExtensionsProtocol | None = None
     time: TimeContext = field(default_factory=TimeContext)
@@ -472,7 +465,6 @@ class Context:
             ai=self.ai,
             storage=self.storage,
             http=self.http,
-            tools=self.tools,
             config=self.config,
             extensions=self.extensions,
             time=self.time,
