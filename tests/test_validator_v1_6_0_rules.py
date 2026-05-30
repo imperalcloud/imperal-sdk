@@ -12,7 +12,6 @@ instance is required because the rules are static (AST + JSON).
 from __future__ import annotations
 
 import pathlib
-import pytest
 
 from imperal_sdk.validator_v1_6_0 import (
     validate_source_tree,
@@ -308,69 +307,33 @@ async def alert_tasks(ctx, old=None, new=None):
 
 
 # ---------------------------------------------------------------------------
-# SDK-VERSION-1 — manifest sdk_version vs v1.6.0 features
+# SDK-VERSION-1 — manifest sdk_version must be >= 5.0.0 (unconditional platform floor)
 # ---------------------------------------------------------------------------
 
 
-def test_sdk_version_1_warns_when_using_v1_6_features_without_version(tmp_path):
-    _write(tmp_path, "main.py", """
-from pydantic import BaseModel
-from imperal_sdk import Extension
-
-ext = Extension("app", version="1.0.0")
-
-@ext.cache_model("inbox_summary")
-class InboxSummary(BaseModel):
-    unread: int
-
-@ext.tool("probe")
-async def probe(ctx):
-    await ctx.cache.set("k", InboxSummary(unread=0), ttl_seconds=60)
-""")
-    # manifest missing sdk_version
+def test_sdk_version_1_errors_when_missing_sdk_version(tmp_path):
+    # manifest missing sdk_version is loader-fatal -> ERROR (feature-independent)
     manifest = {"app_id": "app", "version": "1.0.0"}
     issues = validate_manifest_v1_6_0(manifest, str(tmp_path))
     hits = _rules(issues, "SDK-VERSION-1")
     assert len(hits) == 1
-    assert hits[0].level == "WARN"
+    assert hits[0].level == "ERROR"
 
 
 def test_sdk_version_1_silent_on_correct_sdk_version(tmp_path):
-    _write(tmp_path, "main.py", """
-from pydantic import BaseModel
-from imperal_sdk import Extension
-
-ext = Extension("app", version="1.0.0")
-
-@ext.cache_model("inbox_summary")
-class InboxSummary(BaseModel):
-    unread: int
-
-@ext.tool("probe")
-async def probe(ctx):
-    await ctx.cache.set("k", InboxSummary(unread=0), ttl_seconds=60)
-""")
-    manifest = {"app_id": "app", "version": "1.0.0", "sdk_version": "1.6.0"}
+    # 5.0.0+ passes clean — no SDK-VERSION-1 issue at all
+    manifest = {"app_id": "app", "version": "1.0.0", "sdk_version": "5.0.0"}
     issues = validate_manifest_v1_6_0(manifest, str(tmp_path))
-    warn_hits = [i for i in _rules(issues, "SDK-VERSION-1") if i.level == "WARN"]
-    assert warn_hits == []
+    assert _rules(issues, "SDK-VERSION-1") == []
 
 
-def test_sdk_version_1_warns_on_stale_version_with_v1_6_features(tmp_path):
-    _write(tmp_path, "main.py", """
-from imperal_sdk import Extension
-
-ext = Extension("app", version="1.0.0")
-
-@ext.skeleton("monitors")
-async def refresh_monitors(ctx):
-    return {"response": {"count": 0}}
-""")
+def test_sdk_version_1_errors_on_stale_version(tmp_path):
+    # 1.5.22 < 5.0.0 -> loader-fatal -> ERROR (feature-independent)
     manifest = {"app_id": "app", "version": "1.0.0", "sdk_version": "1.5.22"}
     issues = validate_manifest_v1_6_0(manifest, str(tmp_path))
     hits = _rules(issues, "SDK-VERSION-1")
     assert len(hits) == 1
-    assert hits[0].level == "WARN"
+    assert hits[0].level == "ERROR"
     assert "1.5.22" in hits[0].message
 
 

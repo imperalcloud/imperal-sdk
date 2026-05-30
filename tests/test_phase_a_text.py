@@ -45,3 +45,20 @@ def test_validate_manifest_dict_docstring_states_it_raises():
     assert "raise" in doc.lower()
     # the module-level summary must also stop calling it non-raising:
     assert "(non-raising)" not in (ms.__doc__ or "")
+
+
+def test_sdk_version_floor_is_5_0_0():
+    from imperal_sdk.validator_v1_6_0 import validate_manifest_v1_6_0
+    # sub-5.0.0 is loader-fatal -> ERROR
+    sub = validate_manifest_v1_6_0(
+        {"app_id": "x", "version": "1.0.0", "sdk_version": "4.2.0"})
+    sdkv = [i for i in sub if i.rule == "SDK-VERSION-1"]
+    assert sdkv and all(i.level == "ERROR" for i in sdkv)
+    # missing sdk_version -> ERROR
+    missing = validate_manifest_v1_6_0({"app_id": "x", "version": "1.0.0"})
+    assert any(i.rule == "SDK-VERSION-1" and i.level == "ERROR" for i in missing)
+    # 5.0.0 (the exact floor) and any newer version pass clean
+    for good in ("5.0.0", "5.0.1", "5.1.0"):
+        ok = validate_manifest_v1_6_0(
+            {"app_id": "x", "version": "1.0.0", "sdk_version": good})
+        assert not [i for i in ok if i.rule == "SDK-VERSION-1"]

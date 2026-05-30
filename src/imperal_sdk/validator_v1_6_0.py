@@ -23,8 +23,8 @@ Seven new rules added on top of the V1-V16 contract in ``validator.py``:
   docstring and is discovered by the kernel via tool-name presence in
   ``tools[]`` (see ``activities/config_loader.py``).
 * ``SDK-VERSION-1`` — ``imperal.json`` missing ``sdk_version`` or
-  ``sdk_version < "1.6.0"`` when the extension uses v1.6.0 features
-  (``ctx.cache``, ``@ext.skeleton``, etc.).
+  ``sdk_version < "5.0.0"``; the kernel loader hard-rejects such manifests
+  at load, so this fires as an ERROR (mirrors the binding kernel gate).
 
 These run off AST + manifest JSON so they fire in CI **before** deploy, without
 importing the extension module. The runtime ``validate_extension(ext)`` cannot
@@ -211,29 +211,6 @@ def _extract_cache_ttl(call: ast.Call) -> int | None:
             return kw.value.value
     return None
 
-
-def _uses_v1_6_0_features(trees: dict[str, ast.Module]) -> bool:
-    """True iff any scanned file uses a v1.6.0 feature.
-
-    Signals: any ``ctx.cache.*`` reference, any ``@ext.skeleton`` (or
-    ``@*.skeleton``) decorator, any ``ctx.skeleton.get`` call. This drives
-    ``SDK-VERSION-1`` so extensions still on the v1.5.x contract don't get
-    warned about a missing ``sdk_version`` they don't need.
-    """
-    for tree in trees.values():
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute) and _is_ctx_attr(node.value, "cache"):
-                return True
-            if isinstance(node, ast.Call):
-                if _find_cache_call(node):
-                    return True
-                if isinstance(node.func, ast.Attribute) and _is_ctx_skeleton_method(node.func, "get"):
-                    return True
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for dec in node.decorator_list:
-                    if _decorator_attr_name(dec) == "skeleton":
-                        return True
-    return False
 
 
 def _collect_skeleton_tool_targets(trees: dict[str, ast.Module]) -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.Call, str, str]]:
@@ -473,51 +450,44 @@ def _visit_module(
 
 
 def validate_manifest_v1_6_0(manifest: dict, source_path: str | None = None) -> list[ValidationIssue]:
-    """Apply SDK-VERSION-1 against a parsed ``imperal.json``.
+    """Apply SDK-VERSION-1: manifest ``sdk_version`` must be >= 5.0.0.
 
-    * Warn if the extension uses v1.6.0 features (detected by scanning the
-      source tree at ``source_path``) and the manifest is missing
-      ``sdk_version`` or has ``sdk_version < "1.6.0"``.
-    * Warn unconditionally if the manifest omits ``sdk_version`` — but tagged
-      ``INFO`` instead of ``WARN`` when no v1.6.0 features are detected, so
-      the noise floor stays low for pre-1.6 extensions.
+    The kernel loader (``core/loader.py``, I-LOADER-REJECTS-LEGACY-LLM-ROUTER)
+    HARD-rejects any extension whose manifest declares ``sdk_version < 5.0.0``
+    (the unified-chain boundary where the legacy LLM router was removed), and
+    treats a missing ``sdk_version`` as ``0.0.0``. A sub-5.0.0 (or missing)
+    manifest is therefore loader-fatal, so this pre-flight check mirrors that
+    single binding gate and emits ERROR — letting authors catch it before
+    deploy instead of after.
+
+    (``source_path`` is accepted for signature compatibility with the other
+    source-tree validators; this manifest-level check does not use it.)
     """
-    uses_v16 = False
-    if source_path and os.path.isdir(source_path):
-        trees: dict[str, ast.Module] = {}
-        for p in _iter_py_files(source_path):
-            t = _parse(p)
-            if t is not None:
-                trees[p] = t
-        uses_v16 = _uses_v1_6_0_features(trees)
-
     sdk_version = manifest.get("sdk_version")
     issues: list[ValidationIssue] = []
     if sdk_version is None:
         issues.append(ValidationIssue(
             rule="SDK-VERSION-1",
-            level="WARN" if uses_v16 else "INFO",
+            level="ERROR",
             message=(
-                "imperal.json missing 'sdk_version'. "
-                + ("Extension uses v1.6.0 features; declare `\"sdk_version\": \"1.6.0\"`." if uses_v16
-                   else "Declare 'sdk_version' to pin the SDK contract.")
+                "imperal.json missing 'sdk_version'. The platform requires "
+                "sdk_version >= 5.0.0 and rejects extensions without it."
             ),
             file="imperal.json",
-            fix='Add `"sdk_version": "1.6.0"` to imperal.json.',
+            fix='Add `"sdk_version": "5.0.0"` (or newer) to imperal.json.',
         ))
-    else:
-        if _version_lt(str(sdk_version), "1.6.0") and uses_v16:
-            issues.append(ValidationIssue(
-                rule="SDK-VERSION-1",
-                level="WARN",
-                message=(
-                    f"imperal.json declares sdk_version={sdk_version!r} but "
-                    f"the extension uses v1.6.0 features (ctx.cache or "
-                    f"@ext.skeleton)."
-                ),
-                file="imperal.json",
-                fix='Bump `"sdk_version"` to `"1.6.0"` in imperal.json.',
-            ))
+    elif _version_lt(str(sdk_version), "5.0.0"):
+        issues.append(ValidationIssue(
+            rule="SDK-VERSION-1",
+            level="ERROR",
+            message=(
+                f"imperal.json declares sdk_version={sdk_version!r}, but the "
+                f"platform hard-rejects anything < 5.0.0 at load (the legacy "
+                f"LLM-router removal boundary)."
+            ),
+            file="imperal.json",
+            fix='Rebuild against imperal-sdk >= 5.0.0 and bump `"sdk_version"`.',
+        ))
     return issues
 
 
