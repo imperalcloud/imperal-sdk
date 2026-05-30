@@ -107,22 +107,31 @@ class BillingClient:
             log.warning("Billing get_subscription failed: %s", e)
             return SubscriptionInfo(plan="unknown", status="unavailable")
 
-    async def track_usage(self, meter: str, amount: int = 1, user: Any = None) -> bool:
-        """Track usage for a given meter. Returns True on success."""
+    async def track_usage(self, meter: str, quantity: int = 1, user: Any = None) -> bool:
+        """Track usage for a given meter. Returns True on success.
+
+        Requires service_token — usage tracking is a server-to-server operation.
+        The gateway endpoint is POST /v1/billing/internal/usage/track (service
+        token required). There is no public user-facing track endpoint; calling
+        without a service token logs a warning and returns False.
+        """
         uid = self._uid(user)
+        if not self._service_token:
+            log.warning(
+                "Billing track_usage requires a service token; "
+                "no-token path is not supported (no public track endpoint). "
+                "Returning False without attempting the request."
+            )
+            return False
         try:
             async with httpx.AsyncClient() as client:
-                payload = {"meter": meter, "amount": amount}
-                if self._service_token and uid:
+                payload: dict = {"meter": meter, "quantity": quantity}
+                if uid:
                     payload["user_id"] = uid
                     payload["tenant_id"] = "default"
-                    resp = await client.post(
-                        f"{self._gateway_url}/v1/billing/internal/usage/track",
-                        json=payload, headers=self._headers(), timeout=10)
-                else:
-                    resp = await client.post(
-                        f"{self._gateway_url}/v1/billing/usage/track",
-                        json=payload, headers=self._headers(), timeout=10)
+                resp = await client.post(
+                    f"{self._gateway_url}/v1/billing/internal/usage/track",
+                    json=payload, headers=self._headers(), timeout=10)
                 return resp.status_code == 200
         except Exception as e:
             log.warning("Billing track_usage failed: %s", e)
