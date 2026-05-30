@@ -14,7 +14,12 @@ from imperal_sdk.errors import NotFoundError, AuthError, ExtensionError
 
 log = logging.getLogger(__name__)
 
-MAX_CALL_DEPTH = 3  # match kernel hub_dispatch_handler MAX_DEPTH
+# Kernel hub_dispatch_handler.MAX_DEPTH=3 allows 3 nested inter-extension calls
+# (its depth counter EXCLUDES the root, rejecting at depth>=3). This call stack
+# INCLUDES the root (starts at len 1) and rejects at len>=MAX_CALL_DEPTH, so the
+# equivalent cap is 4 — permitting the same 3 nested calls, matching the kernel's
+# effective allowance rather than under-cutting it by one hop.
+MAX_CALL_DEPTH = 4
 
 
 class CircularCallError(ExtensionError):

@@ -49,4 +49,10 @@ def test_mock_skeleton_satisfies_protocol():
 
 def test_max_call_depth_matches_kernel():
     from imperal_sdk.extensions import client
-    assert client.MAX_CALL_DEPTH == 3   # kernel hub_dispatch_handler MAX_DEPTH=3
+    # Kernel hub_dispatch_handler.MAX_DEPTH=3 allows 3 nested inter-extension
+    # calls (its depth counter excludes the root). The SDK call_stack INCLUDES
+    # the root, so the matching cap is kernel-allowed-calls + 1 == 4 (reject at
+    # len(call_stack) >= MAX_CALL_DEPTH). Verified against live kernel
+    # orchestration/hub_dispatch_handler.py (2026-05-30 kernel-truth pass).
+    KERNEL_ALLOWED_NESTED_CALLS = 3
+    assert client.MAX_CALL_DEPTH == KERNEL_ALLOWED_NESTED_CALLS + 1  # == 4
