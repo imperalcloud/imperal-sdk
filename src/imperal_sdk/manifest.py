@@ -39,10 +39,13 @@ def generate_manifest(ext: Extension) -> dict:
       - ``actions_explicit`` declares the extension follows the typed-dispatch
         contract — kernel uses ``chain_callable`` per tool.
       - Every ``@chat.function`` is emitted as a typed tool with
-        ``action_type``, ``chain_callable``, ``effects``, ``params_schema``,
+        ``action_type``, ``chain_callable``, ``params_schema``,
         ``return_schema``. The kernel chain planner reads these directly and
         issues ``app/func(args)`` calls without delegating to the
-        ChatExtension LLM router.
+        ChatExtension LLM router. ``effects`` and the per-tool
+        ``background`` / ``long_running`` hints are also emitted, but are
+        advisory metadata — the kernel does not currently consume these
+        decorator fields.
       - ``lifecycle_hooks`` records signatures so the kernel can pass kwargs
         the hook actually accepts (closes the ``on_refresh(message=)``
         TypeError class).

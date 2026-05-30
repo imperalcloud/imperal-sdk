@@ -34,9 +34,11 @@ class FunctionDef:
     than ``"read"`` so the platform can deterministically execute writes
     without giving the LLM a chance to summarise instead.
 
-    ``effects`` declares the side-effect surface (``["create:note"]``,
-    ``["delete:folder"]``, etc.) so the chain narrator + audit ledger
-    can describe exactly what changed without re-deriving from text.
+    ``effects`` declares the *intended* side-effect surface
+    (``["create:note"]``, ``["delete:folder"]``, …). **Reserved /
+    advisory:** the kernel does not currently consume it (no narrator /
+    audit-ledger read today); it is retained as declared-intent metadata
+    emitted into the manifest.
 
     ``id_projection`` declares the Pydantic params field that carries the
     resolved target id when this tool runs as a downstream chain step.
@@ -54,8 +56,8 @@ class FunctionDef:
     chain_callable: bool = True  # platform uses typed dispatch
     effects: list[str] = field(default_factory=list)  # ["create:note", "delete:folder", ...]
     id_projection: str = ""  # params field carrying resolved target id
-    background: bool = False
-    long_running: bool = False
+    background: bool = False  # advisory per-tool hint; kernel does not consume this decorator field (runtime path: ctx.background_task(long_running=…))
+    long_running: bool = False  # advisory per-tool hint; kernel does not consume this decorator field
     _pydantic_model: type | None = None  # auto-detected Pydantic BaseModel class
     _pydantic_param: str = ""  # parameter name that receives the model instance
     _return_model: type | None = None  # data_model kwarg OR autodetected return Pydantic model
@@ -132,13 +134,20 @@ class ChatExtension:
                 call ``app/func(args)`` instead of delegating to the
                 ChatExtension LLM router. Defaults to ``True`` for ALL
                 action_types since v4.2.10.
-            effects: Side-effect surface list — ``["create:note"]``,
-                ``["delete:folder"]``, etc. Used by chain narrator + audit
-                ledger.
+            effects: Declared (advisory) side-effect surface —
+                ``["create:note"]``, ``["delete:folder"]``, etc. Emitted
+                into the manifest as declared-intent metadata; the kernel
+                does not currently consume this decorator field.
             id_projection: Name of the params field that carries the
                 resolved target id when this tool runs as a downstream
                 chain step (e.g. ``"folder_id"`` for
                 ``delete_notes_from_folder``).
+            background: Advisory per-tool hint. The kernel does not consume
+                this decorator field directly; the runtime long-running path
+                is ``ctx.background_task(long_running=…)``. Retained for
+                extension convention (third-party extensions declare it).
+            long_running: Advisory per-tool hint, like ``background`` — not
+                consumed by the kernel from this decorator field.
             data_model: **v5.0.1 — Federal Typed Return Contract.** Explicit
                 Pydantic ``BaseModel`` subclass declaring the shape of
                 ``ActionResult.data`` for this tool. Federal contract:
