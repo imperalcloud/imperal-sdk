@@ -2,6 +2,47 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.1.0 — 2026-05-30 — Accuracy & correctness pass
+
+This release makes the SDK faithful to current platform behavior: a billing
+fix, removal of unused surface, a corrected limit, and documentation that now
+matches what the platform actually does. Everything removed was unused (never
+wired by the platform); the single signature change is on a method that
+previously could not record usage correctly.
+
+### Fixed
+
+- **`ctx.billing.track_usage(...)` now records the requested amount.** Previously
+  every call was recorded as a single unit regardless of the amount passed, and
+  one code path could not reach the platform at all. The method now sends the
+  correct request. **Signature changed** to
+  `track_usage(meter: str, quantity: int = 1, user=None) -> bool`
+  (previously `track_usage(tokens, resource)`).
+- **Inter-extension call-depth limit** now matches the platform's actual nesting
+  allowance, so a legitimate chain of nested `ctx.extensions.call(...)` hops is no
+  longer rejected one level too early.
+- **Manifest pre-flight validation** now reports an `sdk_version` below `5.0.0`
+  as an error. The platform rejects such extensions at load, so this is now
+  caught before deploy instead of after.
+
+### Removed (unused — never wired by the platform)
+
+- `ctx.db` and `ctx.tools` — use `ctx.extensions` for inter-extension calls.
+- The `event_schema=` parameter on `@chat.function`.
+- `ctx.config.require()` — use `ctx.config.get(...)`.
+- Internal LLM-router methods left over from the 5.0.0 refactor.
+
+### Documentation & test doubles
+
+- `effects`, `background`, and `long_running` are now documented as advisory,
+  declared-intent metadata. Declare them for convention; the long-running
+  runtime path remains `ctx.background_task(long_running=...)`.
+- Corrected the documented behavior of `data_model`, `chain_callable`, and
+  `validate_manifest_dict` (which raises on duplicate webhook paths,
+  cross-namespace event types, and duplicate exposed names).
+- `MockSkeleton` is read-only, matching the real skeleton client; tests prime
+  sections via the test-only `_seed(...)` helper.
+
 ## 5.0.3 — 2026-05-27 — Manifest `hidden_in_sidebar` field (system-only)
 
 System apps may opt out of the Imperal Panel sidebar tile by declaring
