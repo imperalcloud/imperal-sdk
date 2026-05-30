@@ -41,3 +41,10 @@ def test_ctx_tools_surface_removed():
     import importlib, pytest
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("imperal_sdk.tools")
+
+
+def test_orphaned_llm_router_methods_removed():
+    from imperal_sdk.chat.extension import ChatExtension
+    for m in ("_make_chat_result", "_get_action_type", "_build_tool_schemas",
+              "_build_system_prompt", "_build_messages"):
+        assert not hasattr(ChatExtension, m), f"{m} should be removed (dead v5 router)"

@@ -1,7 +1,8 @@
-"""ChatResult and FunctionCall — typed returns from ChatExtension._handle().
+"""ChatResult and FunctionCall — typed return envelope for extension dispatch.
 
-Replaces raw dict returns. Provides to_dict()/from_dict() for kernel
-serialization (Temporal activities expect dict).
+Provides to_dict()/from_dict() for kernel serialization (Temporal activities
+expect dict). Built by the kernel's typed-dispatch layer after each
+extension function invocation.
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ class FunctionCall:
 
 @dataclass
 class ChatResult:
-    """Typed return from ChatExtension._handle(). Replaces ad-hoc dict."""
+    """Typed return envelope from the kernel's typed-dispatch layer. Replaces ad-hoc dict."""
 
     response: str
     handled: bool = False

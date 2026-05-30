@@ -3,8 +3,8 @@
 """Output filtering pipeline for ChatExtension responses.
 
 Enforces OS identity, response style, Markdown hygiene, and tool result
-size limits. All public functions are called by ChatExtension._handle()
-after each LLM turn.
+size limits. Public functions are called by the kernel's typed-dispatch
+layer after each extension function invocation.
 """
 from __future__ import annotations
 import json

@@ -61,7 +61,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Serialized return from ChatExtension._handle() \u2014 the kernel-transport form of a chat turn's output. Underscore-prefixed keys distinguish transport metadata from raw tool response. Crosses Temporal activity history.",
+  "description": "Serialized return from the kernel's typed-dispatch layer \u2014 the kernel-transport form of a chat turn's output. Underscore-prefixed keys distinguish transport metadata from raw tool response. Crosses Temporal activity history.",
   "properties": {
     "response": {
       "default": "",
