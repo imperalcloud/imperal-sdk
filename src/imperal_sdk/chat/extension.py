@@ -52,7 +52,6 @@ class FunctionDef:
     params: dict = field(default_factory=dict)
     action_type: str = "read"  # "read", "write", or "destructive"
     event: str = ""  # event name for ActionResult publishing (e.g. "mail.sent")
-    event_schema: type | None = None  # Pydantic BaseModel for typed event data
     chain_callable: bool = True  # platform uses typed dispatch
     effects: list[str] = field(default_factory=list)  # ["create:note", "delete:folder", ...]
     id_projection: str = ""  # params field carrying resolved target id
@@ -113,7 +112,6 @@ class ChatExtension:
 
     def function(self, name: str, description: str, params: dict | None = None,
                  action_type: str = "read", event: str = "",
-                 event_schema: type | None = None,
                  chain_callable: bool | None = None,
                  effects: list[str] | None = None,
                  id_projection: str | None = None,
@@ -131,7 +129,6 @@ class ChatExtension:
             action_type: ``"read"``, ``"write"``, or ``"destructive"``. Drives
                 kernel action verification and the 2-step confirmation gate.
             event: Event name for ActionResult publishing.
-            event_schema: Optional Pydantic BaseModel class for typed event data.
             chain_callable: When ``True`` the platform issues a direct typed
                 call ``app/func(args)`` instead of delegating to the
                 ChatExtension LLM router. Defaults to ``True`` for ALL
@@ -256,7 +253,6 @@ class ChatExtension:
             self._functions[name] = FunctionDef(
                 name=name, func=func, description=description,
                 params=resolved_params, action_type=action_type, event=event,
-                event_schema=event_schema,
                 chain_callable=chain_callable,
                 effects=list(effects or []),
                 id_projection=id_projection or "",
