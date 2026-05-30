@@ -36,3 +36,12 @@ def test_chain_callable_docstring_unconditional_true():
     assert "other than" not in before_id_projection
     # positive: states the unconditional/all-action-types default:
     assert "v4.2.10" in before_id_projection
+
+
+def test_validate_manifest_dict_docstring_states_it_raises():
+    import imperal_sdk.manifest_schema as ms
+    doc = ms.validate_manifest_dict.__doc__ or ""
+    assert "non-raising" not in doc.lower()
+    assert "raise" in doc.lower()
+    # the module-level summary must also stop calling it non-raising:
+    assert "(non-raising)" not in (ms.__doc__ or "")

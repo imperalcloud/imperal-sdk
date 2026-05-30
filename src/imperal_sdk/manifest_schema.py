@@ -9,7 +9,7 @@ shape `generate_manifest()` produces and the Registry consumes.
 Public API
 ----------
 - `Manifest`                — Pydantic model (runtime validation)
-- `validate_manifest_dict`  — dict -> list[ValidationIssue] (non-raising)
+- `validate_manifest_dict`  — dict -> list[ValidationIssue] for M1–M5; raises ValueError on M6.3/M7.3/M8.2
 - `get_schema`              — returns JSON Schema (dict, Draft 2020-12)
 - `MANIFEST_SCHEMA`         — same thing, module-level constant
 
@@ -405,15 +405,23 @@ class Manifest(BaseModel):
 def validate_manifest_dict(data: Any) -> List["ValidationIssue"]:
     """Validate a manifest dict against the JSON Schema contract.
 
-    Non-raising. Returns a list of `ValidationIssue` entries — empty list
-    means the manifest is valid.
+    Returns a list of `ValidationIssue` entries for the schema-level rules
+    M1–M5 (empty list means those passed). **Raises** ``ValueError`` on the
+    hard semantic rules M6.3 / M7.3 / M8.2, which run only when the manifest
+    is otherwise structurally valid (no M1–M5 issues present).
 
-    Rule codes emitted:
-    - `M1`  — root is not a dict / JSON object
-    - `M2`  — missing required field
-    - `M3`  — unknown top-level field (typo detection)
-    - `M4`  — invalid value (regex / type / enum mismatch)
-    - `M5`  — nested field error (tool / signal / schedule)
+    Rule codes:
+    - `M1`   — root is not a dict / JSON object             (issue)
+    - `M2`   — missing required field                        (issue)
+    - `M3`   — unknown top-level field (typo detection)      (issue)
+    - `M4`   — invalid value (regex / type / enum mismatch)  (issue)
+    - `M5`   — nested field error (tool / signal / schedule) (issue)
+    - `M6.3` — webhooks[].path must be unique                (raises ValueError)
+    - `M7.3` — events.emits[].type must be app_id-prefixed   (raises ValueError)
+    - `M8.2` — exposed[].name must be unique                 (raises ValueError)
+
+    Raises:
+        ValueError: on an M6.3 / M7.3 / M8.2 violation.
     """
     # Local import — ValidationIssue lives in validator.py; avoid a
     # circular import at module load by deferring.
