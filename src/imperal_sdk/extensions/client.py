@@ -14,7 +14,7 @@ from imperal_sdk.errors import NotFoundError, AuthError, ExtensionError
 
 log = logging.getLogger(__name__)
 
-MAX_CALL_DEPTH = 8
+MAX_CALL_DEPTH = 3  # match kernel hub_dispatch_handler MAX_DEPTH
 
 
 class CircularCallError(ExtensionError):

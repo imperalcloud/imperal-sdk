@@ -45,3 +45,8 @@ def test_mock_skeleton_satisfies_protocol():
     from imperal_sdk.context import SkeletonProtocol
     from imperal_sdk.testing.mock_context import MockSkeleton
     assert isinstance(MockSkeleton(), SkeletonProtocol)
+
+
+def test_max_call_depth_matches_kernel():
+    from imperal_sdk.extensions import client
+    assert client.MAX_CALL_DEPTH == 3   # kernel hub_dispatch_handler MAX_DEPTH=3
