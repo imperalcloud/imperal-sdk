@@ -45,10 +45,31 @@ def test_ref_shape():
 
 
 def test_entity_list_generic_iter_len():
-    el = EntityList[Project](items=[Project(id=1, title="A"), Project(id=2, title="B")], total=340, has_more=True)
+    el = EntityList[Project](
+        items=[Project(id=1, title="A"), Project(id=2, title="B")],
+        total=340,
+        has_more=True,
+    )
     assert len(el) == 2
     assert [p.title for p in el] == ["A", "B"]
     assert el.total == 340 and el.has_more is True
+
+
+def test_entity_list_page_field():
+    el = EntityList[Project](items=[Project(id=1, title="A")], page=2)
+    assert el.page == 2
+
+
+def test_ref_cross_app():
+    assert Ref(id=1, kind="task", title="T", app_id="tasks").app_id == "tasks"
+
+
+def test_kind_empty_string_treated_as_absent():
+    assert Entity(id=1, title="X", kind="").kind == "entity"
+
+
+def test_roles_of_accepts_instance():
+    assert roles_of(Project(id=1, title="P")) == roles_of(Project)
 
 
 def test_roles_of_core_and_custom():

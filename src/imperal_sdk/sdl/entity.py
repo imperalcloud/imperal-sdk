@@ -31,6 +31,8 @@ class Entity(BaseModel):
     """Canonical base for any SDL entity. Subclasses add domain fields + facets.
 
     Required: id, title, kind. ``kind`` defaults to the subclass name lowercased.
+    An empty-string ``kind`` is treated as absent and is replaced by the subclass
+    name lowercased (e.g. ``Entity(id=1, title="X", kind="").kind == "entity"``).
     """
     id: str | int
     title: str
@@ -67,7 +69,12 @@ def roles_of(model: type[BaseModel]) -> dict[str, str]:
     Core Entity fields resolve to their fixed ``core.*`` roles; other fields
     resolve to a custom role iff declared via ``sdl.field`` (``x-sdl-role`` in
     ``json_schema_extra``). Plain untagged fields are omitted.
+
+    Accepts either an Entity subclass OR an instance (an instance is coerced to its
+    type) so callers (e.g. the kernel) can pass whichever they have.
     """
+    if not isinstance(model, type):
+        model = type(model)
     out: dict[str, str] = {}
     for fname, finfo in model.model_fields.items():
         if fname in CORE_ROLES:
