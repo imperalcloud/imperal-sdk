@@ -2,7 +2,27 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-## 5.1.0 — 2026-05-30 — Accuracy & correctness pass
+## [Unreleased]
+
+### Added
+
+- **SDL — Structured Data Layer (Phase 1: Core).** New `imperal_sdk.sdl` module
+  for returning *typed* entities whose field meanings the platform reads directly
+  instead of inferring from field names:
+  - `sdl.Entity` — canonical base with `id` / `title` / `kind` (+ optional
+    `subtitle` / `description` / `status` / `url`). `kind` defaults to the
+    subclass name.
+  - `sdl.Ref` — lightweight reference (id / kind / title / app_id) for relations
+    and list items.
+  - `sdl.EntityList[T]` — typed list with `items` / `total` / `page` / `has_more`.
+  - `sdl.field(role="...")` — declare a custom semantic role on a field; roles
+    follow a dotted grammar and reserved namespaces are protected.
+  - `sdl.roles_of(model)` — introspect a model's field→role map.
+
+  Use it via `data_model=` on `@chat.function` (e.g.
+  `class Note(sdl.Entity): ...` → `data_model=Note`). This phase ships the core
+  types and the role registry only; the standard facet library and full platform
+  integration arrive in later phases. Not yet wired into the platform.
 
 This release makes the SDK faithful to current platform behavior: a billing
 fix, removal of unused surface, a corrected limit, and documentation that now
