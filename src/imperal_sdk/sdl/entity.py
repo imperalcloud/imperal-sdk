@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from imperal_sdk.sdl.field import ROLE_KEY
 from imperal_sdk.sdl.roles import CORE_ROLES
@@ -33,7 +33,11 @@ class Entity(BaseModel):
     Required: id, title, kind. ``kind`` defaults to the subclass name lowercased.
     An empty-string ``kind`` is treated as absent and is replaced by the subclass
     name lowercased (e.g. ``Entity(id=1, title="X", kind="").kind == "entity"``).
+
+    Carries the schema marker ``x-sdl: "entity"`` so the platform can detect an
+    SDL-typed result from its ``return_schema`` alone. Inherited by subclasses.
     """
+    model_config = ConfigDict(json_schema_extra={"x-sdl": "entity"})
     id: str | int
     title: str
     kind: str = ""
@@ -50,7 +54,11 @@ class Entity(BaseModel):
 
 
 class EntityList(BaseModel, Generic[T]):
-    """Typed list result with list/pagination semantics. Mirrors Page[T]."""
+    """Typed list result with list/pagination semantics. Mirrors Page[T].
+
+    Carries the schema marker ``x-sdl: "entity-list"`` for platform detection.
+    """
+    model_config = ConfigDict(json_schema_extra={"x-sdl": "entity-list"})
     items: list[T]
     total: int | None = None
     page: int | None = None
