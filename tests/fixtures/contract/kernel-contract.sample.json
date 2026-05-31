@@ -13,7 +13,7 @@
   },
   "constants": {
     "hub_dispatch": {
-      "max_depth": {"value": 3, "counts_root": false, "effective_nested_calls": 3, "reject_when": "depth >= value"}
+      "max_depth": {"value": 6, "counts_root": false, "effective_nested_calls": 6, "reject_when": "depth >= value"}
     }
   },
   "sdk_version_floor": "5.0.0",

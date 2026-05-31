@@ -3,7 +3,7 @@
   "constants": {
     "max_call_depth": {
       "counts_root": true,
-      "value": 4
+      "value": 7
     }
   },
   "decorator_roles": {

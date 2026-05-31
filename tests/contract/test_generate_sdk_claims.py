@@ -7,9 +7,9 @@ def test_claims_carry_depth_semantics_and_roles():
     c = generate_claims()
     md = c["constants"]["max_call_depth"]
     # Assert EFFECTIVE behavior (the guard's own principle), NOT the raw value:
-    # the SDK's depth cap must permit the kernel's 3 nested inter-extension calls.
+    # the SDK's depth cap must permit the kernel's 6 nested inter-extension calls (default).
     assert md["counts_root"] is True
-    assert _effective_nested_calls(md["value"], md["counts_root"]) == 3
+    assert _effective_nested_calls(md["value"], md["counts_root"]) == 6
     assert c["decorator_roles"]["effects"] == "advisory"
     assert c["decorator_roles"]["action_type"] == "consumed"
 

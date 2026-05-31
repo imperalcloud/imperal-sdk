@@ -14,12 +14,14 @@ from imperal_sdk.errors import NotFoundError, AuthError, ExtensionError
 
 log = logging.getLogger(__name__)
 
-# Kernel hub_dispatch_handler.MAX_DEPTH=3 allows 3 nested inter-extension calls
-# (its depth counter EXCLUDES the root, rejecting at depth>=3). This call stack
-# INCLUDES the root (starts at len 1) and rejects at len>=MAX_CALL_DEPTH, so the
-# equivalent cap is 4 — permitting the same 3 nested calls, matching the kernel's
-# effective allowance rather than under-cutting it by one hop.
-MAX_CALL_DEPTH = 4
+# Kernel hub_dispatch depth is admin-tunable (default 6; its depth counter
+# EXCLUDES the root, rejecting at depth>=cap, so the default permits 6 nested
+# inter-extension calls). This call stack INCLUDES the root (starts at len 1)
+# and rejects at len>=MAX_CALL_DEPTH, so the equivalent fallback cap is 7 —
+# permitting the same 6 nested calls, matching the kernel's default allowance
+# rather than under-cutting it by one hop. This is only a client-side fallback;
+# the kernel enforces the real per-tenant cap (hub_dispatch_max_depth, [0,9]).
+MAX_CALL_DEPTH = 7
 
 
 class CircularCallError(ExtensionError):
