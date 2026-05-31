@@ -2,10 +2,496 @@
   "schema_version": 1,
   "roles": [
     {
+      "role": "catalog.age_restriction",
+      "field": "age_restriction",
+      "tier": "facet",
+      "facet": "ProductCompliance"
+    },
+    {
+      "role": "catalog.availability",
+      "field": "availability",
+      "tier": "facet",
+      "facet": "Inventory"
+    },
+    {
+      "role": "catalog.backorderable",
+      "field": "backorderable",
+      "tier": "facet",
+      "facet": "Inventory"
+    },
+    {
+      "role": "catalog.brand",
+      "field": "brand",
+      "tier": "facet",
+      "facet": "Branded"
+    },
+    {
+      "role": "catalog.bundle_items",
+      "field": "bundle_items",
+      "tier": "facet",
+      "facet": "Bundle"
+    },
+    {
+      "role": "catalog.bundle_type",
+      "field": "bundle_type",
+      "tier": "facet",
+      "facet": "Bundle"
+    },
+    {
+      "role": "catalog.certifications",
+      "field": "certifications",
+      "tier": "facet",
+      "facet": "ProductCompliance"
+    },
+    {
+      "role": "catalog.color",
+      "field": "color",
+      "tier": "facet",
+      "facet": "ColorMaterial"
+    },
+    {
+      "role": "catalog.color_hex",
+      "field": "color_hex",
+      "tier": "facet",
+      "facet": "ColorMaterial"
+    },
+    {
+      "role": "catalog.country_of_origin",
+      "field": "country_of_origin",
+      "tier": "facet",
+      "facet": "Branded"
+    },
+    {
+      "role": "catalog.finish",
+      "field": "finish",
+      "tier": "facet",
+      "facet": "ColorMaterial"
+    },
+    {
+      "role": "catalog.hs_code",
+      "field": "hs_code",
+      "tier": "facet",
+      "facet": "ProductCompliance"
+    },
+    {
+      "role": "catalog.in_stock",
+      "field": "in_stock",
+      "tier": "facet",
+      "facet": "Inventory"
+    },
+    {
+      "role": "catalog.is_bundle",
+      "field": "is_bundle",
+      "tier": "facet",
+      "facet": "Bundle"
+    },
+    {
+      "role": "catalog.is_low_stock",
+      "field": "is_low_stock",
+      "tier": "facet",
+      "facet": "Inventory"
+    },
+    {
+      "role": "catalog.low_stock_threshold",
+      "field": "low_stock_threshold",
+      "tier": "facet",
+      "facet": "Inventory"
+    },
+    {
+      "role": "catalog.manufacturer",
+      "field": "manufacturer",
+      "tier": "facet",
+      "facet": "Branded"
+    },
+    {
+      "role": "catalog.material",
+      "field": "material",
+      "tier": "facet",
+      "facet": "ColorMaterial"
+    },
+    {
+      "role": "catalog.model_name",
+      "field": "model_name",
+      "tier": "facet",
+      "facet": "Branded"
+    },
+    {
+      "role": "catalog.model_year",
+      "field": "model_year",
+      "tier": "facet",
+      "facet": "Branded"
+    },
+    {
+      "role": "catalog.pattern",
+      "field": "pattern",
+      "tier": "facet",
+      "facet": "ColorMaterial"
+    },
+    {
+      "role": "catalog.preorder",
+      "field": "preorder",
+      "tier": "facet",
+      "facet": "Inventory"
+    },
+    {
+      "role": "catalog.requires_prescription",
+      "field": "requires_prescription",
+      "tier": "facet",
+      "facet": "ProductCompliance"
+    },
+    {
+      "role": "catalog.restricted_regions",
+      "field": "restricted_regions",
+      "tier": "facet",
+      "facet": "ProductCompliance"
+    },
+    {
+      "role": "comm.answered",
+      "field": "answered",
+      "tier": "facet",
+      "facet": "Callable"
+    },
+    {
+      "role": "comm.call_direction",
+      "field": "call_direction",
+      "tier": "facet",
+      "facet": "Callable"
+    },
+    {
+      "role": "comm.call_state",
+      "field": "call_state",
+      "tier": "facet",
+      "facet": "Callable"
+    },
+    {
+      "role": "comm.call_type",
+      "field": "call_type",
+      "tier": "facet",
+      "facet": "Callable"
+    },
+    {
+      "role": "comm.channel_name",
+      "field": "channel_name",
+      "tier": "facet",
+      "facet": "Conversational"
+    },
+    {
+      "role": "comm.conversation_ref",
+      "field": "conversation_ref",
+      "tier": "facet",
+      "facet": "Conversational"
+    },
+    {
+      "role": "comm.conversation_type",
+      "field": "conversation_type",
+      "tier": "facet",
+      "facet": "Conversational"
+    },
+    {
+      "role": "comm.delivery_state",
+      "field": "delivery_state",
+      "tier": "facet",
+      "facet": "MessageState"
+    },
+    {
+      "role": "comm.depth",
+      "field": "depth",
+      "tier": "facet",
+      "facet": "Threaded"
+    },
+    {
+      "role": "comm.direction",
+      "field": "direction",
+      "tier": "facet",
+      "facet": "MessageState"
+    },
+    {
+      "role": "comm.edited_at",
+      "field": "edited_at",
+      "tier": "facet",
+      "facet": "MessageState"
+    },
+    {
+      "role": "comm.end_reason",
+      "field": "end_reason",
+      "tier": "facet",
+      "facet": "Callable"
+    },
+    {
+      "role": "comm.is_auto_generated",
+      "field": "is_auto_generated",
+      "tier": "facet",
+      "facet": "Draftable"
+    },
+    {
+      "role": "comm.is_draft",
+      "field": "is_draft",
+      "tier": "facet",
+      "facet": "Draftable"
+    },
+    {
+      "role": "comm.is_from_me",
+      "field": "is_from_me",
+      "tier": "facet",
+      "facet": "MessageState"
+    },
+    {
+      "role": "comm.is_group",
+      "field": "is_group",
+      "tier": "facet",
+      "facet": "Conversational"
+    },
+    {
+      "role": "comm.is_read",
+      "field": "is_read",
+      "tier": "facet",
+      "facet": "MessageState"
+    },
+    {
+      "role": "comm.last_message_at",
+      "field": "last_message_at",
+      "tier": "facet",
+      "facet": "Conversational"
+    },
+    {
+      "role": "comm.last_preview",
+      "field": "last_preview",
+      "tier": "facet",
+      "facet": "Conversational"
+    },
+    {
+      "role": "comm.last_saved_at",
+      "field": "last_saved_at",
+      "tier": "facet",
+      "facet": "Draftable"
+    },
+    {
+      "role": "comm.my_reactions",
+      "field": "my_reactions",
+      "tier": "facet",
+      "facet": "Reactable"
+    },
+    {
+      "role": "comm.participant_count",
+      "field": "conversation_participant_count",
+      "tier": "facet",
+      "facet": "Conversational"
+    },
+    {
+      "role": "comm.reaction_count",
+      "field": "reaction_count",
+      "tier": "facet",
+      "facet": "Reactable"
+    },
+    {
+      "role": "comm.reactions",
+      "field": "reactions",
+      "tier": "facet",
+      "facet": "Reactable"
+    },
+    {
+      "role": "comm.reply_to_message",
+      "field": "reply_to_message",
+      "tier": "facet",
+      "facet": "Threaded"
+    },
+    {
+      "role": "comm.ring_duration_s",
+      "field": "ring_duration_s",
+      "tier": "facet",
+      "facet": "Callable"
+    },
+    {
+      "role": "comm.root",
+      "field": "root",
+      "tier": "facet",
+      "facet": "Threaded"
+    },
+    {
+      "role": "comm.scheduled_send_at",
+      "field": "scheduled_send_at",
+      "tier": "facet",
+      "facet": "Draftable"
+    },
+    {
+      "role": "comm.sent_at",
+      "field": "sent_at",
+      "tier": "facet",
+      "facet": "MessageState"
+    },
+    {
+      "role": "comm.thread_ref",
+      "field": "thread_ref",
+      "tier": "facet",
+      "facet": "Threaded"
+    },
+    {
+      "role": "content.attachment_count",
+      "field": "attachment_count",
+      "tier": "facet",
+      "facet": "Attached"
+    },
+    {
+      "role": "content.attachments",
+      "field": "attachments",
+      "tier": "facet",
+      "facet": "Attached"
+    },
+    {
+      "role": "content.body",
+      "field": "body",
+      "tier": "facet",
+      "facet": "Bodied"
+    },
+    {
+      "role": "content.body_format",
+      "field": "body_format",
+      "tier": "facet",
+      "facet": "Bodied"
+    },
+    {
+      "role": "content.categories",
+      "field": "categories",
+      "tier": "facet",
+      "facet": "Categorized"
+    },
+    {
+      "role": "content.editorial_state",
+      "field": "editorial_state",
+      "tier": "facet",
+      "facet": "Editorial"
+    },
+    {
+      "role": "content.excerpt",
+      "field": "excerpt",
+      "tier": "facet",
+      "facet": "Excerptable"
+    },
+    {
+      "role": "content.first_published_at",
+      "field": "first_published_at",
+      "tier": "facet",
+      "facet": "Editorial"
+    },
+    {
+      "role": "content.has_attachments",
+      "field": "has_attachments",
+      "tier": "facet",
+      "facet": "Attached"
+    },
+    {
+      "role": "content.inline_images",
+      "field": "inline_images",
+      "tier": "facet",
+      "facet": "Attached"
+    },
+    {
+      "role": "content.is_draft",
+      "field": "is_draft",
+      "tier": "facet",
+      "facet": "Editorial"
+    },
+    {
+      "role": "content.keywords",
+      "field": "keywords",
+      "tier": "facet",
+      "facet": "Categorized"
+    },
+    {
+      "role": "content.labels",
+      "field": "labels",
+      "tier": "facet",
+      "facet": "Categorized"
+    },
+    {
+      "role": "content.published_at",
+      "field": "published_at",
+      "tier": "facet",
+      "facet": "Editorial"
+    },
+    {
+      "role": "content.raw_body",
+      "field": "raw_body",
+      "tier": "facet",
+      "facet": "Bodied"
+    },
+    {
+      "role": "content.reading_time_s",
+      "field": "reading_time_s",
+      "tier": "facet",
+      "facet": "Excerptable"
+    },
+    {
+      "role": "content.summary",
+      "field": "summary",
+      "tier": "facet",
+      "facet": "Excerptable"
+    },
+    {
+      "role": "content.tags",
+      "field": "tags",
+      "tier": "facet",
+      "facet": "Categorized"
+    },
+    {
+      "role": "content.topics",
+      "field": "topics",
+      "tier": "facet",
+      "facet": "Categorized"
+    },
+    {
+      "role": "content.word_count",
+      "field": "word_count",
+      "tier": "facet",
+      "facet": "Excerptable"
+    },
+    {
+      "role": "core.available_locales",
+      "field": "available_locales",
+      "tier": "facet",
+      "facet": "Localized"
+    },
+    {
+      "role": "core.avatar_url",
+      "field": "avatar_url",
+      "tier": "facet",
+      "facet": "Iconified"
+    },
+    {
+      "role": "core.channel",
+      "field": "channel",
+      "tier": "facet",
+      "facet": "Versioned"
+    },
+    {
+      "role": "core.color_hex",
+      "field": "color_hex",
+      "tier": "facet",
+      "facet": "Iconified"
+    },
+    {
+      "role": "core.content_hash",
+      "field": "content_hash",
+      "tier": "facet",
+      "facet": "Versioned"
+    },
+    {
       "role": "core.description",
       "field": "description",
       "tier": "core",
       "facet": "Entity"
+    },
+    {
+      "role": "core.emoji",
+      "field": "emoji",
+      "tier": "facet",
+      "facet": "Iconified"
+    },
+    {
+      "role": "core.icon",
+      "field": "icon",
+      "tier": "facet",
+      "facet": "Iconified"
     },
     {
       "role": "core.id",
@@ -14,10 +500,94 @@
       "facet": "Entity"
     },
     {
+      "role": "core.is_archived",
+      "field": "is_archived",
+      "tier": "facet",
+      "facet": "Lifecycle"
+    },
+    {
+      "role": "core.is_deleted",
+      "field": "is_deleted",
+      "tier": "facet",
+      "facet": "Lifecycle"
+    },
+    {
+      "role": "core.is_favorite",
+      "field": "is_favorite",
+      "tier": "facet",
+      "facet": "Lifecycle"
+    },
+    {
+      "role": "core.is_latest",
+      "field": "is_latest",
+      "tier": "facet",
+      "facet": "Versioned"
+    },
+    {
+      "role": "core.is_pinned",
+      "field": "is_pinned",
+      "tier": "facet",
+      "facet": "Lifecycle"
+    },
+    {
       "role": "core.kind",
       "field": "kind",
       "tier": "core",
       "facet": "Entity"
+    },
+    {
+      "role": "core.language",
+      "field": "language",
+      "tier": "facet",
+      "facet": "Localized"
+    },
+    {
+      "role": "core.languages",
+      "field": "languages",
+      "tier": "facet",
+      "facet": "Localized"
+    },
+    {
+      "role": "core.locale",
+      "field": "locale",
+      "tier": "facet",
+      "facet": "Localized"
+    },
+    {
+      "role": "core.localized_description",
+      "field": "localized_description",
+      "tier": "facet",
+      "facet": "Localized"
+    },
+    {
+      "role": "core.localized_title",
+      "field": "localized_title",
+      "tier": "facet",
+      "facet": "Localized"
+    },
+    {
+      "role": "core.released_at",
+      "field": "released_at",
+      "tier": "facet",
+      "facet": "Versioned"
+    },
+    {
+      "role": "core.revision",
+      "field": "revision",
+      "tier": "facet",
+      "facet": "Versioned"
+    },
+    {
+      "role": "core.revision_of",
+      "field": "revision_of",
+      "tier": "facet",
+      "facet": "Versioned"
+    },
+    {
+      "role": "core.semver",
+      "field": "semver",
+      "tier": "facet",
+      "facet": "Versioned"
     },
     {
       "role": "core.status",
@@ -32,6 +602,12 @@
       "facet": "Entity"
     },
     {
+      "role": "core.text_direction",
+      "field": "text_direction",
+      "tier": "facet",
+      "facet": "Localized"
+    },
+    {
       "role": "core.title",
       "field": "title",
       "tier": "core",
@@ -42,6 +618,2772 @@
       "field": "url",
       "tier": "core",
       "facet": "Entity"
+    },
+    {
+      "role": "core.version",
+      "field": "version",
+      "tier": "facet",
+      "facet": "Versioned"
+    },
+    {
+      "role": "core.visibility",
+      "field": "visibility",
+      "tier": "facet",
+      "facet": "Lifecycle"
+    },
+    {
+      "role": "device.active_calories_kcal",
+      "field": "active_calories_kcal",
+      "tier": "facet",
+      "facet": "ActivityMetrics"
+    },
+    {
+      "role": "device.active_minutes",
+      "field": "active_minutes",
+      "tier": "facet",
+      "facet": "ActivityMetrics"
+    },
+    {
+      "role": "device.activity_distance_m",
+      "field": "activity_distance_m",
+      "tier": "facet",
+      "facet": "ActivityMetrics"
+    },
+    {
+      "role": "device.actuator_color_hex",
+      "field": "actuator_color_hex",
+      "tier": "facet",
+      "facet": "ActuatorState"
+    },
+    {
+      "role": "device.actuator_position",
+      "field": "actuator_position",
+      "tier": "facet",
+      "facet": "ActuatorState"
+    },
+    {
+      "role": "device.ai_confidence",
+      "field": "ai_confidence",
+      "tier": "facet",
+      "facet": "AIProvenance"
+    },
+    {
+      "role": "device.ai_model",
+      "field": "ai_model",
+      "tier": "facet",
+      "facet": "AIProvenance"
+    },
+    {
+      "role": "device.awake_at",
+      "field": "awake_at",
+      "tier": "facet",
+      "facet": "SleepRecord"
+    },
+    {
+      "role": "device.battery_pct",
+      "field": "battery_pct",
+      "tier": "facet",
+      "facet": "DeviceState"
+    },
+    {
+      "role": "device.biometric_context",
+      "field": "biometric_context",
+      "tier": "facet",
+      "facet": "Biometric"
+    },
+    {
+      "role": "device.biometric_measured_at",
+      "field": "biometric_measured_at",
+      "tier": "facet",
+      "facet": "Biometric"
+    },
+    {
+      "role": "device.biometric_type",
+      "field": "biometric_type",
+      "tier": "facet",
+      "facet": "Biometric"
+    },
+    {
+      "role": "device.biometric_unit",
+      "field": "biometric_unit",
+      "tier": "facet",
+      "facet": "Biometric"
+    },
+    {
+      "role": "device.biometric_value",
+      "field": "biometric_value",
+      "tier": "facet",
+      "facet": "Biometric"
+    },
+    {
+      "role": "device.blood_pressure",
+      "field": "blood_pressure",
+      "tier": "facet",
+      "facet": "VitalSign"
+    },
+    {
+      "role": "device.bmi",
+      "field": "bmi",
+      "tier": "facet",
+      "facet": "BodyComposition"
+    },
+    {
+      "role": "device.body_fat_pct",
+      "field": "body_fat_pct",
+      "tier": "facet",
+      "facet": "BodyComposition"
+    },
+    {
+      "role": "device.body_measured_at",
+      "field": "body_measured_at",
+      "tier": "facet",
+      "facet": "BodyComposition"
+    },
+    {
+      "role": "device.body_temp_c",
+      "field": "body_temp_c",
+      "tier": "facet",
+      "facet": "VitalSign"
+    },
+    {
+      "role": "device.color_temp_k",
+      "field": "color_temp_k",
+      "tier": "facet",
+      "facet": "ActuatorState"
+    },
+    {
+      "role": "device.consumable_type",
+      "field": "consumable_type",
+      "tier": "facet",
+      "facet": "Consumable"
+    },
+    {
+      "role": "device.device_id",
+      "field": "device_id",
+      "tier": "facet",
+      "facet": "DeviceIdentity"
+    },
+    {
+      "role": "device.device_last_seen_at",
+      "field": "device_last_seen_at",
+      "tier": "facet",
+      "facet": "DeviceState"
+    },
+    {
+      "role": "device.device_manufacturer",
+      "field": "device_manufacturer",
+      "tier": "facet",
+      "facet": "DeviceIdentity"
+    },
+    {
+      "role": "device.device_model",
+      "field": "device_model",
+      "tier": "facet",
+      "facet": "DeviceIdentity"
+    },
+    {
+      "role": "device.firmware_version",
+      "field": "firmware_version",
+      "tier": "facet",
+      "facet": "DeviceIdentity"
+    },
+    {
+      "role": "device.floors_climbed",
+      "field": "floors_climbed",
+      "tier": "facet",
+      "facet": "ActivityMetrics"
+    },
+    {
+      "role": "device.generated_by_ai",
+      "field": "generated_by_ai",
+      "tier": "facet",
+      "facet": "AIProvenance"
+    },
+    {
+      "role": "device.heart_rate_bpm",
+      "field": "heart_rate_bpm",
+      "tier": "facet",
+      "facet": "VitalSign"
+    },
+    {
+      "role": "device.in_bed_at",
+      "field": "in_bed_at",
+      "tier": "facet",
+      "facet": "SleepRecord"
+    },
+    {
+      "role": "device.level_pct",
+      "field": "level_pct",
+      "tier": "facet",
+      "facet": "ActuatorState"
+    },
+    {
+      "role": "device.locked",
+      "field": "locked",
+      "tier": "facet",
+      "facet": "ActuatorState"
+    },
+    {
+      "role": "device.low",
+      "field": "low",
+      "tier": "facet",
+      "facet": "Consumable"
+    },
+    {
+      "role": "device.measured_at",
+      "field": "measured_at",
+      "tier": "facet",
+      "facet": "SensorReading"
+    },
+    {
+      "role": "device.mode",
+      "field": "mode",
+      "tier": "facet",
+      "facet": "ActuatorState"
+    },
+    {
+      "role": "device.muscle_mass_kg",
+      "field": "muscle_mass_kg",
+      "tier": "facet",
+      "facet": "BodyComposition"
+    },
+    {
+      "role": "device.on",
+      "field": "on",
+      "tier": "facet",
+      "facet": "ActuatorState"
+    },
+    {
+      "role": "device.online",
+      "field": "online",
+      "tier": "facet",
+      "facet": "DeviceState"
+    },
+    {
+      "role": "device.prompt_ref",
+      "field": "prompt_ref",
+      "tier": "facet",
+      "facet": "AIProvenance"
+    },
+    {
+      "role": "device.quality",
+      "field": "quality",
+      "tier": "facet",
+      "facet": "SensorReading"
+    },
+    {
+      "role": "device.reference_high",
+      "field": "reference_high",
+      "tier": "facet",
+      "facet": "Biometric"
+    },
+    {
+      "role": "device.reference_low",
+      "field": "reference_low",
+      "tier": "facet",
+      "facet": "Biometric"
+    },
+    {
+      "role": "device.remaining_pct",
+      "field": "remaining_pct",
+      "tier": "facet",
+      "facet": "Consumable"
+    },
+    {
+      "role": "device.replace_after_at",
+      "field": "replace_after_at",
+      "tier": "facet",
+      "facet": "Consumable"
+    },
+    {
+      "role": "device.respiratory_rate",
+      "field": "respiratory_rate",
+      "tier": "facet",
+      "facet": "VitalSign"
+    },
+    {
+      "role": "device.reviewed_by_human",
+      "field": "reviewed_by_human",
+      "tier": "facet",
+      "facet": "AIProvenance"
+    },
+    {
+      "role": "device.sensor_type",
+      "field": "sensor_type",
+      "tier": "facet",
+      "facet": "SensorReading"
+    },
+    {
+      "role": "device.sensor_unit",
+      "field": "sensor_unit",
+      "tier": "facet",
+      "facet": "SensorReading"
+    },
+    {
+      "role": "device.sensor_value",
+      "field": "sensor_value",
+      "tier": "facet",
+      "facet": "SensorReading"
+    },
+    {
+      "role": "device.serial",
+      "field": "serial",
+      "tier": "facet",
+      "facet": "DeviceIdentity"
+    },
+    {
+      "role": "device.signal_strength",
+      "field": "signal_strength",
+      "tier": "facet",
+      "facet": "DeviceState"
+    },
+    {
+      "role": "device.sleep_duration_s",
+      "field": "sleep_duration_s",
+      "tier": "facet",
+      "facet": "SleepRecord"
+    },
+    {
+      "role": "device.sleep_quality_score",
+      "field": "sleep_quality_score",
+      "tier": "facet",
+      "facet": "SleepRecord"
+    },
+    {
+      "role": "device.sleep_stages",
+      "field": "sleep_stages",
+      "tier": "facet",
+      "facet": "SleepRecord"
+    },
+    {
+      "role": "device.spo2_pct",
+      "field": "spo2_pct",
+      "tier": "facet",
+      "facet": "VitalSign"
+    },
+    {
+      "role": "device.steps",
+      "field": "steps",
+      "tier": "facet",
+      "facet": "ActivityMetrics"
+    },
+    {
+      "role": "device.weight_kg",
+      "field": "body_weight_kg",
+      "tier": "facet",
+      "facet": "BodyComposition"
+    },
+    {
+      "role": "event.barcode",
+      "field": "barcode",
+      "tier": "facet",
+      "facet": "Ticketed"
+    },
+    {
+      "role": "event.calendar_color",
+      "field": "calendar_color",
+      "tier": "facet",
+      "facet": "CalendarFeed"
+    },
+    {
+      "role": "event.calendar_name",
+      "field": "calendar_name",
+      "tier": "facet",
+      "facet": "CalendarFeed"
+    },
+    {
+      "role": "event.capacity_remaining",
+      "field": "capacity_remaining",
+      "tier": "facet",
+      "facet": "Capacity"
+    },
+    {
+      "role": "event.capacity_total",
+      "field": "capacity_total",
+      "tier": "facet",
+      "facet": "Capacity"
+    },
+    {
+      "role": "event.check_in_method",
+      "field": "check_in_method",
+      "tier": "facet",
+      "facet": "RSVP"
+    },
+    {
+      "role": "event.checked_in",
+      "field": "checked_in",
+      "tier": "facet",
+      "facet": "RSVP"
+    },
+    {
+      "role": "event.doors_open_at",
+      "field": "doors_open_at",
+      "tier": "facet",
+      "facet": "AdmissionPolicy"
+    },
+    {
+      "role": "event.dress_code",
+      "field": "dress_code",
+      "tier": "facet",
+      "facet": "AdmissionPolicy"
+    },
+    {
+      "role": "event.event_host",
+      "field": "event_host",
+      "tier": "facet",
+      "facet": "Eventful"
+    },
+    {
+      "role": "event.event_organizer",
+      "field": "event_organizer",
+      "tier": "facet",
+      "facet": "Eventful"
+    },
+    {
+      "role": "event.event_type",
+      "field": "event_type",
+      "tier": "facet",
+      "facet": "Eventful"
+    },
+    {
+      "role": "event.feed_url",
+      "field": "feed_url",
+      "tier": "facet",
+      "facet": "CalendarFeed"
+    },
+    {
+      "role": "event.ical_uid",
+      "field": "ical_uid",
+      "tier": "facet",
+      "facet": "CalendarFeed"
+    },
+    {
+      "role": "event.ics_url",
+      "field": "ics_url",
+      "tier": "facet",
+      "facet": "CalendarFeed"
+    },
+    {
+      "role": "event.is_cancelled",
+      "field": "is_cancelled",
+      "tier": "facet",
+      "facet": "Cancellation"
+    },
+    {
+      "role": "event.is_no_show",
+      "field": "is_no_show",
+      "tier": "facet",
+      "facet": "RSVP"
+    },
+    {
+      "role": "event.is_refundable",
+      "field": "is_refundable",
+      "tier": "facet",
+      "facet": "Cancellation"
+    },
+    {
+      "role": "event.is_sold_out",
+      "field": "is_sold_out",
+      "tier": "facet",
+      "facet": "Capacity"
+    },
+    {
+      "role": "event.min_age",
+      "field": "min_age",
+      "tier": "facet",
+      "facet": "AdmissionPolicy"
+    },
+    {
+      "role": "event.order_index",
+      "field": "order_index",
+      "tier": "facet",
+      "facet": "AgendaSlot"
+    },
+    {
+      "role": "event.parent_event",
+      "field": "parent_event",
+      "tier": "facet",
+      "facet": "AgendaSlot"
+    },
+    {
+      "role": "event.prohibited_items",
+      "field": "prohibited_items",
+      "tier": "facet",
+      "facet": "AdmissionPolicy"
+    },
+    {
+      "role": "event.refund_deadline",
+      "field": "refund_deadline",
+      "tier": "facet",
+      "facet": "Cancellation"
+    },
+    {
+      "role": "event.refund_policy",
+      "field": "refund_policy",
+      "tier": "facet",
+      "facet": "Cancellation"
+    },
+    {
+      "role": "event.registered_count",
+      "field": "registered_count",
+      "tier": "facet",
+      "facet": "Capacity"
+    },
+    {
+      "role": "event.requires_id",
+      "field": "requires_id",
+      "tier": "facet",
+      "facet": "AdmissionPolicy"
+    },
+    {
+      "role": "event.rsvp_state",
+      "field": "rsvp_state",
+      "tier": "facet",
+      "facet": "RSVP"
+    },
+    {
+      "role": "event.seat",
+      "field": "seat",
+      "tier": "facet",
+      "facet": "Ticketed"
+    },
+    {
+      "role": "event.session_type",
+      "field": "session_type",
+      "tier": "facet",
+      "facet": "AgendaSlot"
+    },
+    {
+      "role": "event.speakers",
+      "field": "speakers",
+      "tier": "facet",
+      "facet": "AgendaSlot"
+    },
+    {
+      "role": "event.ticket_price",
+      "field": "ticket_price",
+      "tier": "facet",
+      "facet": "Ticketed"
+    },
+    {
+      "role": "event.ticket_type",
+      "field": "ticket_type",
+      "tier": "facet",
+      "facet": "Ticketed"
+    },
+    {
+      "role": "event.track",
+      "field": "track",
+      "tier": "facet",
+      "facet": "AgendaSlot"
+    },
+    {
+      "role": "event.venue",
+      "field": "venue",
+      "tier": "facet",
+      "facet": "Eventful"
+    },
+    {
+      "role": "event.waitlist_count",
+      "field": "waitlist_count",
+      "tier": "facet",
+      "facet": "Capacity"
+    },
+    {
+      "role": "geo.accuracy_m",
+      "field": "accuracy_m",
+      "tier": "facet",
+      "facet": "Geolocated"
+    },
+    {
+      "role": "geo.altitude_m",
+      "field": "altitude_m",
+      "tier": "facet",
+      "facet": "Geolocated"
+    },
+    {
+      "role": "geo.center_lat",
+      "field": "center_lat",
+      "tier": "facet",
+      "facet": "Geofence"
+    },
+    {
+      "role": "geo.center_lon",
+      "field": "center_lon",
+      "tier": "facet",
+      "facet": "Geofence"
+    },
+    {
+      "role": "geo.city",
+      "field": "city",
+      "tier": "facet",
+      "facet": "PostalAddress"
+    },
+    {
+      "role": "geo.continent",
+      "field": "continent",
+      "tier": "facet",
+      "facet": "AdminRegion"
+    },
+    {
+      "role": "geo.country",
+      "field": "country",
+      "tier": "facet",
+      "facet": "PostalAddress"
+    },
+    {
+      "role": "geo.country_code",
+      "field": "country_code",
+      "tier": "facet",
+      "facet": "AdminRegion"
+    },
+    {
+      "role": "geo.county",
+      "field": "county",
+      "tier": "facet",
+      "facet": "AdminRegion"
+    },
+    {
+      "role": "geo.destination",
+      "field": "destination",
+      "tier": "facet",
+      "facet": "Routed"
+    },
+    {
+      "role": "geo.distance_m",
+      "field": "distance_m",
+      "tier": "facet",
+      "facet": "Routed"
+    },
+    {
+      "role": "geo.dwell_s",
+      "field": "dwell_s",
+      "tier": "facet",
+      "facet": "Geofence"
+    },
+    {
+      "role": "geo.heading_deg",
+      "field": "heading_deg",
+      "tier": "facet",
+      "facet": "Geolocated"
+    },
+    {
+      "role": "geo.lat",
+      "field": "lat",
+      "tier": "facet",
+      "facet": "Geolocated"
+    },
+    {
+      "role": "geo.locality",
+      "field": "locality",
+      "tier": "facet",
+      "facet": "AdminRegion"
+    },
+    {
+      "role": "geo.located_at",
+      "field": "located_at",
+      "tier": "facet",
+      "facet": "Geolocated"
+    },
+    {
+      "role": "geo.lon",
+      "field": "lon",
+      "tier": "facet",
+      "facet": "Geolocated"
+    },
+    {
+      "role": "geo.max_lat",
+      "field": "max_lat",
+      "tier": "facet",
+      "facet": "BoundingBox"
+    },
+    {
+      "role": "geo.max_lon",
+      "field": "max_lon",
+      "tier": "facet",
+      "facet": "BoundingBox"
+    },
+    {
+      "role": "geo.min_lat",
+      "field": "min_lat",
+      "tier": "facet",
+      "facet": "BoundingBox"
+    },
+    {
+      "role": "geo.min_lon",
+      "field": "min_lon",
+      "tier": "facet",
+      "facet": "BoundingBox"
+    },
+    {
+      "role": "geo.neighborhood",
+      "field": "neighborhood",
+      "tier": "facet",
+      "facet": "AdminRegion"
+    },
+    {
+      "role": "geo.origin",
+      "field": "origin",
+      "tier": "facet",
+      "facet": "Routed"
+    },
+    {
+      "role": "geo.place_name",
+      "field": "place_name",
+      "tier": "facet",
+      "facet": "Placed"
+    },
+    {
+      "role": "geo.place_type",
+      "field": "place_type",
+      "tier": "facet",
+      "facet": "Placed"
+    },
+    {
+      "role": "geo.plus_code",
+      "field": "plus_code",
+      "tier": "facet",
+      "facet": "Placed"
+    },
+    {
+      "role": "geo.postal_code",
+      "field": "postal_code",
+      "tier": "facet",
+      "facet": "PostalAddress"
+    },
+    {
+      "role": "geo.radius_m",
+      "field": "radius_m",
+      "tier": "facet",
+      "facet": "Geofence"
+    },
+    {
+      "role": "geo.region",
+      "field": "region",
+      "tier": "facet",
+      "facet": "PostalAddress"
+    },
+    {
+      "role": "geo.region_code",
+      "field": "region_code",
+      "tier": "facet",
+      "facet": "AdminRegion"
+    },
+    {
+      "role": "geo.route_duration_s",
+      "field": "route_duration_s",
+      "tier": "facet",
+      "facet": "Routed"
+    },
+    {
+      "role": "geo.speed_mps",
+      "field": "geo_speed_mps",
+      "tier": "facet",
+      "facet": "Geolocated"
+    },
+    {
+      "role": "geo.street",
+      "field": "street",
+      "tier": "facet",
+      "facet": "PostalAddress"
+    },
+    {
+      "role": "geo.trigger",
+      "field": "trigger",
+      "tier": "facet",
+      "facet": "Geofence"
+    },
+    {
+      "role": "geo.waypoints",
+      "field": "waypoints",
+      "tier": "facet",
+      "facet": "Routed"
+    },
+    {
+      "role": "media.archive_format",
+      "field": "archive_format",
+      "tier": "facet",
+      "facet": "Archive"
+    },
+    {
+      "role": "media.audio_codec",
+      "field": "audio_codec",
+      "tier": "facet",
+      "facet": "AudioTrack"
+    },
+    {
+      "role": "media.bit_depth",
+      "field": "bit_depth",
+      "tier": "facet",
+      "facet": "AudioTrack"
+    },
+    {
+      "role": "media.bitrate_kbps",
+      "field": "bitrate_kbps",
+      "tier": "facet",
+      "facet": "AudioTrack"
+    },
+    {
+      "role": "media.blurhash",
+      "field": "blurhash",
+      "tier": "facet",
+      "facet": "ImageMedia"
+    },
+    {
+      "role": "media.captions_url",
+      "field": "captions_url",
+      "tier": "facet",
+      "facet": "Transcribable"
+    },
+    {
+      "role": "media.channels",
+      "field": "channels",
+      "tier": "facet",
+      "facet": "AudioTrack"
+    },
+    {
+      "role": "media.checksum_sha256",
+      "field": "checksum_sha256",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.color_space",
+      "field": "color_space",
+      "tier": "facet",
+      "facet": "ImageMedia"
+    },
+    {
+      "role": "media.compression_ratio",
+      "field": "compression_ratio",
+      "tier": "facet",
+      "facet": "Archive"
+    },
+    {
+      "role": "media.entry_count",
+      "field": "entry_count",
+      "tier": "facet",
+      "facet": "Archive"
+    },
+    {
+      "role": "media.exif",
+      "field": "exif",
+      "tier": "facet",
+      "facet": "ImageMedia"
+    },
+    {
+      "role": "media.extension",
+      "field": "extension",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.filename",
+      "field": "filename",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.fps",
+      "field": "fps",
+      "tier": "facet",
+      "facet": "VideoTrack"
+    },
+    {
+      "role": "media.hdr",
+      "field": "hdr",
+      "tier": "facet",
+      "facet": "VideoTrack"
+    },
+    {
+      "role": "media.height",
+      "field": "height",
+      "tier": "facet",
+      "facet": "ImageMedia"
+    },
+    {
+      "role": "media.is_encrypted",
+      "field": "is_encrypted",
+      "tier": "facet",
+      "facet": "Archive"
+    },
+    {
+      "role": "media.is_nsfw",
+      "field": "is_nsfw",
+      "tier": "facet",
+      "facet": "ContentSafety"
+    },
+    {
+      "role": "media.loudness_lufs",
+      "field": "loudness_lufs",
+      "tier": "facet",
+      "facet": "AudioTrack"
+    },
+    {
+      "role": "media.media_class",
+      "field": "media_class",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.mime_type",
+      "field": "mime_type",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.moderation_labels",
+      "field": "moderation_labels",
+      "tier": "facet",
+      "facet": "ContentSafety"
+    },
+    {
+      "role": "media.path",
+      "field": "path",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.permissions",
+      "field": "permissions",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.resolution",
+      "field": "resolution",
+      "tier": "facet",
+      "facet": "VideoTrack"
+    },
+    {
+      "role": "media.sample_rate_hz",
+      "field": "sample_rate_hz",
+      "tier": "facet",
+      "facet": "AudioTrack"
+    },
+    {
+      "role": "media.scan_state",
+      "field": "scan_state",
+      "tier": "facet",
+      "facet": "ContentSafety"
+    },
+    {
+      "role": "media.scanned_at",
+      "field": "scanned_at",
+      "tier": "facet",
+      "facet": "ContentSafety"
+    },
+    {
+      "role": "media.size_bytes",
+      "field": "size_bytes",
+      "tier": "facet",
+      "facet": "FileObject"
+    },
+    {
+      "role": "media.transcript",
+      "field": "transcript",
+      "tier": "facet",
+      "facet": "Transcribable"
+    },
+    {
+      "role": "media.transcript_language",
+      "field": "transcript_language",
+      "tier": "facet",
+      "facet": "Transcribable"
+    },
+    {
+      "role": "media.uncompressed_size_bytes",
+      "field": "uncompressed_size_bytes",
+      "tier": "facet",
+      "facet": "Archive"
+    },
+    {
+      "role": "media.video_bitrate_kbps",
+      "field": "video_bitrate_kbps",
+      "tier": "facet",
+      "facet": "VideoTrack"
+    },
+    {
+      "role": "media.video_codec",
+      "field": "video_codec",
+      "tier": "facet",
+      "facet": "VideoTrack"
+    },
+    {
+      "role": "media.virus_name",
+      "field": "virus_name",
+      "tier": "facet",
+      "facet": "ContentSafety"
+    },
+    {
+      "role": "media.width",
+      "field": "width",
+      "tier": "facet",
+      "facet": "ImageMedia"
+    },
+    {
+      "role": "metric.aggregation",
+      "field": "aggregation",
+      "tier": "facet",
+      "facet": "Aggregated"
+    },
+    {
+      "role": "metric.breached",
+      "field": "breached",
+      "tier": "facet",
+      "facet": "Threshold"
+    },
+    {
+      "role": "metric.change_pct",
+      "field": "change_pct",
+      "tier": "facet",
+      "facet": "Trended"
+    },
+    {
+      "role": "metric.ci_lower",
+      "field": "ci_lower",
+      "tier": "facet",
+      "facet": "Confident"
+    },
+    {
+      "role": "metric.ci_upper",
+      "field": "ci_upper",
+      "tier": "facet",
+      "facet": "Confident"
+    },
+    {
+      "role": "metric.confidence_level",
+      "field": "confidence_level",
+      "tier": "facet",
+      "facet": "Confident"
+    },
+    {
+      "role": "metric.delta",
+      "field": "delta",
+      "tier": "facet",
+      "facet": "Trended"
+    },
+    {
+      "role": "metric.dimensions",
+      "field": "dimensions",
+      "tier": "facet",
+      "facet": "Dimensioned"
+    },
+    {
+      "role": "metric.fill_policy",
+      "field": "fill_policy",
+      "tier": "facet",
+      "facet": "Aggregated"
+    },
+    {
+      "role": "metric.granularity",
+      "field": "granularity",
+      "tier": "facet",
+      "facet": "Aggregated"
+    },
+    {
+      "role": "metric.is_significant",
+      "field": "is_significant",
+      "tier": "facet",
+      "facet": "Confident"
+    },
+    {
+      "role": "metric.margin_of_error",
+      "field": "margin_of_error",
+      "tier": "facet",
+      "facet": "Confident"
+    },
+    {
+      "role": "metric.p_value",
+      "field": "p_value",
+      "tier": "facet",
+      "facet": "Confident"
+    },
+    {
+      "role": "metric.threshold",
+      "field": "threshold",
+      "tier": "facet",
+      "facet": "Threshold"
+    },
+    {
+      "role": "metric.threshold_target",
+      "field": "threshold_target",
+      "tier": "facet",
+      "facet": "Threshold"
+    },
+    {
+      "role": "metric.trend",
+      "field": "trend",
+      "tier": "facet",
+      "facet": "Trended"
+    },
+    {
+      "role": "metric.trend_period",
+      "field": "trend_period",
+      "tier": "facet",
+      "facet": "Trended"
+    },
+    {
+      "role": "metric.ts_timestamp",
+      "field": "ts_timestamp",
+      "tier": "facet",
+      "facet": "TimeSeriesPoint"
+    },
+    {
+      "role": "metric.ts_value",
+      "field": "ts_value",
+      "tier": "facet",
+      "facet": "TimeSeriesPoint"
+    },
+    {
+      "role": "metric.window_end",
+      "field": "window_end",
+      "tier": "facet",
+      "facet": "Aggregated"
+    },
+    {
+      "role": "metric.window_start",
+      "field": "window_start",
+      "tier": "facet",
+      "facet": "Aggregated"
+    },
+    {
+      "role": "money.amount",
+      "field": "amount",
+      "tier": "facet",
+      "facet": "Monetary"
+    },
+    {
+      "role": "money.available_balance",
+      "field": "available_balance",
+      "tier": "facet",
+      "facet": "Balanced"
+    },
+    {
+      "role": "money.balance",
+      "field": "balance",
+      "tier": "facet",
+      "facet": "Balanced"
+    },
+    {
+      "role": "money.balance_currency",
+      "field": "balance_currency",
+      "tier": "facet",
+      "facet": "Balanced"
+    },
+    {
+      "role": "money.billing_interval",
+      "field": "billing_interval",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.billing_interval_count",
+      "field": "billing_interval_count",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.cancel_at_period_end",
+      "field": "cancel_at_period_end",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.compare_at_price",
+      "field": "compare_at_price",
+      "tier": "facet",
+      "facet": "Priced"
+    },
+    {
+      "role": "money.credit_limit",
+      "field": "credit_limit",
+      "tier": "facet",
+      "facet": "Balanced"
+    },
+    {
+      "role": "money.currency",
+      "field": "currency",
+      "tier": "facet",
+      "facet": "Monetary"
+    },
+    {
+      "role": "money.current_period_end",
+      "field": "current_period_end",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.current_period_start",
+      "field": "current_period_start",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.discount_pct",
+      "field": "discount_pct",
+      "tier": "facet",
+      "facet": "Discountable"
+    },
+    {
+      "role": "money.invoice_due_at",
+      "field": "invoice_due_at",
+      "tier": "facet",
+      "facet": "Invoiced"
+    },
+    {
+      "role": "money.invoice_number",
+      "field": "invoice_number",
+      "tier": "facet",
+      "facet": "Invoiced"
+    },
+    {
+      "role": "money.is_on_sale",
+      "field": "is_on_sale",
+      "tier": "facet",
+      "facet": "Discountable"
+    },
+    {
+      "role": "money.list_price",
+      "field": "list_price",
+      "tier": "facet",
+      "facet": "Priced"
+    },
+    {
+      "role": "money.paid_at",
+      "field": "paid_at",
+      "tier": "facet",
+      "facet": "Invoiced"
+    },
+    {
+      "role": "money.payment_status",
+      "field": "payment_status",
+      "tier": "facet",
+      "facet": "Invoiced"
+    },
+    {
+      "role": "money.pending_balance",
+      "field": "pending_balance",
+      "tier": "facet",
+      "facet": "Balanced"
+    },
+    {
+      "role": "money.price_currency",
+      "field": "price_currency",
+      "tier": "facet",
+      "facet": "Priced"
+    },
+    {
+      "role": "money.price_includes_tax",
+      "field": "price_includes_tax",
+      "tier": "facet",
+      "facet": "Priced"
+    },
+    {
+      "role": "money.recurring_amount",
+      "field": "recurring_amount",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.sale_price",
+      "field": "sale_price",
+      "tier": "facet",
+      "facet": "Discountable"
+    },
+    {
+      "role": "money.subscription_status",
+      "field": "subscription_status",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.tax",
+      "field": "tax",
+      "tier": "facet",
+      "facet": "Invoiced"
+    },
+    {
+      "role": "money.total",
+      "field": "total",
+      "tier": "facet",
+      "facet": "Invoiced"
+    },
+    {
+      "role": "money.trial_end",
+      "field": "trial_end",
+      "tier": "facet",
+      "facet": "Subscribable"
+    },
+    {
+      "role": "money.unit_price",
+      "field": "unit_price",
+      "tier": "facet",
+      "facet": "Priced"
+    },
+    {
+      "role": "net.arch",
+      "field": "arch",
+      "tier": "facet",
+      "facet": "ComputeSpec"
+    },
+    {
+      "role": "net.auth_required",
+      "field": "auth_required",
+      "tier": "facet",
+      "facet": "ApiEndpoint"
+    },
+    {
+      "role": "net.backup_kind",
+      "field": "backup_kind",
+      "tier": "facet",
+      "facet": "Backup"
+    },
+    {
+      "role": "net.backup_size_bytes",
+      "field": "backup_size_bytes",
+      "tier": "facet",
+      "facet": "Backup"
+    },
+    {
+      "role": "net.cert_is_valid",
+      "field": "cert_is_valid",
+      "tier": "facet",
+      "facet": "Certificated"
+    },
+    {
+      "role": "net.cert_issuer",
+      "field": "cert_issuer",
+      "tier": "facet",
+      "facet": "Certificated"
+    },
+    {
+      "role": "net.cert_subject",
+      "field": "cert_subject",
+      "tier": "facet",
+      "facet": "Certificated"
+    },
+    {
+      "role": "net.compose_project",
+      "field": "compose_project",
+      "tier": "facet",
+      "facet": "Container"
+    },
+    {
+      "role": "net.config_key",
+      "field": "config_key",
+      "tier": "facet",
+      "facet": "ConfigSetting"
+    },
+    {
+      "role": "net.config_source",
+      "field": "config_source",
+      "tier": "facet",
+      "facet": "ConfigSetting"
+    },
+    {
+      "role": "net.config_value",
+      "field": "config_value",
+      "tier": "facet",
+      "facet": "ConfigSetting"
+    },
+    {
+      "role": "net.container_id",
+      "field": "container_id",
+      "tier": "facet",
+      "facet": "Container"
+    },
+    {
+      "role": "net.container_name",
+      "field": "container_name",
+      "tier": "facet",
+      "facet": "Container"
+    },
+    {
+      "role": "net.default_value",
+      "field": "default_value",
+      "tier": "facet",
+      "facet": "ConfigSetting"
+    },
+    {
+      "role": "net.deprecated",
+      "field": "deprecated",
+      "tier": "facet",
+      "facet": "ApiEndpoint"
+    },
+    {
+      "role": "net.disk_bytes",
+      "field": "disk_bytes",
+      "tier": "facet",
+      "facet": "ComputeSpec"
+    },
+    {
+      "role": "net.domain",
+      "field": "domain",
+      "tier": "facet",
+      "facet": "NetAsset"
+    },
+    {
+      "role": "net.environment",
+      "field": "environment",
+      "tier": "facet",
+      "facet": "HostResource"
+    },
+    {
+      "role": "net.fingerprint",
+      "field": "fingerprint",
+      "tier": "facet",
+      "facet": "Certificated"
+    },
+    {
+      "role": "net.gpu_count",
+      "field": "gpu_count",
+      "tier": "facet",
+      "facet": "ComputeSpec"
+    },
+    {
+      "role": "net.health",
+      "field": "health",
+      "tier": "facet",
+      "facet": "ServiceHealth"
+    },
+    {
+      "role": "net.host_region",
+      "field": "host_region",
+      "tier": "facet",
+      "facet": "HostResource"
+    },
+    {
+      "role": "net.hostname",
+      "field": "hostname",
+      "tier": "facet",
+      "facet": "HostResource"
+    },
+    {
+      "role": "net.image",
+      "field": "image",
+      "tier": "facet",
+      "facet": "Container"
+    },
+    {
+      "role": "net.image_digest",
+      "field": "image_digest",
+      "tier": "facet",
+      "facet": "Container"
+    },
+    {
+      "role": "net.ip",
+      "field": "ip",
+      "tier": "facet",
+      "facet": "NetAsset"
+    },
+    {
+      "role": "net.is_secret",
+      "field": "is_secret",
+      "tier": "facet",
+      "facet": "ConfigSetting"
+    },
+    {
+      "role": "net.is_verified",
+      "field": "is_verified",
+      "tier": "facet",
+      "facet": "Backup"
+    },
+    {
+      "role": "net.last_check_at",
+      "field": "last_check_at",
+      "tier": "facet",
+      "facet": "ServiceHealth"
+    },
+    {
+      "role": "net.memory_bytes",
+      "field": "memory_bytes",
+      "tier": "facet",
+      "facet": "ComputeSpec"
+    },
+    {
+      "role": "net.method",
+      "field": "method",
+      "tier": "facet",
+      "facet": "ApiEndpoint"
+    },
+    {
+      "role": "net.not_after",
+      "field": "not_after",
+      "tier": "facet",
+      "facet": "Certificated"
+    },
+    {
+      "role": "net.operation_id",
+      "field": "operation_id",
+      "tier": "facet",
+      "facet": "ApiEndpoint"
+    },
+    {
+      "role": "net.path",
+      "field": "api_path",
+      "tier": "facet",
+      "facet": "ApiEndpoint"
+    },
+    {
+      "role": "net.port",
+      "field": "port",
+      "tier": "facet",
+      "facet": "NetAsset"
+    },
+    {
+      "role": "net.protocol",
+      "field": "protocol",
+      "tier": "facet",
+      "facet": "NetAsset"
+    },
+    {
+      "role": "net.query",
+      "field": "query",
+      "tier": "facet",
+      "facet": "DataRecord"
+    },
+    {
+      "role": "net.record_type",
+      "field": "record_type",
+      "tier": "facet",
+      "facet": "NetAsset"
+    },
+    {
+      "role": "net.resource_id",
+      "field": "resource_id",
+      "tier": "facet",
+      "facet": "HostResource"
+    },
+    {
+      "role": "net.retain_until",
+      "field": "retain_until",
+      "tier": "facet",
+      "facet": "Backup"
+    },
+    {
+      "role": "net.row_id",
+      "field": "row_id",
+      "tier": "facet",
+      "facet": "DataRecord"
+    },
+    {
+      "role": "net.runtime",
+      "field": "runtime",
+      "tier": "facet",
+      "facet": "Container"
+    },
+    {
+      "role": "net.schema_ref",
+      "field": "schema_ref",
+      "tier": "facet",
+      "facet": "DataRecord"
+    },
+    {
+      "role": "net.snapshot_id",
+      "field": "snapshot_id",
+      "tier": "facet",
+      "facet": "Backup"
+    },
+    {
+      "role": "net.source_resource",
+      "field": "source_resource",
+      "tier": "facet",
+      "facet": "Backup"
+    },
+    {
+      "role": "net.table",
+      "field": "table",
+      "tier": "facet",
+      "facet": "DataRecord"
+    },
+    {
+      "role": "net.taken_at",
+      "field": "taken_at",
+      "tier": "facet",
+      "facet": "Backup"
+    },
+    {
+      "role": "net.uptime_s",
+      "field": "uptime_s",
+      "tier": "facet",
+      "facet": "ServiceHealth"
+    },
+    {
+      "role": "net.value_type",
+      "field": "config_value_type",
+      "tier": "facet",
+      "facet": "ConfigSetting"
+    },
+    {
+      "role": "net.vcpus",
+      "field": "vcpus",
+      "tier": "facet",
+      "facet": "ComputeSpec"
+    },
+    {
+      "role": "people.active_now",
+      "field": "active_now",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.active_until",
+      "field": "active_until",
+      "tier": "facet",
+      "facet": "Presence"
+    },
+    {
+      "role": "people.admins",
+      "field": "admins",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.assigned_at",
+      "field": "assigned_at",
+      "tier": "facet",
+      "facet": "Assignable"
+    },
+    {
+      "role": "people.assignee",
+      "field": "assignee",
+      "tier": "facet",
+      "facet": "Assignable"
+    },
+    {
+      "role": "people.assignees",
+      "field": "assignees",
+      "tier": "facet",
+      "facet": "Assignable"
+    },
+    {
+      "role": "people.author",
+      "field": "author",
+      "tier": "facet",
+      "facet": "Authorship"
+    },
+    {
+      "role": "people.contributors",
+      "field": "contributors",
+      "tier": "facet",
+      "facet": "Authorship"
+    },
+    {
+      "role": "people.creator",
+      "field": "creator",
+      "tier": "facet",
+      "facet": "Authorship"
+    },
+    {
+      "role": "people.delegated_by",
+      "field": "delegated_by",
+      "tier": "facet",
+      "facet": "Assignable"
+    },
+    {
+      "role": "people.editors",
+      "field": "editors",
+      "tier": "facet",
+      "facet": "Authorship"
+    },
+    {
+      "role": "people.emails",
+      "field": "emails",
+      "tier": "facet",
+      "facet": "ContactPoints"
+    },
+    {
+      "role": "people.host",
+      "field": "host",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.join_state",
+      "field": "join_state",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.last_editor",
+      "field": "last_editor",
+      "tier": "facet",
+      "facet": "Authorship"
+    },
+    {
+      "role": "people.last_seen_at",
+      "field": "last_seen_at",
+      "tier": "facet",
+      "facet": "Presence"
+    },
+    {
+      "role": "people.members",
+      "field": "members",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.online_status",
+      "field": "online_status",
+      "tier": "facet",
+      "facet": "Presence"
+    },
+    {
+      "role": "people.organizer",
+      "field": "organizer",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.owner",
+      "field": "owner",
+      "tier": "facet",
+      "facet": "Authorship"
+    },
+    {
+      "role": "people.participant_count",
+      "field": "participant_count",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.phones",
+      "field": "phones",
+      "tier": "facet",
+      "facet": "ContactPoints"
+    },
+    {
+      "role": "people.preferred_channel",
+      "field": "preferred_channel",
+      "tier": "facet",
+      "facet": "ContactPoints"
+    },
+    {
+      "role": "people.recipient_count",
+      "field": "recipient_count",
+      "tier": "facet",
+      "facet": "Correspondents"
+    },
+    {
+      "role": "people.recipients_bcc",
+      "field": "recipients_bcc",
+      "tier": "facet",
+      "facet": "Correspondents"
+    },
+    {
+      "role": "people.recipients_cc",
+      "field": "recipients_cc",
+      "tier": "facet",
+      "facet": "Correspondents"
+    },
+    {
+      "role": "people.recipients_to",
+      "field": "recipients_to",
+      "tier": "facet",
+      "facet": "Correspondents"
+    },
+    {
+      "role": "people.reply_to",
+      "field": "reply_to",
+      "tier": "facet",
+      "facet": "Correspondents"
+    },
+    {
+      "role": "people.reviewer",
+      "field": "reviewer",
+      "tier": "facet",
+      "facet": "Assignable"
+    },
+    {
+      "role": "people.reviewers",
+      "field": "reviewers",
+      "tier": "facet",
+      "facet": "Assignable"
+    },
+    {
+      "role": "people.sender",
+      "field": "sender",
+      "tier": "facet",
+      "facet": "Correspondents"
+    },
+    {
+      "role": "people.social_handles",
+      "field": "social_handles",
+      "tier": "facet",
+      "facet": "ContactPoints"
+    },
+    {
+      "role": "people.status_emoji",
+      "field": "status_emoji",
+      "tier": "facet",
+      "facet": "Presence"
+    },
+    {
+      "role": "people.status_message",
+      "field": "status_message",
+      "tier": "facet",
+      "facet": "Presence"
+    },
+    {
+      "role": "people.team",
+      "field": "team",
+      "tier": "facet",
+      "facet": "Assignable"
+    },
+    {
+      "role": "people.typing",
+      "field": "typing",
+      "tier": "facet",
+      "facet": "Participants"
+    },
+    {
+      "role": "people.website_url",
+      "field": "website_url",
+      "tier": "facet",
+      "facet": "ContactPoints"
+    },
+    {
+      "role": "quantity.angle_deg",
+      "field": "angle_deg",
+      "tier": "facet",
+      "facet": "Angle"
+    },
+    {
+      "role": "quantity.angle_unit",
+      "field": "angle_unit",
+      "tier": "facet",
+      "facet": "Angle"
+    },
+    {
+      "role": "quantity.area_m2",
+      "field": "area_m2",
+      "tier": "facet",
+      "facet": "Area"
+    },
+    {
+      "role": "quantity.area_unit",
+      "field": "area_unit",
+      "tier": "facet",
+      "facet": "Area"
+    },
+    {
+      "role": "quantity.bitrate_bps",
+      "field": "bitrate_bps",
+      "tier": "facet",
+      "facet": "Bitrate"
+    },
+    {
+      "role": "quantity.bitrate_unit",
+      "field": "bitrate_unit",
+      "tier": "facet",
+      "facet": "Bitrate"
+    },
+    {
+      "role": "quantity.bytes",
+      "field": "bytes",
+      "tier": "facet",
+      "facet": "DataSize"
+    },
+    {
+      "role": "quantity.data_size_unit",
+      "field": "data_size_unit",
+      "tier": "facet",
+      "facet": "DataSize"
+    },
+    {
+      "role": "quantity.dim_depth",
+      "field": "dim_depth",
+      "tier": "facet",
+      "facet": "Dimensions3D"
+    },
+    {
+      "role": "quantity.dim_height",
+      "field": "dim_height",
+      "tier": "facet",
+      "facet": "Dimensions3D"
+    },
+    {
+      "role": "quantity.dim_unit",
+      "field": "dim_unit",
+      "tier": "facet",
+      "facet": "Dimensions3D"
+    },
+    {
+      "role": "quantity.dim_width",
+      "field": "dim_width",
+      "tier": "facet",
+      "facet": "Dimensions3D"
+    },
+    {
+      "role": "quantity.dimension",
+      "field": "dimension",
+      "tier": "facet",
+      "facet": "Measured"
+    },
+    {
+      "role": "quantity.formatted_value",
+      "field": "formatted_value",
+      "tier": "facet",
+      "facet": "Measured"
+    },
+    {
+      "role": "quantity.length_m",
+      "field": "length_m",
+      "tier": "facet",
+      "facet": "Length"
+    },
+    {
+      "role": "quantity.length_unit",
+      "field": "length_unit",
+      "tier": "facet",
+      "facet": "Length"
+    },
+    {
+      "role": "quantity.max_value",
+      "field": "max_value",
+      "tier": "facet",
+      "facet": "Range"
+    },
+    {
+      "role": "quantity.min_value",
+      "field": "min_value",
+      "tier": "facet",
+      "facet": "Range"
+    },
+    {
+      "role": "quantity.percent",
+      "field": "percent",
+      "tier": "facet",
+      "facet": "Percentage"
+    },
+    {
+      "role": "quantity.speed_mps",
+      "field": "speed_mps",
+      "tier": "facet",
+      "facet": "Speed"
+    },
+    {
+      "role": "quantity.speed_unit",
+      "field": "speed_unit",
+      "tier": "facet",
+      "facet": "Speed"
+    },
+    {
+      "role": "quantity.target",
+      "field": "target",
+      "tier": "facet",
+      "facet": "Range"
+    },
+    {
+      "role": "quantity.temp_c",
+      "field": "temp_c",
+      "tier": "facet",
+      "facet": "Temperature"
+    },
+    {
+      "role": "quantity.temp_unit",
+      "field": "temp_unit",
+      "tier": "facet",
+      "facet": "Temperature"
+    },
+    {
+      "role": "quantity.uncertainty",
+      "field": "uncertainty",
+      "tier": "facet",
+      "facet": "Measured"
+    },
+    {
+      "role": "quantity.unit",
+      "field": "unit",
+      "tier": "facet",
+      "facet": "Measured"
+    },
+    {
+      "role": "quantity.unit_family",
+      "field": "unit_family",
+      "tier": "facet",
+      "facet": "Measured"
+    },
+    {
+      "role": "quantity.value",
+      "field": "value",
+      "tier": "facet",
+      "facet": "Measured"
+    },
+    {
+      "role": "quantity.value_type",
+      "field": "value_type",
+      "tier": "facet",
+      "facet": "Measured"
+    },
+    {
+      "role": "quantity.weight_kg",
+      "field": "weight_kg",
+      "tier": "facet",
+      "facet": "Weight"
+    },
+    {
+      "role": "quantity.weight_unit",
+      "field": "weight_unit",
+      "tier": "facet",
+      "facet": "Weight"
+    },
+    {
+      "role": "rating.distribution",
+      "field": "distribution",
+      "tier": "facet",
+      "facet": "Rated"
+    },
+    {
+      "role": "rating.downvotes",
+      "field": "downvotes",
+      "tier": "facet",
+      "facet": "Voted"
+    },
+    {
+      "role": "rating.helpfulness",
+      "field": "helpfulness",
+      "tier": "facet",
+      "facet": "Reviewed"
+    },
+    {
+      "role": "rating.is_verified",
+      "field": "is_verified",
+      "tier": "facet",
+      "facet": "Reviewed"
+    },
+    {
+      "role": "rating.magnitude",
+      "field": "magnitude",
+      "tier": "facet",
+      "facet": "Sentiment"
+    },
+    {
+      "role": "rating.max_score",
+      "field": "max_score",
+      "tier": "facet",
+      "facet": "Rated"
+    },
+    {
+      "role": "rating.my_vote",
+      "field": "my_vote",
+      "tier": "facet",
+      "facet": "Voted"
+    },
+    {
+      "role": "rating.rating",
+      "field": "rating",
+      "tier": "facet",
+      "facet": "Rated"
+    },
+    {
+      "role": "rating.rating_count",
+      "field": "rating_count",
+      "tier": "facet",
+      "facet": "Rated"
+    },
+    {
+      "role": "rating.review_body",
+      "field": "review_body",
+      "tier": "facet",
+      "facet": "Reviewed"
+    },
+    {
+      "role": "rating.score",
+      "field": "score",
+      "tier": "facet",
+      "facet": "Voted"
+    },
+    {
+      "role": "rating.sentiment",
+      "field": "sentiment",
+      "tier": "facet",
+      "facet": "Sentiment"
+    },
+    {
+      "role": "rating.sentiment_score",
+      "field": "sentiment_score",
+      "tier": "facet",
+      "facet": "Sentiment"
+    },
+    {
+      "role": "rating.upvotes",
+      "field": "upvotes",
+      "tier": "facet",
+      "facet": "Voted"
+    },
+    {
+      "role": "rating.would_recommend",
+      "field": "would_recommend",
+      "tier": "facet",
+      "facet": "Reviewed"
+    },
+    {
+      "role": "sec.action",
+      "field": "action",
+      "tier": "facet",
+      "facet": "Auditable"
+    },
+    {
+      "role": "sec.actor",
+      "field": "actor",
+      "tier": "facet",
+      "facet": "Auditable"
+    },
+    {
+      "role": "sec.alert_severity",
+      "field": "alert_severity",
+      "tier": "facet",
+      "facet": "Alertable"
+    },
+    {
+      "role": "sec.alert_state",
+      "field": "alert_state",
+      "tier": "facet",
+      "facet": "Alertable"
+    },
+    {
+      "role": "sec.alert_threshold",
+      "field": "alert_threshold",
+      "tier": "facet",
+      "facet": "Alertable"
+    },
+    {
+      "role": "sec.algorithm",
+      "field": "algorithm",
+      "tier": "facet",
+      "facet": "Signed"
+    },
+    {
+      "role": "sec.assessed_by",
+      "field": "assessed_by",
+      "tier": "facet",
+      "facet": "Compliant"
+    },
+    {
+      "role": "sec.attestation_confidence",
+      "field": "attestation_confidence",
+      "tier": "facet",
+      "facet": "Attested"
+    },
+    {
+      "role": "sec.attestation_result",
+      "field": "attestation_result",
+      "tier": "facet",
+      "facet": "Attested"
+    },
+    {
+      "role": "sec.attestation_type",
+      "field": "attestation_type",
+      "tier": "facet",
+      "facet": "Attested"
+    },
+    {
+      "role": "sec.attested_by",
+      "field": "attested_by",
+      "tier": "facet",
+      "facet": "Attested"
+    },
+    {
+      "role": "sec.can_delete",
+      "field": "can_delete",
+      "tier": "facet",
+      "facet": "Permissioned"
+    },
+    {
+      "role": "sec.can_read",
+      "field": "can_read",
+      "tier": "facet",
+      "facet": "Permissioned"
+    },
+    {
+      "role": "sec.can_share",
+      "field": "can_share",
+      "tier": "facet",
+      "facet": "Permissioned"
+    },
+    {
+      "role": "sec.can_write",
+      "field": "can_write",
+      "tier": "facet",
+      "facet": "Permissioned"
+    },
+    {
+      "role": "sec.case_number",
+      "field": "case_number",
+      "tier": "facet",
+      "facet": "Caseable"
+    },
+    {
+      "role": "sec.case_resolution",
+      "field": "case_resolution",
+      "tier": "facet",
+      "facet": "Caseable"
+    },
+    {
+      "role": "sec.case_stage",
+      "field": "case_stage",
+      "tier": "facet",
+      "facet": "Caseable"
+    },
+    {
+      "role": "sec.case_type",
+      "field": "case_type",
+      "tier": "facet",
+      "facet": "Caseable"
+    },
+    {
+      "role": "sec.changes",
+      "field": "changes",
+      "tier": "facet",
+      "facet": "Auditable"
+    },
+    {
+      "role": "sec.classification",
+      "field": "classification",
+      "tier": "facet",
+      "facet": "AccessLeveled"
+    },
+    {
+      "role": "sec.clearance_required",
+      "field": "clearance_required",
+      "tier": "facet",
+      "facet": "AccessLeveled"
+    },
+    {
+      "role": "sec.closed_at",
+      "field": "closed_at",
+      "tier": "facet",
+      "facet": "Caseable"
+    },
+    {
+      "role": "sec.compliance_status",
+      "field": "compliance_status",
+      "tier": "facet",
+      "facet": "Compliant"
+    },
+    {
+      "role": "sec.consent_proof",
+      "field": "consent_proof",
+      "tier": "facet",
+      "facet": "Consented"
+    },
+    {
+      "role": "sec.consent_purpose",
+      "field": "consent_purpose",
+      "tier": "facet",
+      "facet": "Consented"
+    },
+    {
+      "role": "sec.consent_state",
+      "field": "consent_state",
+      "tier": "facet",
+      "facet": "Consented"
+    },
+    {
+      "role": "sec.consent_subject",
+      "field": "consent_subject",
+      "tier": "facet",
+      "facet": "Consented"
+    },
+    {
+      "role": "sec.control_id",
+      "field": "control_id",
+      "tier": "facet",
+      "facet": "Compliant"
+    },
+    {
+      "role": "sec.fired_at",
+      "field": "fired_at",
+      "tier": "facet",
+      "facet": "Alertable"
+    },
+    {
+      "role": "sec.framework",
+      "field": "framework",
+      "tier": "facet",
+      "facet": "Compliant"
+    },
+    {
+      "role": "sec.granted_at",
+      "field": "granted_at",
+      "tier": "facet",
+      "facet": "Consented"
+    },
+    {
+      "role": "sec.handling_caveats",
+      "field": "handling_caveats",
+      "tier": "facet",
+      "facet": "AccessLeveled"
+    },
+    {
+      "role": "sec.jurisdiction",
+      "field": "jurisdiction",
+      "tier": "facet",
+      "facet": "Caseable"
+    },
+    {
+      "role": "sec.last_assessed_at",
+      "field": "last_assessed_at",
+      "tier": "facet",
+      "facet": "Compliant"
+    },
+    {
+      "role": "sec.legal_basis",
+      "field": "legal_basis",
+      "tier": "facet",
+      "facet": "Consented"
+    },
+    {
+      "role": "sec.legal_hold",
+      "field": "legal_hold",
+      "tier": "facet",
+      "facet": "Retained"
+    },
+    {
+      "role": "sec.occurred_at",
+      "field": "occurred_at",
+      "tier": "facet",
+      "facet": "Auditable"
+    },
+    {
+      "role": "sec.opened_at",
+      "field": "opened_at",
+      "tier": "facet",
+      "facet": "Caseable"
+    },
+    {
+      "role": "sec.outcome",
+      "field": "outcome",
+      "tier": "facet",
+      "facet": "Auditable"
+    },
+    {
+      "role": "sec.permissions",
+      "field": "sec_permissions",
+      "tier": "facet",
+      "facet": "Permissioned"
+    },
+    {
+      "role": "sec.resolved_at",
+      "field": "resolved_at",
+      "tier": "facet",
+      "facet": "Alertable"
+    },
+    {
+      "role": "sec.retain_until",
+      "field": "sec_retain_until",
+      "tier": "facet",
+      "facet": "Retained"
+    },
+    {
+      "role": "sec.retention_class",
+      "field": "retention_class",
+      "tier": "facet",
+      "facet": "Retained"
+    },
+    {
+      "role": "sec.risk_factors",
+      "field": "risk_factors",
+      "tier": "facet",
+      "facet": "RiskScored"
+    },
+    {
+      "role": "sec.risk_level",
+      "field": "risk_level",
+      "tier": "facet",
+      "facet": "RiskScored"
+    },
+    {
+      "role": "sec.risk_score",
+      "field": "risk_score",
+      "tier": "facet",
+      "facet": "RiskScored"
+    },
+    {
+      "role": "sec.role",
+      "field": "role",
+      "tier": "facet",
+      "facet": "Permissioned"
+    },
+    {
+      "role": "sec.rule_name",
+      "field": "rule_name",
+      "tier": "facet",
+      "facet": "Alertable"
+    },
+    {
+      "role": "sec.signature",
+      "field": "signature",
+      "tier": "facet",
+      "facet": "Signed"
+    },
+    {
+      "role": "sec.signature_is_valid",
+      "field": "signature_is_valid",
+      "tier": "facet",
+      "facet": "Signed"
+    },
+    {
+      "role": "sec.signed_at",
+      "field": "signed_at",
+      "tier": "facet",
+      "facet": "Signed"
+    },
+    {
+      "role": "sec.signer",
+      "field": "signer",
+      "tier": "facet",
+      "facet": "Signed"
+    },
+    {
+      "role": "sec.source_ip",
+      "field": "source_ip",
+      "tier": "facet",
+      "facet": "Auditable"
+    },
+    {
+      "role": "sec.target",
+      "field": "audit_target",
+      "tier": "facet",
+      "facet": "Auditable"
+    },
+    {
+      "role": "sec.visibility",
+      "field": "access_visibility",
+      "tier": "facet",
+      "facet": "AccessLeveled"
+    },
+    {
+      "role": "task.allowed_transitions",
+      "field": "allowed_transitions",
+      "tier": "facet",
+      "facet": "WorkflowState"
+    },
+    {
+      "role": "task.approval_status",
+      "field": "approval_status",
+      "tier": "facet",
+      "facet": "Approvable"
+    },
+    {
+      "role": "task.approver",
+      "field": "approver",
+      "tier": "facet",
+      "facet": "Approvable"
+    },
+    {
+      "role": "task.blocked_by",
+      "field": "blocked_by",
+      "tier": "facet",
+      "facet": "Dependencies"
+    },
+    {
+      "role": "task.blocked_reason",
+      "field": "blocked_reason",
+      "tier": "facet",
+      "facet": "Blockable"
+    },
+    {
+      "role": "task.blocked_since",
+      "field": "blocked_since",
+      "tier": "facet",
+      "facet": "Blockable"
+    },
+    {
+      "role": "task.blocks",
+      "field": "blocks",
+      "tier": "facet",
+      "facet": "Dependencies"
+    },
+    {
+      "role": "task.board",
+      "field": "board",
+      "tier": "facet",
+      "facet": "Boarded"
+    },
+    {
+      "role": "task.checked_count",
+      "field": "checked_count",
+      "tier": "facet",
+      "facet": "Checklist"
+    },
+    {
+      "role": "task.checklist_items",
+      "field": "checklist_items",
+      "tier": "facet",
+      "facet": "Checklist"
+    },
+    {
+      "role": "task.checklist_total",
+      "field": "checklist_total",
+      "tier": "facet",
+      "facet": "Checklist"
+    },
+    {
+      "role": "task.column",
+      "field": "column",
+      "tier": "facet",
+      "facet": "Boarded"
+    },
+    {
+      "role": "task.completed_at",
+      "field": "completed_at",
+      "tier": "facet",
+      "facet": "Completable"
+    },
+    {
+      "role": "task.completed_by",
+      "field": "completed_by",
+      "tier": "facet",
+      "facet": "Completable"
+    },
+    {
+      "role": "task.decided_at",
+      "field": "decided_at",
+      "tier": "facet",
+      "facet": "Approvable"
+    },
+    {
+      "role": "task.decision_note",
+      "field": "decision_note",
+      "tier": "facet",
+      "facet": "Approvable"
+    },
+    {
+      "role": "task.done_count",
+      "field": "done_count",
+      "tier": "facet",
+      "facet": "Progress"
+    },
+    {
+      "role": "task.entered_state_at",
+      "field": "entered_state_at",
+      "tier": "facet",
+      "facet": "WorkflowState"
+    },
+    {
+      "role": "task.estimate_s",
+      "field": "estimate_s",
+      "tier": "facet",
+      "facet": "Estimable"
+    },
+    {
+      "role": "task.is_blocked",
+      "field": "is_blocked",
+      "tier": "facet",
+      "facet": "Blockable"
+    },
+    {
+      "role": "task.is_done",
+      "field": "is_done",
+      "tier": "facet",
+      "facet": "Completable"
+    },
+    {
+      "role": "task.position",
+      "field": "position",
+      "tier": "facet",
+      "facet": "Boarded"
+    },
+    {
+      "role": "task.priority",
+      "field": "priority",
+      "tier": "facet",
+      "facet": "Prioritized"
+    },
+    {
+      "role": "task.progress",
+      "field": "progress",
+      "tier": "facet",
+      "facet": "Progress"
+    },
+    {
+      "role": "task.related",
+      "field": "related",
+      "tier": "facet",
+      "facet": "Dependencies"
+    },
+    {
+      "role": "task.remaining_s",
+      "field": "remaining_s",
+      "tier": "facet",
+      "facet": "Estimable"
+    },
+    {
+      "role": "task.resolution",
+      "field": "resolution",
+      "tier": "facet",
+      "facet": "Completable"
+    },
+    {
+      "role": "task.severity",
+      "field": "severity",
+      "tier": "facet",
+      "facet": "Prioritized"
+    },
+    {
+      "role": "task.spent_s",
+      "field": "spent_s",
+      "tier": "facet",
+      "facet": "Estimable"
+    },
+    {
+      "role": "task.state",
+      "field": "state",
+      "tier": "facet",
+      "facet": "WorkflowState"
+    },
+    {
+      "role": "task.swimlane",
+      "field": "swimlane",
+      "tier": "facet",
+      "facet": "Boarded"
+    },
+    {
+      "role": "task.total_count",
+      "field": "total_count",
+      "tier": "facet",
+      "facet": "Progress"
+    },
+    {
+      "role": "task.urgency",
+      "field": "urgency",
+      "tier": "facet",
+      "facet": "Prioritized"
+    },
+    {
+      "role": "task.waiting_on",
+      "field": "waiting_on",
+      "tier": "facet",
+      "facet": "Blockable"
+    },
+    {
+      "role": "time.all_day",
+      "field": "all_day",
+      "tier": "facet",
+      "facet": "Schedulable"
+    },
+    {
+      "role": "time.booked_at",
+      "field": "booked_at",
+      "tier": "facet",
+      "facet": "Booked"
+    },
+    {
+      "role": "time.cancellation_deadline",
+      "field": "cancellation_deadline",
+      "tier": "facet",
+      "facet": "Booked"
+    },
+    {
+      "role": "time.cancelled_at",
+      "field": "cancelled_at",
+      "tier": "facet",
+      "facet": "Booked"
+    },
+    {
+      "role": "time.check_in_at",
+      "field": "check_in_at",
+      "tier": "facet",
+      "facet": "Booked"
+    },
+    {
+      "role": "time.check_out_at",
+      "field": "check_out_at",
+      "tier": "facet",
+      "facet": "Booked"
+    },
+    {
+      "role": "time.created_at",
+      "field": "created_at",
+      "tier": "facet",
+      "facet": "Timestamped"
+    },
+    {
+      "role": "time.deleted_at",
+      "field": "deleted_at",
+      "tier": "facet",
+      "facet": "Timestamped"
+    },
+    {
+      "role": "time.due_at",
+      "field": "due_at",
+      "tier": "facet",
+      "facet": "Schedulable"
+    },
+    {
+      "role": "time.duration_display_unit",
+      "field": "duration_display_unit",
+      "tier": "facet",
+      "facet": "Duration"
+    },
+    {
+      "role": "time.duration_s",
+      "field": "duration_s",
+      "tier": "facet",
+      "facet": "Duration"
+    },
+    {
+      "role": "time.end_at",
+      "field": "end_at",
+      "tier": "facet",
+      "facet": "Schedulable"
+    },
+    {
+      "role": "time.is_recurring_master",
+      "field": "is_recurring_master",
+      "tier": "facet",
+      "facet": "Recurring"
+    },
+    {
+      "role": "time.next_occurrence_at",
+      "field": "next_occurrence_at",
+      "tier": "facet",
+      "facet": "Recurring"
+    },
+    {
+      "role": "time.recurrence_anchor",
+      "field": "recurrence_anchor",
+      "tier": "facet",
+      "facet": "Recurring"
+    },
+    {
+      "role": "time.recurrence_count",
+      "field": "recurrence_count",
+      "tier": "facet",
+      "facet": "Recurring"
+    },
+    {
+      "role": "time.recurrence_rule",
+      "field": "recurrence_rule",
+      "tier": "facet",
+      "facet": "Recurring"
+    },
+    {
+      "role": "time.recurrence_until",
+      "field": "recurrence_until",
+      "tier": "facet",
+      "facet": "Recurring"
+    },
+    {
+      "role": "time.start_at",
+      "field": "start_at",
+      "tier": "facet",
+      "facet": "Schedulable"
+    },
+    {
+      "role": "time.timezone",
+      "field": "timezone",
+      "tier": "facet",
+      "facet": "Schedulable"
+    },
+    {
+      "role": "time.updated_at",
+      "field": "updated_at",
+      "tier": "facet",
+      "facet": "Timestamped"
     }
   ]
 }

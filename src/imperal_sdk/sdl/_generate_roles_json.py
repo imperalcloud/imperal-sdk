@@ -14,11 +14,22 @@ _SCHEMA_VERSION = 1
 
 
 def build_catalog() -> dict:
-    """Return the role catalog as a plain dict (sorted, stable ordering)."""
+    """Role catalog: Entity core roles + every standard facet's roles (sorted, stable)."""
+    import imperal_sdk.sdl.facets as _facets
+    from imperal_sdk.sdl.entity import roles_of as _roles_of
+
     roles = [
         {"role": role, "field": field_name, "tier": "core", "facet": "Entity"}
         for field_name, role in CORE_ROLES.items()
     ]
+    seen = {r["role"] for r in roles}
+    for facet_name in _facets.__all__:
+        model = getattr(_facets, facet_name)
+        for field_name, role in _roles_of(model).items():
+            if role in seen:
+                continue
+            seen.add(role)
+            roles.append({"role": role, "field": field_name, "tier": "facet", "facet": facet_name})
     roles.sort(key=lambda r: r["role"])
     return {"schema_version": _SCHEMA_VERSION, "roles": roles}
 
