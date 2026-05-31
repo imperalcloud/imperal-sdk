@@ -11,7 +11,13 @@ from typing import Any
 
 from pydantic import Field
 
-from imperal_sdk.sdl.roles import validate_custom_role
+from imperal_sdk.sdl.roles import (
+    validate_custom_role,
+    is_valid_role,
+    namespace_of,
+    RESERVED_NAMESPACES,
+    RoleError,
+)
 
 ROLE_KEY = "x-sdl-role"
 
@@ -30,6 +36,23 @@ def field(*, role: str, default: Any = None, **kwargs: Any):
         **kwargs: forwarded to ``pydantic.Field`` (e.g. ``description=``).
     """
     validate_custom_role(role)
+    json_schema_extra: dict[str, Any] = dict(kwargs.pop("json_schema_extra", None) or {})
+    json_schema_extra[ROLE_KEY] = role
+    return Field(default, json_schema_extra=json_schema_extra, **kwargs)
+
+
+def _facet_field(*, role: str, default: Any = None, **kwargs: Any):
+    """Internal: declare a STANDARD facet field. Unlike the public ``field``,
+    a facet role MUST use a reserved namespace (facets own the standard role
+    namespaces). Validates grammar + reserved-namespace membership.
+    """
+    if not is_valid_role(role):
+        raise RoleError(f"Malformed facet role {role!r}: expected dotted lowercase.")
+    if namespace_of(role) not in RESERVED_NAMESPACES:
+        raise RoleError(
+            f"Facet role {role!r} must use a reserved namespace "
+            f"(one of {sorted(RESERVED_NAMESPACES)})."
+        )
     json_schema_extra: dict[str, Any] = dict(kwargs.pop("json_schema_extra", None) or {})
     json_schema_extra[ROLE_KEY] = role
     return Field(default, json_schema_extra=json_schema_extra, **kwargs)
