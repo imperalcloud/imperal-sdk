@@ -2,7 +2,15 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-## [Unreleased]
+## 5.2.0 — 2026-05-31 — Structured Data Layer (SDL) foundation
+
+Introduces the **SDL (`imperal_sdk.sdl`)** — a typed, semantic vocabulary for the
+data an extension returns, so the platform can read an entity's id / title / kind
+and its facets directly instead of inferring them from field names. This release
+ships the SDK foundation (canonical types + the standard facet library + a schema
+marker for platform detection); the platform begins reading SDL behind a rollout
+flag in a later release. Fully **additive** — the existing API and existing
+extensions are unchanged; adopting SDL is opt-in via `data_model=`.
 
 ### Added
 
@@ -38,6 +46,12 @@ All notable changes to `imperal-sdk` are documented here.
   non-reserved namespace. Full guide: `docs/sdl-facets.md`. Still not wired into
   the platform — extensions can adopt the types now; the platform begins reading
   them in a later phase.
+- **SDL — schema marker on `Entity` / `EntityList`.** Both stamp
+  `x-sdl: "entity"` / `"entity-list"` into their JSON schema so the platform can
+  detect an SDL-typed result from a function's return schema alone. Inherited by
+  subclasses — no extension action needed beyond subclassing `sdl.Entity`.
+
+## 5.1.0 — 2026-05-30 — Accuracy & correctness pass
 
 This release makes the SDK faithful to current platform behavior: a billing
 fix, removal of unused surface, a corrected limit, and documentation that now
