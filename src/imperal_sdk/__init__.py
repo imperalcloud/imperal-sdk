@@ -10,6 +10,7 @@ from imperal_sdk.manifest import generate_manifest, save_manifest
 from imperal_sdk.chat import ChatExtension
 from imperal_sdk.chat.action_result import ActionResult
 from imperal_sdk import ui
+from imperal_sdk import sdl
 from imperal_sdk.runtime.llm_provider import get_llm_provider, LLMProvider, LLMConfig, LLMUsage
 from imperal_sdk.runtime.message_adapter import MessageAdapter
 from imperal_sdk.extensions.client import ExtensionsClient, CircularCallError
@@ -67,4 +68,6 @@ __all__ = [
     "validate_source_tree", "validate_manifest_v1_6_0",
     # UI
     "ui",
+    # SDL — Structured Data Layer
+    "sdl",
 ]
