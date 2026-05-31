@@ -97,4 +97,5 @@ class Backup(BaseModel):
     backup_size_bytes: int | None = _facet_field(role="net.backup_size_bytes")
     retain_until: datetime | None = _facet_field(role="net.retain_until")
     backup_kind: Literal["full", "incremental", "differential", "snapshot"] | None = _facet_field(role="net.backup_kind")
-    is_verified: bool | None = _facet_field(role="net.is_verified")
+    # Prefixed to avoid collision with rating.Reviewed.is_verified (role rating.is_verified)
+    backup_is_verified: bool | None = _facet_field(role="net.is_verified")

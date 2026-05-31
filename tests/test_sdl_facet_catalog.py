@@ -45,11 +45,11 @@ def test_inventory_accept_values():
 def test_color_material_accept_values():
     d = ProductDoc(
         id=1, title="x",
-        color="Red", color_hex="#FF0000", material="Cotton",
+        color="Red", material_color_hex="#FF0000", material="Cotton",
         pattern="Solid", finish="Matte",
     )
     assert d.color == "Red"
-    assert d.color_hex == "#FF0000"
+    assert d.material_color_hex == "#FF0000"
     assert d.finish == "Matte"
 
 

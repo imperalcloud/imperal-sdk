@@ -34,7 +34,8 @@ class Bundle(BaseModel):
 
 class ColorMaterial(BaseModel):
     color: str | None = _facet_field(role="catalog.color")
-    color_hex: str | None = _facet_field(role="catalog.color_hex")
+    # Prefixed to avoid collision with identity.Iconified.color_hex (role core.color_hex)
+    material_color_hex: str | None = _facet_field(role="catalog.color_hex")
     material: str | None = _facet_field(role="catalog.material")
     pattern: str | None = _facet_field(role="catalog.pattern")
     finish: str | None = _facet_field(role="catalog.finish")

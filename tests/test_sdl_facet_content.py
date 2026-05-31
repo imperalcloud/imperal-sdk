@@ -54,10 +54,10 @@ def test_attached_accepts_values():
 
 def test_editorial_accepts_values():
     now = datetime(2026, 5, 31, 12, 0, 0)
-    a = Article(id=1, title="x", editorial_state="published", is_draft=False,
+    a = Article(id=1, title="x", editorial_state="published", editorial_is_draft=False,
                 published_at=now, first_published_at=now)
     assert a.editorial_state == "published"
-    assert a.is_draft is False
+    assert a.editorial_is_draft is False
     assert a.published_at == now
 
 

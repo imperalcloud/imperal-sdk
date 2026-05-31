@@ -39,7 +39,8 @@ class AudioTrack(BaseModel):
 
 class VideoTrack(BaseModel):
     video_codec: str | None = _facet_field(role="media.video_codec")
-    resolution: str | None = _facet_field(role="media.resolution")
+    # Prefixed to avoid collision with task.Completable.resolution (role task.resolution)
+    video_resolution: str | None = _facet_field(role="media.resolution")
     fps: float | None = _facet_field(role="media.fps")
     video_bitrate_kbps: int | None = _facet_field(role="media.video_bitrate_kbps")
     hdr: bool | None = _facet_field(role="media.hdr")

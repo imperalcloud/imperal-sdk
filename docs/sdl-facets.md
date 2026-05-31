@@ -112,7 +112,7 @@ Use these facets for entities that carry body text, summaries, categories, attac
 `attachments`, `attachment_count`, `has_attachments`, `inline_images`
 
 **Editorial** — publishing workflow:
-`editorial_state`, `is_draft`, `published_at`, `first_published_at`
+`editorial_state`, `editorial_is_draft`, `published_at`, `first_published_at`
 
 ---
 
@@ -154,7 +154,7 @@ Use these facets for files, images, audio/video tracks, archives, content safety
 `audio_codec`, `bitrate_kbps`, `sample_rate_hz`, `channels`, `bit_depth`, `loudness_lufs`
 
 **VideoTrack** — video encoding properties:
-`video_codec`, `resolution`, `fps`, `video_bitrate_kbps`, `hdr`
+`video_codec`, `video_resolution`, `fps`, `video_bitrate_kbps`, `hdr`
 
 **Archive** — compressed archive metadata:
 `archive_format`, `entry_count`, `uncompressed_size_bytes`, `compression_ratio`, `is_encrypted`
@@ -247,7 +247,7 @@ Use these facets for product catalog entities: brand identity, stock levels, bun
 `is_bundle`, `bundle_items`, `bundle_type`
 
 **ColorMaterial** — visual and material attributes:
-`color`, `color_hex`, `material`, `pattern`, `finish`
+`color`, `material_color_hex`, `material`, `pattern`, `finish`
 
 **ProductCompliance** — regulatory and age-restriction metadata:
 `certifications`, `hs_code`, `age_restriction`, `restricted_regions`, `requires_prescription`
@@ -349,7 +349,7 @@ Use these facets for infrastructure entities: network assets, API endpoints, hos
 `config_key`, `config_value`, `config_value_type`, `is_secret`, `config_source`, `default_value`
 
 **Backup** — a point-in-time backup snapshot:
-`snapshot_id`, `source_resource`, `taken_at`, `backup_size_bytes`, `retain_until`, `backup_kind`, `is_verified`
+`snapshot_id`, `source_resource`, `taken_at`, `backup_size_bytes`, `retain_until`, `backup_kind`, `backup_is_verified`
 
 ---
 

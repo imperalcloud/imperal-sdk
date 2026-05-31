@@ -41,6 +41,7 @@ class Attached(BaseModel):
 
 class Editorial(BaseModel):
     editorial_state: Literal["draft", "in_review", "approved", "published", "scheduled", "archived"] | None = _facet_field(role="content.editorial_state")
-    is_draft: bool | None = _facet_field(role="content.is_draft")
+    # Prefixed to avoid collision with comm.Draftable.is_draft (role comm.is_draft)
+    editorial_is_draft: bool | None = _facet_field(role="content.is_draft")
     published_at: datetime | None = _facet_field(role="content.published_at")
     first_published_at: datetime | None = _facet_field(role="content.first_published_at")

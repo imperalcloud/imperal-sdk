@@ -51,7 +51,7 @@
     },
     {
       "role": "catalog.color_hex",
-      "field": "color_hex",
+      "field": "material_color_hex",
       "tier": "facet",
       "facet": "ColorMaterial"
     },
@@ -387,7 +387,7 @@
     },
     {
       "role": "content.is_draft",
-      "field": "is_draft",
+      "field": "editorial_is_draft",
       "tier": "facet",
       "facet": "Editorial"
     },
@@ -1551,7 +1551,7 @@
     },
     {
       "role": "media.resolution",
-      "field": "resolution",
+      "field": "video_resolution",
       "tier": "facet",
       "facet": "VideoTrack"
     },
@@ -2085,7 +2085,7 @@
     },
     {
       "role": "net.is_verified",
-      "field": "is_verified",
+      "field": "backup_is_verified",
       "tier": "facet",
       "facet": "Backup"
     },
