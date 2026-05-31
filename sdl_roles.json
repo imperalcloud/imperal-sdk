@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "roles": [
+    {
+      "role": "core.description",
+      "field": "description",
+      "tier": "core",
+      "facet": "Entity"
+    },
+    {
+      "role": "core.id",
+      "field": "id",
+      "tier": "core",
+      "facet": "Entity"
+    },
+    {
+      "role": "core.kind",
+      "field": "kind",
+      "tier": "core",
+      "facet": "Entity"
+    },
+    {
+      "role": "core.status",
+      "field": "status",
+      "tier": "core",
+      "facet": "Entity"
+    },
+    {
+      "role": "core.subtitle",
+      "field": "subtitle",
+      "tier": "core",
+      "facet": "Entity"
+    },
+    {
+      "role": "core.title",
+      "field": "title",
+      "tier": "core",
+      "facet": "Entity"
+    },
+    {
+      "role": "core.url",
+      "field": "url",
+      "tier": "core",
+      "facet": "Entity"
+    }
+  ]
+}
