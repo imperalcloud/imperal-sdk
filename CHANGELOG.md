@@ -8,8 +8,7 @@ Introduces the **SDL (`imperal_sdk.sdl`)** — a typed, semantic vocabulary for 
 data an extension returns, so the platform can read an entity's id / title / kind
 and its facets directly instead of inferring them from field names. This release
 ships the SDK foundation (canonical types + the standard facet library + a schema
-marker for platform detection); the platform begins reading SDL behind a rollout
-flag in a later release. Fully **additive** — the existing API and existing
+marker for platform detection). **The platform reads SDL in production today.** Fully **additive** — the existing API and existing
 extensions are unchanged; adopting SDL is opt-in via `data_model=`.
 
 ### Added
@@ -28,8 +27,8 @@ extensions are unchanged; adopting SDL is opt-in via `data_model=`.
   - `sdl.roles_of(model)` — introspect a model's field→role map.
 
   Use it via `data_model=` on `@chat.function` (e.g.
-  `class Note(sdl.Entity): ...` → `data_model=Note`). Full platform integration
-  arrives in a later phase. Not yet wired into the platform.
+  `class Note(sdl.Entity): ...` → `data_model=Note`). **The platform reads SDL
+  entities in production today.**
 - **SDL — Standard Facet Library (Phase 2).** 123 composable facet mixins across
   17 families (Identity, Time, People, Content, Communication, Media, Quantities,
   Money, Catalog, Tasks, Location, Tech/Network, Analytics, Events, Ratings,
@@ -43,9 +42,8 @@ extensions are unchanged; adopting SDL is opt-in via `data_model=`.
 
   564 standard roles are catalogued in `sdl_roles.json`. Every facet field is
   optional; for anything not covered, use `sdl.field(role="yourapp.x")` with a
-  non-reserved namespace. Full guide: `docs/sdl-facets.md`. Still not wired into
-  the platform — extensions can adopt the types now; the platform begins reading
-  them in a later phase.
+  non-reserved namespace. Full guide: `docs/sdl-facets.md`. **Live in production** —
+  extensions adopt the types and the platform reads them today.
 - **SDL — schema marker on `Entity` / `EntityList`.** Both stamp
   `x-sdl: "entity"` / `"entity-list"` into their JSON schema so the platform can
   detect an SDL-typed result from a function's return schema alone. Inherited by
