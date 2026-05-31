@@ -20,9 +20,24 @@ All notable changes to `imperal-sdk` are documented here.
   - `sdl.roles_of(model)` — introspect a model's field→role map.
 
   Use it via `data_model=` on `@chat.function` (e.g.
-  `class Note(sdl.Entity): ...` → `data_model=Note`). This phase ships the core
-  types and the role registry only; the standard facet library and full platform
-  integration arrive in later phases. Not yet wired into the platform.
+  `class Note(sdl.Entity): ...` → `data_model=Note`). Full platform integration
+  arrives in a later phase. Not yet wired into the platform.
+- **SDL — Standard Facet Library (Phase 2).** 123 composable facet mixins across
+  17 families (Identity, Time, People, Content, Communication, Media, Quantities,
+  Money, Catalog, Tasks, Location, Tech/Network, Analytics, Events, Ratings,
+  Security, Devices/Health). Compose the facets an entity needs and every field
+  carries a standard semantic role:
+
+  ```python
+  class Task(sdl.Entity, sdl.Schedulable, sdl.Prioritized, sdl.Progress):
+      estimate_s: int | None = None
+  ```
+
+  564 standard roles are catalogued in `sdl_roles.json`. Every facet field is
+  optional; for anything not covered, use `sdl.field(role="yourapp.x")` with a
+  non-reserved namespace. Full guide: `docs/sdl-facets.md`. Still not wired into
+  the platform — extensions can adopt the types now; the platform begins reading
+  them in a later phase.
 
 This release makes the SDK faithful to current platform behavior: a billing
 fix, removal of unused surface, a corrected limit, and documentation that now
