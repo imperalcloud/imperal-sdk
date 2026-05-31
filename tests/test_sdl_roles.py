@@ -15,7 +15,7 @@ def test_valid_roles(role):
     assert is_valid_role(role) is True
 
 
-@pytest.mark.parametrize("role", ["", "Core.Title", "single", "a..b", "a.", ".b", "a.B", "1a.b"])
+@pytest.mark.parametrize("role", ["", "Core.Title", "single", "a..b", "a.", ".b", "a.B", "1a.b", "a.b\n", "a.b\nc.d"])
 def test_invalid_roles(role):
     assert is_valid_role(role) is False
 
@@ -26,7 +26,7 @@ def test_namespace_of():
 
 
 def test_validate_custom_role_ok():
-    validate_custom_role("audio.bpm")  # no raise
+    assert validate_custom_role("audio.bpm") is None  # valid custom role → no raise, returns None
 
 
 def test_validate_custom_role_rejects_reserved_namespace():

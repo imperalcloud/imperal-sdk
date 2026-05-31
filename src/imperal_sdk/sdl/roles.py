@@ -1,4 +1,3 @@
-# src/imperal_sdk/sdl/roles.py
 """SDL semantic role grammar, reserved-namespace registry, and core role catalog.
 
 A role is a dotted lowercase string (e.g. ``core.title``, ``audio.bpm``) declaring
@@ -18,7 +17,7 @@ RESERVED_NAMESPACES: frozenset[str] = frozenset({
 })
 
 # Dotted role grammar: >=2 lowercase segments, first char alpha.
-_ROLE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+_ROLE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+\Z")
 
 # Canonical roles of the Entity core fields (Phase 1). Facet roles append in Phase 2.
 CORE_ROLES: dict[str, str] = {
@@ -42,7 +41,11 @@ def is_valid_role(role: str) -> bool:
 
 
 def namespace_of(role: str) -> str:
-    """Return the first dotted segment (the namespace)."""
+    """Return the first dotted segment (the namespace).
+
+    The caller is responsible for passing a syntactically valid role; this function
+    does not validate.
+    """
     return role.split(".", 1)[0]
 
 
@@ -53,8 +56,9 @@ def validate_custom_role(role: str) -> None:
         raise RoleError(
             f"Malformed role {role!r}: expected dotted lowercase, e.g. 'audio.bpm'."
         )
-    if namespace_of(role) in RESERVED_NAMESPACES:
+    ns = namespace_of(role)
+    if ns in RESERVED_NAMESPACES:
         raise RoleError(
-            f"Role {role!r} uses reserved namespace {namespace_of(role)!r}; "
+            f"Role {role!r} uses reserved namespace {ns!r}; "
             "custom roles must use a non-reserved namespace."
         )
