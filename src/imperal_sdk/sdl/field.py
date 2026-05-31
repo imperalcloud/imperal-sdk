@@ -16,19 +16,20 @@ from imperal_sdk.sdl.roles import validate_custom_role
 ROLE_KEY = "x-sdl-role"
 
 
-def field(*, role: str, describe: str | None = None, default: Any = None, **kwargs: Any):
+def field(*, role: str, default: Any = None, **kwargs: Any):
     """Pydantic field carrying an SDL semantic ``role``.
+
+    The role is stamped into ``json_schema_extra['x-sdl-role']`` (readable via
+    ``model_fields[name].json_schema_extra[ROLE_KEY]``). Use pydantic's native
+    ``description=`` for a human description; it is forwarded to ``pydantic.Field``.
 
     Args:
         role: dotted custom role in a non-reserved namespace (validated eagerly).
-        describe: optional human description (stored as the field description).
         default: field default. Defaults to ``None`` (optional). Pass
             ``default=...`` (Ellipsis) to make the field required.
-        **kwargs: forwarded to ``pydantic.Field``.
+        **kwargs: forwarded to ``pydantic.Field`` (e.g. ``description=``).
     """
     validate_custom_role(role)
     json_schema_extra: dict[str, Any] = dict(kwargs.pop("json_schema_extra", None) or {})
     json_schema_extra[ROLE_KEY] = role
-    if describe is not None:
-        json_schema_extra.setdefault("description", describe)
     return Field(default, json_schema_extra=json_schema_extra, **kwargs)

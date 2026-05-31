@@ -10,7 +10,7 @@ from imperal_sdk.sdl.roles import RoleError
 
 
 class Track(BaseModel):
-    bpm: int | None = field(role="audio.bpm", describe="beats per minute")
+    bpm: int | None = field(role="audio.bpm", description="beats per minute")
     name: str = "untitled"
 
 
@@ -20,9 +20,8 @@ def test_role_lands_in_field_schema_extra():
     assert extra[ROLE_KEY] == "audio.bpm"
 
 
-def test_describe_becomes_description():
-    extra = Track.model_fields["bpm"].json_schema_extra
-    assert extra["description"] == "beats per minute"
+def test_description_uses_native_pydantic_slot():
+    assert Track.model_fields["bpm"].description == "beats per minute"
 
 
 def test_field_is_optional_by_default():
@@ -41,3 +40,9 @@ def test_field_rejects_reserved_namespace_eagerly():
     with pytest.raises(RoleError):
         class Bad(BaseModel):
             y: str = field(role="core.title")  # reserved → raises at class definition
+
+
+def test_field_rejects_malformed_role_eagerly():
+    with pytest.raises(RoleError):
+        class Bad(BaseModel):
+            z: str = field(role="NotARole")  # no dot / uppercase → malformed
