@@ -8,10 +8,7 @@ from imperal_sdk.chat import ChatExtension
 def test_chat_extension_does_not_emit_orchestrator_tool():
     """Building a manifest from an ext with a ChatExtension must not include tool_<name>_chat."""
     ext = Extension(app_id="demo", description="demo ext for emitter test")
-    # Suppress the DeprecationWarning emitted by ChatExtension(tool_name=...) — covered separately.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        chat = ChatExtension(ext, tool_name="demo_legacy_kwarg", description="legacy")
+    chat = ChatExtension(ext, tool_name="demo_legacy_kwarg", description="legacy")
 
     @chat.function(name="list_items", description="list user items for the demo ext")
     async def list_items(ctx):
@@ -53,17 +50,37 @@ def test_chat_extension_does_not_emit_orchestrator_tool():
     )
 
 
-def test_chat_extension_tool_name_kwarg_emits_deprecation_warning():
-    """ChatExtension(tool_name=...) must emit DeprecationWarning at construction."""
+def test_chat_extension_tool_name_kwarg_does_not_warn():
+    """ChatExtension(tool_name=...) is the canonical chat-registration key — it
+    must NOT emit a DeprecationWarning.
+
+    Reversed from the transient SDK 5.0.0 stance: the kwarg is load-bearing
+    (manifest grouping key + per-turn prompt + scope guards), has no
+    replacement API, and every first-party extension passes it. A deprecation
+    warning with no migration path is cry-wolf noise, so it was removed.
+    """
     ext = Extension(app_id="demo2", description="demo ext for deprecation test")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         ChatExtension(ext, tool_name="legacy_name", description="legacy")
-    deprecation = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-    assert deprecation, (
-        "ChatExtension(tool_name=...) MUST emit a DeprecationWarning in SDK 5.0.0"
+    tool_name_deprecations = [
+        w for w in caught
+        if issubclass(w.category, DeprecationWarning) and "tool_name" in str(w.message)
+    ]
+    assert not tool_name_deprecations, (
+        "ChatExtension(tool_name=...) must NOT emit a tool_name DeprecationWarning; "
+        f"got: {[str(w.message) for w in tool_name_deprecations]}"
     )
-    msg = str(deprecation[0].message)
-    assert "tool_name" in msg and ("5.0.0" in msg or "5.1.0" in msg), (
-        f"DeprecationWarning message must reference tool_name and version cutoff; got: {msg}"
+
+
+def test_chat_extension_tool_name_optional_defaults_to_app_id():
+    """tool_name is optional — when omitted it derives from the extension app_id
+    (``tool_<app_id>_chat``) and is used as the manifest registration key."""
+    ext = Extension(app_id="demo3", description="demo ext for default-tool-name test")
+    chat = ChatExtension(ext, description="no explicit tool_name")
+    assert chat.tool_name == "tool_demo3_chat", (
+        f"omitted tool_name must default to tool_<app_id>_chat; got {chat.tool_name!r}"
+    )
+    assert "tool_demo3_chat" in ext._chat_extensions, (
+        "default tool_name must be registered as the _chat_extensions key"
     )

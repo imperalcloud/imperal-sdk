@@ -64,9 +64,16 @@ class FunctionDef:
 
 
 class ChatExtension:
-    def __init__(self, ext, tool_name: str, description: str, system_prompt: str = "",
+    def __init__(self, ext, tool_name: str | None = None, description: str = "",
+                 system_prompt: str = "",
                  model: "str | None" = None, max_rounds: int = 10):
         self.ext = ext
+        # tool_name is the canonical chat-registration key: it groups the
+        # extension's @chat.function tools in the manifest, anchors the per-turn
+        # system prompt, and labels scope-guard audit lines. Optional — derived
+        # from the extension app_id (``tool_<app_id>_chat``) when omitted; pass
+        # it explicitly to pin a production-stable routing name.
+        tool_name = tool_name or f"tool_{ext.app_id}_chat"
         self.tool_name = tool_name
         self.description = description
         self.system_prompt = system_prompt
@@ -94,20 +101,12 @@ class ChatExtension:
                 "Example: 'Notes module — manage user notes and folders.'"
             )
 
-        # v5.0.0: orchestrator-tool auto-registration REMOVED. ChatExtension
-        # is now purely a @chat.function bundle declaration — the platform
-        # chain executor dispatches each function directly via typed dispatch.
-        # tool_name kwarg retained for back-compat but emits DeprecationWarning.
-        # Will be removed in 5.1.0.
-        import warnings as _warnings
-        _warnings.warn(
-            f"ChatExtension(tool_name={tool_name!r}): kwarg deprecated in SDK 5.0.0 "
-            "(orchestrator-tool auto-registration removed). Move classifier-readable "
-            "text into Extension(description=...) + per-@chat.function(description=...). "
-            "Will be removed in 5.1.0.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        # v5.0.0 removed orchestrator-tool auto-registration: ChatExtension is
+        # purely a @chat.function bundle declaration, and the platform chain
+        # executor dispatches each function directly via typed dispatch — the
+        # host LLM no longer sees a single ``tool_<app_id>_chat`` umbrella tool.
+        # ``tool_name`` is retained as the canonical registration key (see the
+        # __init__ note above) — it is NOT deprecated.
         ext._chat_extensions = getattr(ext, "_chat_extensions", {})
         ext._chat_extensions[tool_name] = self
 
