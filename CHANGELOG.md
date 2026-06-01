@@ -2,6 +2,26 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.2.1 — 2026-06-01 — ChatExtension ergonomics & honest deprecations
+
+Small, fully backward-compatible cleanup of `ChatExtension`. No API removals;
+existing extensions are unaffected.
+
+### Changed
+
+- `ChatExtension(tool_name=...)` no longer emits a `DeprecationWarning`. The
+  kwarg is the **canonical** chat-registration key — it groups your
+  `@chat.function` tools in the manifest, anchors the per-turn prompt, and
+  labels scope-guard audit lines. It is load-bearing and not going away; the
+  prior "removed in 5.1.0" warning was incorrect and has been removed.
+
+### Added
+
+- `ChatExtension(...)` now accepts an **optional** `tool_name`. When omitted it
+  defaults to `f"tool_{ext.app_id}_chat"`. Pass it explicitly to pin a stable
+  routing name (recommended for production extensions). `description=` is now
+  optional as well.
+
 ## 5.2.0 — 2026-05-31 — Structured Data Layer (SDL) foundation
 
 Introduces the **SDL (`imperal_sdk.sdl`)** — a typed, semantic vocabulary for the
