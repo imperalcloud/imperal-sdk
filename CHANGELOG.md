@@ -2,6 +2,25 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.2.2 — 2026-06-11 — Import-light package root
+
+Performance / robustness release. **Zero API changes** — every public name,
+submodule attribute, star-import and `dir()` entry resolves exactly as before
+(verified by an eager-parity test over the whole surface).
+
+### Changed
+
+- **The package root is now import-light (PEP 562 lazy surface).**
+  `import imperal_sdk` — and importing transport-free helpers such as
+  `imperal_sdk.chat.filters` or `imperal_sdk.chat.error_codes` — no longer
+  loads the HTTP client stack. Heavy dependencies load on first use of the
+  names that actually need them (`Context`, the service clients,
+  `get_llm_provider`, …). Benefits: faster cold imports, and helper modules
+  are now safe to import from restricted/sandboxed execution contexts that
+  forbid network-stack loading.
+
+Nothing to migrate — rebuild against `imperal-sdk>=5.2.2` at your convenience.
+
 ## 5.2.1 — 2026-06-01 — ChatExtension ergonomics & honest deprecations
 
 Small, fully backward-compatible cleanup of `ChatExtension`. No API removals;
