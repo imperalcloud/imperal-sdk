@@ -1,28 +1,105 @@
 {
-  "version": "5.x-sample",
-  "request_models": {
-    "POST /v1/billing/internal/usage/track": {
-      "fields": {
-        "user_id":      {"type": "str",        "required": true},
-        "tenant_id":    {"type": "str",        "required": true},
-        "meter":        {"type": "str",        "required": true},
-        "quantity":     {"type": "int",        "required": false},
-        "extension_id": {"type": "str | None", "required": false}
+  "advisory_decorator_fields": [
+    "effects",
+    "background",
+    "long_running"
+  ],
+  "constants": {
+    "hub_dispatch": {
+      "max_depth": {
+        "admin_tunable": true,
+        "counts_root": false,
+        "effective_nested_calls": 6,
+        "reject_when": "depth >= value",
+        "source": "orchestration/hub_dispatch_handler.py::MAX_DEPTH",
+        "value": 6
       }
     }
   },
-  "constants": {
-    "hub_dispatch": {
-      "max_depth": {"value": 6, "counts_root": false, "effective_nested_calls": 6, "reject_when": "depth >= value"}
+  "consumed_decorator_fields": [
+    "action_type",
+    "chain_callable",
+    "data_model",
+    "event",
+    "id_projection"
+  ],
+  "ctx_surface": {
+    "ai": [
+      "complete"
+    ],
+    "billing": [
+      "check_limits",
+      "get_balance",
+      "get_subscription",
+      "track_usage"
+    ],
+    "config": [
+      "all",
+      "get",
+      "get_section"
+    ],
+    "http": [
+      "delete",
+      "get",
+      "patch",
+      "post",
+      "put"
+    ],
+    "notify": [
+      "send"
+    ],
+    "skeleton": [
+      "get"
+    ],
+    "storage": [
+      "delete",
+      "download",
+      "list",
+      "upload"
+    ],
+    "store": [
+      "count",
+      "create",
+      "delete",
+      "get",
+      "list",
+      "list_users",
+      "query",
+      "query_all",
+      "set",
+      "update"
+    ]
+  },
+  "emit_time_validation": {
+    "action_result_data": false
+  },
+  "request_models": {
+    "POST /v1/billing/internal/usage/track": {
+      "fields": {
+        "extension_id": {
+          "required": false,
+          "type": "str | None"
+        },
+        "meter": {
+          "required": true,
+          "type": "str"
+        },
+        "quantity": {
+          "required": false,
+          "type": "int"
+        },
+        "tenant_id": {
+          "required": true,
+          "type": "str"
+        },
+        "user_id": {
+          "required": true,
+          "type": "str"
+        }
+      },
+      "source": "gateway_spec (auth-gateway billing/schemas.py::UsageTrackRequest)"
     }
   },
   "sdk_version_floor": "5.0.0",
-  "consumed_decorator_fields": ["action_type", "chain_callable", "data_model", "event", "id_projection"],
-  "ctx_surface": {
-    "ai": ["complete"],
-    "billing": ["check_limits", "get_balance", "get_subscription", "track_usage"],
-    "config": ["all", "get", "get_section"],
-    "skeleton": ["get"]
-  },
-  "emit_time_validation": {"action_result_data": false}
+  "version": "1.0.0"
 }
