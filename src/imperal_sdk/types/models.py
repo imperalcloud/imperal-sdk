@@ -123,3 +123,56 @@ class HTTPStatusError(Exception):
         self.status_code = status_code
         self.body = body or ""
         super().__init__(f"HTTP {status_code}: {str(body)[:200]}")
+
+
+@dataclass
+class PaymentMethod:
+    """Result item from ctx.billing.list_payment_methods()."""
+    id: str = ""
+    type: str = "card"
+    brand: str = ""
+    last4: str = ""
+    exp_month: int = 0
+    exp_year: int = 0
+    is_default: bool = False
+
+
+@dataclass
+class SetupIntentResult:
+    """Result from ctx.billing.create_setup_intent() — drives a Stripe add-card flow."""
+    client_secret: str = ""
+    publishable_key: str = ""
+
+
+@dataclass
+class ChangePlanResult:
+    """Result from ctx.billing.change_plan()."""
+    action: str = ""
+    plan: str = ""
+    succeeded: bool = False
+    requires_action: bool = False
+    client_secret: str = ""
+    effective_at: str = ""
+    pending: bool = False
+
+
+@dataclass
+class TopupResult:
+    """Result from ctx.billing.topup() — drives a Stripe Payment Element."""
+    client_secret: str = ""
+    payment_intent_id: str = ""
+    publishable_key: str = ""
+
+
+@dataclass
+class PaymentRecord:
+    """Result item from ctx.billing.list_payments()."""
+    payment_intent_id: str = ""
+    amount_cents: int = 0
+    currency: str = "usd"
+    tokens: int = 0
+    status: str = ""
+    type: str = ""
+    created_at: str | None = None
+    completed_at: str | None = None
+    receipt_url: str = ""

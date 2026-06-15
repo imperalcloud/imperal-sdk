@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 import httpx
 
-from imperal_sdk.types.models import BalanceInfo
+from imperal_sdk.types.models import (
+    BalanceInfo, PaymentMethod, SetupIntentResult, ChangePlanResult,
+    TopupResult, PaymentRecord,
+)
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +56,10 @@ class BillingClient:
 
     def _headers(self) -> dict:
         if self._service_token:
-            return {"X-Service-Token": self._service_token}
+            h = {"X-Service-Token": self._service_token}
+            if self._user_id:
+                h["X-Acting-User"] = self._user_id
+            return h
         return {"Authorization": f"Bearer {self._auth_token}"}
 
     def _uid(self, user: Any = None) -> str:
@@ -160,3 +166,89 @@ class BillingClient:
         except Exception as e:
             log.warning("Billing get_balance failed: %s", e)
             return BalanceInfo(balance=0, plan="unknown", cap=0)
+
+    # ─── Payment methods + plan changes + top-up + payment history ──────── #
+
+    async def list_payment_methods(self, user: Any = None) -> list[PaymentMethod]:
+        uid = self._uid(user)
+        try:
+            async with httpx.AsyncClient() as client:
+                url = (f"{self._gateway_url}/v1/billing/internal/payment-methods/{uid}"
+                       if (self._service_token and uid)
+                       else f"{self._gateway_url}/v1/billing/payment-methods")
+                resp = await client.get(url, headers=self._headers(), timeout=10)
+                resp.raise_for_status()
+                return [PaymentMethod(**m) for m in resp.json()]
+        except Exception as e:
+            log.warning("Billing list_payment_methods failed: %s", e)
+            return []
+
+    async def list_payments(self, user: Any = None, limit: int = 50, offset: int = 0) -> list[PaymentRecord]:
+        uid = self._uid(user)
+        try:
+            async with httpx.AsyncClient() as client:
+                if self._service_token and uid:
+                    url = f"{self._gateway_url}/v1/billing/internal/payments/{uid}"
+                else:
+                    url = f"{self._gateway_url}/v1/billing/payments"
+                resp = await client.get(url, headers=self._headers(),
+                                        params={"limit": limit, "offset": offset}, timeout=15)
+                resp.raise_for_status()
+                return [PaymentRecord(**p) for p in resp.json()]
+        except Exception as e:
+            log.warning("Billing list_payments failed: %s", e)
+            return []
+
+    async def create_setup_intent(self, user: Any = None) -> SetupIntentResult:
+        """Add-card SetupIntent. Surfaces errors (the ext needs the client secret)."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/payment-methods/setup",
+                                     headers=self._headers(), timeout=10)
+            resp.raise_for_status()
+            d = resp.json()
+            return SetupIntentResult(client_secret=d.get("client_secret", ""),
+                                     publishable_key=d.get("publishable_key", ""))
+
+    async def set_default_payment_method(self, pm_id: str, user: Any = None) -> bool:
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(f"{self._gateway_url}/v1/billing/payment-methods/{pm_id}/default",
+                                    headers=self._headers(), timeout=10)
+            resp.raise_for_status()
+            return True
+
+    async def remove_payment_method(self, pm_id: str, user: Any = None) -> bool:
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(f"{self._gateway_url}/v1/billing/payment-methods/{pm_id}",
+                                       headers=self._headers(), timeout=10)
+            resp.raise_for_status()
+            return True
+
+    async def change_plan(self, plan_id: str, period: str = "monthly", user: Any = None) -> ChangePlanResult:
+        """Upgrade (prorated, immediate) / downgrade (scheduled). Surfaces errors."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/change-plan",
+                                     json={"plan_id": plan_id, "period": period},
+                                     headers=self._headers(), timeout=15)
+            resp.raise_for_status()
+            d = resp.json()
+            return ChangePlanResult(
+                action=d.get("action", ""), plan=d.get("plan", ""),
+                succeeded=bool(d.get("succeeded", False)),
+                requires_action=bool(d.get("requires_action", False)),
+                client_secret=d.get("client_secret", ""),
+                effective_at=d.get("effective_at", "") or "",
+                pending=bool(d.get("pending", False)))
+
+    async def topup(self, tokens: int, price_cents: int, save_payment_method: bool = True,
+                    user: Any = None) -> TopupResult:
+        """Token top-up PaymentIntent. Surfaces errors."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/topup",
+                                     json={"tokens": tokens, "price_cents": price_cents,
+                                           "save_payment_method": save_payment_method},
+                                     headers=self._headers(), timeout=15)
+            resp.raise_for_status()
+            d = resp.json()
+            return TopupResult(client_secret=d.get("client_secret", ""),
+                               payment_intent_id=d.get("payment_intent_id", ""),
+                               publishable_key=d.get("publishable_key", ""))

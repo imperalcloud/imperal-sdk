@@ -31,3 +31,43 @@ def test_subscription_info():
     assert sub.plan == "pro"
     assert sub.status == "active"
     assert sub.expires_at is None
+
+
+import json
+import httpx
+import respx
+from imperal_sdk.billing.client import BillingClient
+
+_GW = "http://gw.test"
+
+
+@respx.mock
+async def test_list_payment_methods_internal_path():
+    respx.get(f"{_GW}/v1/billing/internal/payment-methods/imp_u_x").mock(
+        return_value=httpx.Response(200, json=[{"id": "pm_1", "type": "card", "brand": "visa",
+            "last4": "4242", "exp_month": 12, "exp_year": 2030, "is_default": True}]))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    pms = await c.list_payment_methods()
+    assert pms[0].last4 == "4242" and pms[0].is_default is True
+
+
+@respx.mock
+async def test_change_plan_posts_plan_and_period_with_acting_user():
+    route = respx.post(f"{_GW}/v1/billing/change-plan").mock(
+        return_value=httpx.Response(200, json={"action": "upgrade", "succeeded": True, "plan": "business"}))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    res = await c.change_plan("plan_bus", "monthly")
+    assert res.action == "upgrade" and res.succeeded is True
+    req = route.calls.last.request
+    assert req.headers["X-Service-Token"] == "svc"
+    assert req.headers["X-Acting-User"] == "imp_u_x"
+    assert json.loads(req.content) == {"plan_id": "plan_bus", "period": "monthly"}
+
+
+@respx.mock
+async def test_topup_returns_client_secret():
+    respx.post(f"{_GW}/v1/billing/topup").mock(return_value=httpx.Response(200,
+        json={"client_secret": "cs_1", "payment_intent_id": "pi_1", "publishable_key": "pk_1"}))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    r = await c.topup(tokens=20000, price_cents=2000)
+    assert r.client_secret == "cs_1" and r.payment_intent_id == "pi_1"
