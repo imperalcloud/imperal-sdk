@@ -28,9 +28,16 @@
       "complete"
     ],
     "billing": [
+      "change_plan",
       "check_limits",
+      "create_setup_intent",
       "get_balance",
       "get_subscription",
+      "list_payment_methods",
+      "list_payments",
+      "remove_payment_method",
+      "set_default_payment_method",
+      "topup",
       "track_usage"
     ],
     "config": [
@@ -74,6 +81,19 @@
     "action_result_data": false
   },
   "request_models": {
+    "POST /v1/billing/change-plan": {
+      "fields": {
+        "period": {
+          "required": false,
+          "type": "str"
+        },
+        "plan_id": {
+          "required": true,
+          "type": "str"
+        }
+      },
+      "source": "gateway_spec (auth-gateway billing/schemas.py::ChangePlanRequest)"
+    },
     "POST /v1/billing/internal/usage/track": {
       "fields": {
         "extension_id": {
@@ -98,6 +118,27 @@
         }
       },
       "source": "gateway_spec (auth-gateway billing/schemas.py::UsageTrackRequest)"
+    },
+    "POST /v1/billing/payment-methods/setup": {
+      "fields": {},
+      "source": "gateway_spec (auth-gateway billing/stripe_router.py::setup_method)"
+    },
+    "POST /v1/billing/topup": {
+      "fields": {
+        "price_cents": {
+          "required": true,
+          "type": "int"
+        },
+        "save_payment_method": {
+          "required": false,
+          "type": "bool"
+        },
+        "tokens": {
+          "required": true,
+          "type": "int"
+        }
+      },
+      "source": "gateway_spec (auth-gateway billing/stripe_schemas.py::TopUpRequest)"
     }
   },
   "sdk_version_floor": "5.0.0",

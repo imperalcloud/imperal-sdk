@@ -3,9 +3,16 @@
     "complete"
   ],
   "billing": [
+    "change_plan",
     "check_limits",
+    "create_setup_intent",
     "get_balance",
     "get_subscription",
+    "list_payment_methods",
+    "list_payments",
+    "remove_payment_method",
+    "set_default_payment_method",
+    "topup",
     "track_usage"
   ],
   "config": [

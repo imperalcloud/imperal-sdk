@@ -2,6 +2,18 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.3.0 — 2026-06-16 — BillingClient write/payment methods
+
+Additive — **nothing to migrate**.
+
+### Added
+- `ctx.billing` write/payment methods: `list_payment_methods`, `list_payments`,
+  `create_setup_intent`, `set_default_payment_method`, `remove_payment_method`,
+  `change_plan`, `topup`. Reads degrade safely; writes surface errors so the
+  caller can render Stripe failures / drive the Payment Element.
+- `BillingClient` now sends `X-Acting-User` on the service-token path so
+  `get_user_or_service` gateway endpoints resolve the acting user.
+
 ## 5.2.2 — 2026-06-11 — Import-light package root
 
 Performance / robustness release. **Zero API changes** — every public name,
