@@ -51,7 +51,11 @@ def test_chat_filters_import_is_transport_free():
 
 
 def test_version():
-    assert imperal_sdk.__version__ == "5.2.2"
+    # The import-light root must expose a semver-shaped __version__. Not pinned to
+    # a literal so a version bump doesn't require editing this test (the real
+    # version-drift guard is sdk_claims._sdk_version in tests/contract).
+    v = imperal_sdk.__version__
+    assert isinstance(v, str) and v.count(".") == 2
 
 
 _SECRETS_NAMES = [
