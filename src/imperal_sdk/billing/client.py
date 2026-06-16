@@ -8,7 +8,7 @@ import httpx
 
 from imperal_sdk.types.models import (
     BalanceInfo, PaymentMethod, SetupIntentResult, ChangePlanResult,
-    TopupResult, PaymentRecord,
+    TopupResult, PaymentRecord, PlanInfo, AutoTopupSettings,
 )
 
 log = logging.getLogger(__name__)
@@ -240,15 +240,86 @@ class BillingClient:
                 pending=bool(d.get("pending", False)))
 
     async def topup(self, tokens: int, price_cents: int, save_payment_method: bool = True,
-                    user: Any = None) -> TopupResult:
-        """Token top-up PaymentIntent. Surfaces errors."""
+                    off_session: bool = True, user: Any = None) -> TopupResult:
+        """Token top-up PaymentIntent. Surfaces errors.
+
+        With ``off_session=True`` (default) the gateway attempts an immediate
+        off-session charge against the saved card and returns ``succeeded`` /
+        ``requires_action``. The Element path (``off_session=False``) returns
+        the ``client_secret`` instead.
+        """
         async with httpx.AsyncClient() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/topup",
                                      json={"tokens": tokens, "price_cents": price_cents,
-                                           "save_payment_method": save_payment_method},
+                                           "save_payment_method": save_payment_method,
+                                           "off_session": off_session},
                                      headers=self._headers(), timeout=15)
             resp.raise_for_status()
             d = resp.json()
             return TopupResult(client_secret=d.get("client_secret", ""),
                                payment_intent_id=d.get("payment_intent_id", ""),
-                               publishable_key=d.get("publishable_key", ""))
+                               publishable_key=d.get("publishable_key", ""),
+                               succeeded=bool(d.get("succeeded", False)),
+                               requires_action=bool(d.get("requires_action", False)))
+
+    async def create_billing_portal_session(self, user: Any = None) -> str:
+        """Create a Stripe Customer Portal session and return its hosted URL.
+        Surfaces errors (the ext needs the URL)."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/portal",
+                                     headers=self._headers(), timeout=10)
+            resp.raise_for_status()
+            return resp.json().get("url", "")
+
+    async def list_plans(self, user: Any = None) -> list[PlanInfo]:
+        """Public plan catalog. Safe-degrades to []."""
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{self._gateway_url}/v1/billing/plans",
+                                        headers=self._headers(), timeout=10)
+                resp.raise_for_status()
+                return [PlanInfo(**p) for p in resp.json()]
+        except Exception as e:
+            log.warning("Billing list_plans failed: %s", e)
+            return []
+
+    async def get_auto_topup(self, user: Any = None) -> AutoTopupSettings:
+        """Safe-degrades to disabled defaults."""
+        uid = self._uid(user)
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{self._gateway_url}/v1/billing/auto-topup",
+                                        headers=self._headers(), timeout=10)
+                resp.raise_for_status()
+                return AutoTopupSettings(**resp.json())
+        except Exception as e:
+            log.warning("Billing get_auto_topup failed: %s", e)
+            return AutoTopupSettings()
+
+    async def set_auto_topup(self, enabled: bool, threshold_pct: int = 10,
+                             recharge_tokens: int = 20000, payment_method_id: str = "",
+                             user: Any = None) -> bool:
+        """Surfaces errors."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(f"{self._gateway_url}/v1/billing/auto-topup",
+                json={"enabled": enabled, "threshold_pct": threshold_pct,
+                      "recharge_tokens": recharge_tokens, "payment_method_id": payment_method_id},
+                headers=self._headers(), timeout=10)
+            resp.raise_for_status()
+            return True
+
+    async def cancel_subscription(self, user: Any = None) -> dict:
+        """Cancel at period end. Surfaces errors. Returns the gateway result dict."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/cancel",
+                                     headers=self._headers(), timeout=15)
+            resp.raise_for_status()
+            return resp.json() if resp.content else {}
+
+    async def update_billing_profile(self, profile: dict, user: Any = None) -> bool:
+        """Surfaces errors. profile keys: name/company/vat/country."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(f"{self._gateway_url}/v1/billing/profile",
+                                    json=profile, headers=self._headers(), timeout=10)
+            resp.raise_for_status()
+            return True

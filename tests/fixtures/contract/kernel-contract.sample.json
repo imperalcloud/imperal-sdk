@@ -28,17 +28,23 @@
       "complete"
     ],
     "billing": [
+      "cancel_subscription",
       "change_plan",
       "check_limits",
+      "create_billing_portal_session",
       "create_setup_intent",
+      "get_auto_topup",
       "get_balance",
       "get_subscription",
       "list_payment_methods",
       "list_payments",
+      "list_plans",
       "remove_payment_method",
+      "set_auto_topup",
       "set_default_payment_method",
       "topup",
-      "track_usage"
+      "track_usage",
+      "update_billing_profile"
     ],
     "config": [
       "all",
@@ -81,6 +87,10 @@
     "action_result_data": false
   },
   "request_models": {
+    "POST /v1/billing/cancel": {
+      "fields": {},
+      "source": "gateway_spec (auth-gateway billing/router.py::cancel)"
+    },
     "POST /v1/billing/change-plan": {
       "fields": {
         "period": {
@@ -123,6 +133,10 @@
       "fields": {},
       "source": "gateway_spec (auth-gateway billing/stripe_router.py::setup_method)"
     },
+    "POST /v1/billing/portal": {
+      "fields": {},
+      "source": "gateway_spec (auth-gateway billing/stripe_router.py::create_portal_session)"
+    },
     "POST /v1/billing/topup": {
       "fields": {
         "price_cents": {
@@ -139,6 +153,48 @@
         }
       },
       "source": "gateway_spec (auth-gateway billing/stripe_schemas.py::TopUpRequest)"
+    },
+    "PUT /v1/billing/auto-topup": {
+      "fields": {
+        "enabled": {
+          "required": true,
+          "type": "bool"
+        },
+        "payment_method_id": {
+          "required": false,
+          "type": "str"
+        },
+        "recharge_tokens": {
+          "required": false,
+          "type": "int"
+        },
+        "threshold_pct": {
+          "required": false,
+          "type": "int"
+        }
+      },
+      "source": "gateway_spec (auth-gateway billing/schemas.py::AutoTopUpSettings)"
+    },
+    "PUT /v1/billing/profile": {
+      "fields": {
+        "company": {
+          "required": false,
+          "type": "str"
+        },
+        "country": {
+          "required": false,
+          "type": "str"
+        },
+        "name": {
+          "required": false,
+          "type": "str"
+        },
+        "vat": {
+          "required": false,
+          "type": "str"
+        }
+      },
+      "source": "gateway_spec (auth-gateway billing/stripe_schemas.py::BillingProfileUpdate)"
     }
   },
   "sdk_version_floor": "5.0.0",

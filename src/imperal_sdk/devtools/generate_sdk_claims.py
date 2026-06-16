@@ -36,7 +36,7 @@ _DECORATOR_ROLES = {
 _HTTP_PAYLOADS: dict[str, list[str]] = {
     "POST /v1/billing/internal/usage/track": ["meter", "quantity", "user_id", "tenant_id"],
     "POST /v1/billing/change-plan": ["plan_id", "period"],
-    "POST /v1/billing/topup": ["tokens", "price_cents", "save_payment_method"],
+    "POST /v1/billing/topup": ["tokens", "price_cents", "save_payment_method", "off_session"],
     "POST /v1/billing/payment-methods/setup": [],
 }
 

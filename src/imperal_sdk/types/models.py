@@ -162,6 +162,8 @@ class TopupResult:
     client_secret: str = ""
     payment_intent_id: str = ""
     publishable_key: str = ""
+    succeeded: bool = False
+    requires_action: bool = False
 
 
 @dataclass
@@ -176,3 +178,24 @@ class PaymentRecord:
     created_at: str | None = None
     completed_at: str | None = None
     receipt_url: str = ""
+
+
+@dataclass
+class PlanInfo:
+    """Result item from ctx.billing.list_plans() — the public plan catalog."""
+    id: str = ""
+    name: str = ""
+    price: float = 0.0
+    interval: str = "monthly"
+    features: dict = field(default_factory=dict)
+    limits: dict = field(default_factory=dict)
+
+
+@dataclass
+class AutoTopupSettings:
+    """Result from ctx.billing.get_auto_topup() — auto-recharge configuration."""
+    enabled: bool = False
+    threshold_pct: int = 10
+    recharge_tokens: int = 20000
+    recharge_cents: int = 2000
+    payment_method_id: str = ""

@@ -1,5 +1,5 @@
 {
-  "_sdk_version": "5.3.0",
+  "_sdk_version": "5.4.0",
   "constants": {
     "max_call_depth": {
       "counts_root": true,
@@ -31,7 +31,8 @@
     "POST /v1/billing/topup": [
       "tokens",
       "price_cents",
-      "save_payment_method"
+      "save_payment_method",
+      "off_session"
     ]
   }
 }
