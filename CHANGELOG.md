@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.4.0 — 2026-06-16 — BillingClient portal + full Webbee parity
+
+Additive — **nothing to migrate**.
+
+### Added
+- `ctx.billing.create_billing_portal_session()` — mints a Stripe Customer
+  Portal session and returns its hosted URL (for `ui.Open`), so extensions can
+  let users manage cards + view invoices on Stripe's hosted page (PAN never
+  touches our backend). Surfaces errors.
+- Five `ctx.billing` parity methods so Webbee can fully drive billing via chat:
+  `list_plans()` (public plan catalog → `list[PlanInfo]`, safe-degrades to `[]`),
+  `get_auto_topup()` (→ `AutoTopupSettings`, safe-degrades to disabled defaults),
+  `set_auto_topup(enabled, threshold_pct=10, recharge_tokens=20000, payment_method_id="")`
+  (surfaces errors), `cancel_subscription()` (cancel-at-period-end → result dict,
+  surfaces errors), `update_billing_profile(profile)` (writes name/company/vat/country,
+  surfaces errors).
+- New dataclasses `PlanInfo` and `AutoTopupSettings` in `imperal_sdk.types.models`.
+
 ## 5.3.0 — 2026-06-16 — BillingClient write/payment methods
 
 Additive — **nothing to migrate**.
