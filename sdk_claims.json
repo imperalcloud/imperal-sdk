@@ -31,7 +31,8 @@
     "POST /v1/billing/topup": [
       "tokens",
       "price_cents",
-      "save_payment_method"
+      "save_payment_method",
+      "off_session"
     ]
   }
 }

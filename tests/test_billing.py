@@ -66,11 +66,40 @@ async def test_change_plan_posts_plan_and_period_with_acting_user():
 
 @respx.mock
 async def test_topup_returns_client_secret():
-    respx.post(f"{_GW}/v1/billing/topup").mock(return_value=httpx.Response(200,
+    route = respx.post(f"{_GW}/v1/billing/topup").mock(return_value=httpx.Response(200,
         json={"client_secret": "cs_1", "payment_intent_id": "pi_1", "publishable_key": "pk_1"}))
     c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
-    r = await c.topup(tokens=20000, price_cents=2000)
+    r = await c.topup(tokens=20000, price_cents=2000, off_session=False)
     assert r.client_secret == "cs_1" and r.payment_intent_id == "pi_1"
+    # Element path defaults: succeeded/requires_action absent → False
+    assert r.succeeded is False and r.requires_action is False
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"tokens": 20000, "price_cents": 2000,
+                    "save_payment_method": True, "off_session": False}
+
+
+@respx.mock
+async def test_topup_off_session_default_sends_flag_and_parses_succeeded():
+    route = respx.post(f"{_GW}/v1/billing/topup").mock(return_value=httpx.Response(200,
+        json={"payment_intent_id": "pi_2", "succeeded": True, "requires_action": False}))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    r = await c.topup(tokens=20000, price_cents=2000)
+    assert r.payment_intent_id == "pi_2"
+    assert r.succeeded is True and r.requires_action is False
+    assert r.client_secret == ""
+    # off_session defaults to True and is included in the POST body
+    assert json.loads(route.calls.last.request.content)["off_session"] is True
+
+
+@respx.mock
+async def test_topup_off_session_requires_action():
+    respx.post(f"{_GW}/v1/billing/topup").mock(return_value=httpx.Response(200,
+        json={"payment_intent_id": "pi_3", "client_secret": "cs_3",
+              "succeeded": False, "requires_action": True}))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    r = await c.topup(tokens=20000, price_cents=2000)
+    assert r.requires_action is True and r.succeeded is False
+    assert r.client_secret == "cs_3"
 
 
 @respx.mock

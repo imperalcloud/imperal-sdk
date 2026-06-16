@@ -162,6 +162,8 @@ class TopupResult:
     client_secret: str = ""
     payment_intent_id: str = ""
     publishable_key: str = ""
+    succeeded: bool = False
+    requires_action: bool = False
 
 
 @dataclass

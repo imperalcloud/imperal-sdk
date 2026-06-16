@@ -240,18 +240,27 @@ class BillingClient:
                 pending=bool(d.get("pending", False)))
 
     async def topup(self, tokens: int, price_cents: int, save_payment_method: bool = True,
-                    user: Any = None) -> TopupResult:
-        """Token top-up PaymentIntent. Surfaces errors."""
+                    off_session: bool = True, user: Any = None) -> TopupResult:
+        """Token top-up PaymentIntent. Surfaces errors.
+
+        With ``off_session=True`` (default) the gateway attempts an immediate
+        off-session charge against the saved card and returns ``succeeded`` /
+        ``requires_action``. The Element path (``off_session=False``) returns
+        the ``client_secret`` instead.
+        """
         async with httpx.AsyncClient() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/topup",
                                      json={"tokens": tokens, "price_cents": price_cents,
-                                           "save_payment_method": save_payment_method},
+                                           "save_payment_method": save_payment_method,
+                                           "off_session": off_session},
                                      headers=self._headers(), timeout=15)
             resp.raise_for_status()
             d = resp.json()
             return TopupResult(client_secret=d.get("client_secret", ""),
                                payment_intent_id=d.get("payment_intent_id", ""),
-                               publishable_key=d.get("publishable_key", ""))
+                               publishable_key=d.get("publishable_key", ""),
+                               succeeded=bool(d.get("succeeded", False)),
+                               requires_action=bool(d.get("requires_action", False)))
 
     async def create_billing_portal_session(self, user: Any = None) -> str:
         """Create a Stripe Customer Portal session and return its hosted URL.
