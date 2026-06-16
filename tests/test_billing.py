@@ -185,6 +185,42 @@ async def test_cancel_subscription_posts_and_returns_dict():
 
 
 @respx.mock
+async def test_resume_subscription_posts_and_returns_dict():
+    route = respx.post(f"{_GW}/v1/billing/resume").mock(return_value=httpx.Response(200,
+        json={"status": "active", "plan": "pro", "expires_at": "2026-08-01",
+              "cancel_at_period_end": False}))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    res = await c.resume_subscription()
+    assert res == {"status": "active", "plan": "pro", "expires_at": "2026-08-01",
+                   "cancel_at_period_end": False}
+    req = route.calls.last.request
+    assert req.url.path == "/v1/billing/resume"
+    assert req.headers["X-Service-Token"] == "svc"
+    assert req.headers["X-Acting-User"] == "imp_u_x"
+
+
+@respx.mock
+async def test_get_subscription_parses_cancel_at_period_end():
+    respx.get(f"{_GW}/v1/billing/internal/subscription/imp_u_x").mock(
+        return_value=httpx.Response(200, json={"plan": "pro", "status": "active",
+            "started_at": "2026-01-01T00:00:00", "expires_at": "2026-08-01",
+            "cancel_at_period_end": True}))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    sub = await c.get_subscription()
+    assert sub.plan == "pro" and sub.status == "active"
+    assert sub.cancel_at_period_end is True
+
+
+@respx.mock
+async def test_get_subscription_defaults_cancel_at_period_end_false():
+    respx.get(f"{_GW}/v1/billing/internal/subscription/imp_u_x").mock(
+        return_value=httpx.Response(200, json={"plan": "free", "status": "active"}))
+    c = BillingClient(gateway_url=_GW, service_token="svc", user_id="imp_u_x")
+    sub = await c.get_subscription()
+    assert sub.cancel_at_period_end is False
+
+
+@respx.mock
 async def test_update_billing_profile_puts_profile():
     route = respx.put(f"{_GW}/v1/billing/profile").mock(return_value=httpx.Response(200,
         json={"status": "ok"}))

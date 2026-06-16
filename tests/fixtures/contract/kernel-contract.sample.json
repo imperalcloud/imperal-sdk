@@ -40,6 +40,7 @@
       "list_payments",
       "list_plans",
       "remove_payment_method",
+      "resume_subscription",
       "set_auto_topup",
       "set_default_payment_method",
       "topup",
@@ -136,6 +137,10 @@
     "POST /v1/billing/portal": {
       "fields": {},
       "source": "gateway_spec (auth-gateway billing/stripe_router.py::create_portal_session)"
+    },
+    "POST /v1/billing/resume": {
+      "fields": {},
+      "source": "gateway_spec (auth-gateway billing/router.py::resume)"
     },
     "POST /v1/billing/topup": {
       "fields": {

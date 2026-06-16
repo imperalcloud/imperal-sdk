@@ -2,6 +2,20 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.4.1 — 2026-06-16 — BillingClient resume + cancel_at_period_end
+
+Additive — **nothing to migrate**.
+
+### Added
+- `ctx.billing.resume_subscription()` — undoes a pending cancel-at-period-end
+  (POST `/v1/billing/resume`); returns the gateway result dict
+  (`{status, plan, expires_at, cancel_at_period_end}`). Surfaces errors.
+- `SubscriptionInfo.cancel_at_period_end: bool` (defaults `False`) —
+  `get_subscription()` now maps it from the gateway response so extensions can
+  show whether an active subscription is set to cancel at period end.
+
+`BillingProtocol` 17 → 18 methods.
+
 ## 5.4.0 — 2026-06-16 — BillingClient portal + full Webbee parity
 
 Additive — **nothing to migrate**.

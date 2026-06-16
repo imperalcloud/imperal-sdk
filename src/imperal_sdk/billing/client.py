@@ -35,6 +35,7 @@ class SubscriptionInfo:
     status: str
     started_at: str | None = None
     expires_at: str | None = None
+    cancel_at_period_end: bool = False
 
 
 class BillingClient:
@@ -108,6 +109,7 @@ class BillingClient:
                     status=data.get("status", "unknown"),
                     started_at=data.get("started_at"),
                     expires_at=data.get("expires_at"),
+                    cancel_at_period_end=bool(data.get("cancel_at_period_end", False)),
                 )
         except Exception as e:
             log.warning("Billing get_subscription failed: %s", e)
@@ -312,6 +314,15 @@ class BillingClient:
         """Cancel at period end. Surfaces errors. Returns the gateway result dict."""
         async with httpx.AsyncClient() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/cancel",
+                                     headers=self._headers(), timeout=15)
+            resp.raise_for_status()
+            return resp.json() if resp.content else {}
+
+    async def resume_subscription(self, user: Any = None) -> dict:
+        """Undo a pending cancel-at-period-end. Surfaces errors. Returns the
+        gateway result dict ({status, plan, expires_at, cancel_at_period_end})."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/resume",
                                      headers=self._headers(), timeout=15)
             resp.raise_for_status()
             return resp.json() if resp.content else {}
