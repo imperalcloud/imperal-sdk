@@ -40,6 +40,7 @@
       "list_payments",
       "list_plans",
       "remove_payment_method",
+      "renew_subscription",
       "resume_subscription",
       "set_auto_topup",
       "set_default_payment_method",

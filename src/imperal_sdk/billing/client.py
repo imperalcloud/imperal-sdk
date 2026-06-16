@@ -327,6 +327,17 @@ class BillingClient:
             resp.raise_for_status()
             return resp.json() if resp.content else {}
 
+    async def renew_subscription(self, user: Any = None) -> dict:
+        """Renew an EXPIRED subscription for the same plan — charges the saved
+        default card for one fresh period and restores access immediately.
+        Surfaces errors (402 no-card / SCA, 409 not-expired). Returns the
+        gateway result dict ({status, plan, expires_at, payment_intent_id})."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self._gateway_url}/v1/billing/renew",
+                                     headers=self._headers(), timeout=20)
+            resp.raise_for_status()
+            return resp.json() if resp.content else {}
+
     async def update_billing_profile(self, profile: dict, user: Any = None) -> bool:
         """Surfaces errors. profile keys: name/company/vat/country."""
         async with httpx.AsyncClient() as client:
