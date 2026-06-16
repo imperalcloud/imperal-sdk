@@ -2,6 +2,19 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.4.2 — 2026-06-16 — BillingClient renew_subscription
+
+Additive — **nothing to migrate**.
+
+### Added
+- `ctx.billing.renew_subscription()` — renews an **expired** subscription for
+  the same plan: charges the saved default card for one fresh period and
+  restores access immediately (POST `/v1/billing/renew`). Surfaces errors
+  (`402` no card / SCA required, `409` not expired). Returns the gateway result
+  dict (`{status, plan, expires_at, payment_intent_id}`).
+
+`BillingProtocol` 18 → 19 methods.
+
 ## 5.4.1 — 2026-06-16 — BillingClient resume + cancel_at_period_end
 
 Additive — **nothing to migrate**.
