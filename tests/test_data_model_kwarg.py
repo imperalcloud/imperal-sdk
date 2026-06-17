@@ -139,8 +139,8 @@ def test_data_model_none_means_no_return_model():
 
 
 def test_v23_warn_when_read_missing_data_model(monkeypatch):
-    """``IMPERAL_VALIDATOR_V23_SEVERITY=warn`` (default) MUST emit WARN."""
-    monkeypatch.delenv("IMPERAL_VALIDATOR_V23_SEVERITY", raising=False)
+    """``IMPERAL_VALIDATOR_V23_SEVERITY=warn`` (explicit opt-out) MUST emit WARN."""
+    monkeypatch.setenv("IMPERAL_VALIDATOR_V23_SEVERITY", "warn")
     ext = _make_ext()
     chat = _make_chat(ext)
 
@@ -156,6 +156,26 @@ def test_v23_warn_when_read_missing_data_model(monkeypatch):
     v23 = [i for i in report.issues if i.rule == "V23"]
     assert len(v23) == 1
     assert v23[0].level == "WARN"
+    assert "data_model" in v23[0].message
+
+
+def test_v23_error_by_default(monkeypatch):
+    """P5-final (2026-06-17): with the env unset, V23 defaults to ERROR."""
+    monkeypatch.delenv("IMPERAL_VALIDATOR_V23_SEVERITY", raising=False)
+    ext = _make_ext()
+    chat = _make_chat(ext)
+
+    @chat.function(
+        name="list_notes",
+        description="List notes — read tool deliberately missing data_model",
+        action_type="read",
+    )
+    async def list_notes(ctx, params: ListNotesParams) -> ActionResult:
+        return ActionResult.success(data={}, summary="ok")
+
+    report = validate_extension(ext)
+    v23 = [i for i in report.errors if i.rule == "V23"]
+    assert len(v23) == 1
     assert "data_model" in v23[0].message
 
 

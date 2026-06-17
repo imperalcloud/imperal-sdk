@@ -728,7 +728,7 @@ def validate_extension(ext) -> ValidationReport:
     #      can be promoted post-soak.
     #
     # Soak severity is env-toggled via IMPERAL_VALIDATOR_V23_SEVERITY
-    # (default "warn"; flip to "error" after third-party adoption).
+    # (default "error" since 2026-06-17 P5-final; set "warn" to opt out).
     try:
         _chat_exts = getattr(ext, "_chat_extensions", {}) or {}
         for _tool_name, _chat_ext in _chat_exts.items():
@@ -744,8 +744,10 @@ def validate_extension(ext) -> ValidationReport:
 def _v23_v24_check_data_model_presence(report, extensions, functions):
     """Apply V23 (read) + V24 (write/destructive) ``data_model`` rules to each
     @chat.function in the given functions dict (name -> FunctionDef)."""
-    _v23_severity = os.environ.get("IMPERAL_VALIDATOR_V23_SEVERITY", "warn").lower()
-    _v23_level = "ERROR" if _v23_severity == "error" else "WARN"
+    _v23_severity = os.environ.get("IMPERAL_VALIDATOR_V23_SEVERITY", "error").lower()
+    # P5-final (2026-06-17): V23 defaults to ERROR. Only an explicit env "warn"
+    # downgrades it; anything else (including unset) resolves to ERROR.
+    _v23_level = "WARN" if _v23_severity == "warn" else "ERROR"
     for fn_name, fn_def in (functions or {}).items():
         _action_type = getattr(fn_def, "action_type", "read")
         _return_model = getattr(fn_def, "_return_model", None)
