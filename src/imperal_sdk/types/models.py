@@ -91,13 +91,15 @@ class HTTPResponse:
     body: dict | str | bytes = ""
     headers: dict = field(default_factory=dict)
 
-    def json(self) -> dict:
-        if isinstance(self.body, dict):
+    def json(self) -> dict | list:
+        # Already-parsed JSON (the prod http client parses on content-type: json,
+        # so an array endpoint like WP /wp/v2/posts yields a list body).
+        if isinstance(self.body, (dict, list)):
             return self.body
-        if isinstance(self.body, str):
+        if isinstance(self.body, (str, bytes, bytearray)):
             import json
             return json.loads(self.body)
-        raise ValueError("Body is bytes, cannot parse as JSON")
+        raise ValueError(f"Cannot parse {type(self.body).__name__} body as JSON")
 
     def text(self) -> str:
         if isinstance(self.body, str):

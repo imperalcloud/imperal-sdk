@@ -9,6 +9,11 @@ import configparser
 import click
 import httpx
 
+try:
+    from imperal_sdk import __version__ as SDK_VERSION
+except Exception:  # pragma: no cover - defensive
+    SDK_VERSION = "5.x"
+
 
 def _load_credentials() -> dict:
     """Load credentials from .imperal/credentials or environment variables."""
@@ -57,7 +62,7 @@ def _validate_manifest(manifest: dict) -> list[str]:
 
 
 @click.group()
-@click.version_option(version="1.0.0")
+@click.version_option(version=SDK_VERSION)
 def cli():
     """Imperal Cloud SDK — build extensions for the Imperal platform."""
     pass
@@ -67,7 +72,7 @@ def cli():
 @click.argument("name")
 @click.option("--template", type=click.Choice(["chat", "tool"]), default="chat", help="Extension template")
 def init(name: str, template: str):
-    """Scaffold a new extension project (federal v4 contract)."""
+    """Scaffold a new extension project (federal v5 contract)."""
     os.makedirs(name, exist_ok=True)
     os.makedirs(f"{name}/tests", exist_ok=True)
 
@@ -88,7 +93,7 @@ from pydantic import BaseModel, Field
 from imperal_sdk import Extension, ChatExtension, ActionResult
 
 
-# Federal v4 Extension surface — V14 (description ≥40 chars), V15
+# Federal v5 Extension surface — V14 (description ≥40 chars), V15
 # (display_name ≥3 chars, ≠ app_id), V19 (actions_explicit=True), and
 # V21 (icon.svg required, XML <svg> root + viewBox) are all satisfied
 # by these defaults. Edit display_name + description before publish.
@@ -165,7 +170,7 @@ async def fn_default(ctx, **kwargs):
         )
 
     with open(f"{name}/requirements.txt", "w") as f:
-        f.write("imperal-sdk>=4.0.0\n")
+        f.write("imperal-sdk>=5.0.0\n")
 
     with open(f"{name}/tests/__init__.py", "w") as f:
         pass
@@ -212,9 +217,9 @@ async def fn_default(ctx, **kwargs):
     click.echo(f"")
     click.echo(f"Next steps:")
     click.echo(f"  cd {name}")
-    click.echo(f"  pip install 'imperal-sdk>=4.0.0'")
+    click.echo(f"  pip install 'imperal-sdk>=5.0.0'")
     click.echo(f"  imperal build       # generates imperal.json")
-    click.echo(f"  imperal validate    # runs V14-V22+V24 federal validators")
+    click.echo(f"  imperal validate    # runs V1-V24+V31 federal validators")
     click.echo(f"  imperal test        # smoke-test handlers via MockContext")
     click.echo(f"  imperal deploy      # upload to panel.imperal.io/developer")
 
@@ -297,7 +302,7 @@ def build(path: str):
 @cli.command()
 @click.argument("path", default=".")
 def validate(path: str):
-    """Validate extension against SDK v1.0.0 rules."""
+    """Validate extension against the current SDK federal rules (V1-V24+V31)."""
     original_dir = os.getcwd()
     try:
         os.chdir(path)
@@ -346,7 +351,7 @@ def validate(path: str):
                     fix="Fix the JSON syntax error at the reported line",
                 ))
 
-        click.echo(f"\n── Imperal Extension Validator v1.0 {'─' * 40}")
+        click.echo(f"\n── Imperal Extension Validator (SDK {SDK_VERSION}) {'─' * 36}")
         click.echo(f"\nExtension: {report.app_id} v{report.version}")
         click.echo(f"Tools: {report.tool_count}, Functions: {report.function_count}, Events: {report.event_count}")
 

@@ -207,18 +207,22 @@ class MockHTTP:
     """Mock HTTP client. Register responses per URL pattern."""
 
     def __init__(self):
-        self._mocks: list[tuple[str, str, dict, int]] = []
+        self._mocks: list[tuple[str, str, dict, int, dict]] = []
 
-    def mock_get(self, url_pattern: str, response: dict, status: int = 200) -> None:
-        self._mocks.append(("GET", url_pattern, response, status))
+    def mock_get(self, url_pattern: str, response: dict, status: int = 200,
+                 headers: dict | None = None) -> None:
+        self._mocks.append(("GET", url_pattern, response, status, headers or {}))
 
-    def mock_post(self, url_pattern: str, response: dict, status: int = 200) -> None:
-        self._mocks.append(("POST", url_pattern, response, status))
+    def mock_post(self, url_pattern: str, response: dict, status: int = 200,
+                  headers: dict | None = None) -> None:
+        self._mocks.append(("POST", url_pattern, response, status, headers or {}))
 
     async def _find(self, method: str, url: str) -> HTTPResponse:
-        for m, pattern, resp, status in self._mocks:
+        for entry in self._mocks:
+            m, pattern, resp, status = entry[0], entry[1], entry[2], entry[3]
+            hdrs = entry[4] if len(entry) > 4 else {}  # tolerate legacy 4-tuples
             if m == method and pattern in url:
-                return HTTPResponse(status_code=status, body=resp)
+                return HTTPResponse(status_code=status, body=resp, headers=dict(hdrs))
         return HTTPResponse(status_code=404, body={"error": "No mock registered"})
 
     async def get(self, url: str, **kwargs) -> HTTPResponse:
