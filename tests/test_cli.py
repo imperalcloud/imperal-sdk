@@ -3,6 +3,7 @@
 import os
 import pytest
 from click.testing import CliRunner
+from imperal_sdk import __version__
 from imperal_sdk.cli.main import cli
 
 
@@ -10,7 +11,7 @@ def test_cli_version():
     runner = CliRunner()
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "1.0.0" in result.output
+    assert __version__ in result.output  # CLI reports the real SDK version
 
 
 def test_cli_init_chat_template():
@@ -40,7 +41,7 @@ def test_cli_init_chat_template():
             assert "actions_explicit=True" in content
 
         with open("my-test-ext/requirements.txt") as f:
-            assert "imperal-sdk>=4.0.0" in f.read()  # v4.1.9 — was >=1.0.0
+            assert "imperal-sdk>=5.0.0" in f.read()  # scaffold pins current major
 
         with open("my-test-ext/icon.svg") as f:
             svg = f.read()
