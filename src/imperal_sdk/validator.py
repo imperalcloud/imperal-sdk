@@ -754,6 +754,10 @@ def _v23_v24_check_data_model_presence(report, extensions, functions):
         if _return_model is not None:
             continue
         if _action_type == "read":
+            # Declarative-UI builders (@chat.function(ui_builder=True)) return ui.*
+            # output, not an SDL entity — exempt from the data_model requirement.
+            if getattr(fn_def, "_ui_builder", False):
+                continue
             report.issues.append(ValidationIssue(
                 rule="V23", level=_v23_level,
                 message=(

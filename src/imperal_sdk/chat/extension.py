@@ -61,6 +61,7 @@ class FunctionDef:
     _pydantic_model: type | None = None  # auto-detected Pydantic BaseModel class
     _pydantic_param: str = ""  # parameter name that receives the model instance
     _return_model: type | None = None  # data_model kwarg OR autodetected return Pydantic model
+    _ui_builder: bool = False  # @chat.function(ui_builder=True): Declarative-UI builder; exempt from the V23 data_model rule
 
 
 class ChatExtension:
@@ -117,7 +118,8 @@ class ChatExtension:
                  id_projection: str | None = None,
                  background: bool = False,
                  long_running: bool = False,
-                 data_model: type | None = None):
+                 data_model: type | None = None,
+                 ui_builder: bool = False):
         """Register a chat function.
 
         Args:
@@ -266,6 +268,7 @@ class ChatExtension:
                 long_running=long_running,
                 _pydantic_model=_detected_model, _pydantic_param=_detected_param,
                 _return_model=_detected_return_model,
+                _ui_builder=ui_builder,
             )
             return func
         return decorator

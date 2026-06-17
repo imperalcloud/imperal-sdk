@@ -199,6 +199,25 @@ def test_v23_error_when_severity_env_set(monkeypatch):
     assert "data_model" in v23[0].message
 
 
+def test_v23_skips_ui_builder(monkeypatch):
+    """``ui_builder=True`` read tools are exempt from V23 even at severity=error."""
+    monkeypatch.setenv("IMPERAL_VALIDATOR_V23_SEVERITY", "error")
+    ext = _make_ext()
+    chat = _make_chat(ext)
+
+    @chat.function(
+        name="get_panel_data",
+        description="Declarative-UI builder — exempt from V23 via ui_builder flag",
+        action_type="read",
+        ui_builder=True,
+    )
+    async def get_panel_data(ctx, params: ListNotesParams) -> ActionResult:
+        return ActionResult.success(data={}, summary="ok")
+
+    report = validate_extension(ext)
+    assert not [i for i in report.issues if i.rule == "V23"]
+
+
 def test_v23_passes_when_data_model_declared():
     """Reads with ``data_model=`` MUST NOT trigger V23."""
     ext = _make_ext()
