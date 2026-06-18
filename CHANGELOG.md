@@ -2,6 +2,17 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.4.3 — 2026-06-18 — Fix secrets-panel render crash
+
+Bugfix — **nothing to migrate**.
+
+### Fixed
+- Auto-generated `__panel__secrets` panel (created for any extension declaring
+  `@ext.secret`) called `ui.Heading(...)`, which does not exist — the display
+  element is exported as `ui.Header`. Every secrets-panel render raised
+  `AttributeError: module 'imperal_sdk.ui' has no attribute 'Heading'`. Switched
+  to `ui.Header`. No public API change.
+
 ## 5.4.2 — 2026-06-16 — BillingClient renew_subscription
 
 Additive — **nothing to migrate**.
