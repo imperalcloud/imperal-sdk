@@ -114,7 +114,7 @@ async def builtin_secrets_panel_handler(ctx: Any, **_params: Any) -> dict:
         ))
 
     root = ui.Stack(children=[
-        ui.Heading(f"Secrets · {ext_id}", level=2),
+        ui.Header(f"Secrets · {ext_id}", level=2),
         ui.Text(
             "Credentials this extension needs — API keys, OAuth tokens. "
             "Stored encrypted in Vault; never visible to admins or in logs."
