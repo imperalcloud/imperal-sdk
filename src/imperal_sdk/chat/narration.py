@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Federal-Grade Chat Integrity — emit_narration tool contract (P2 Task 18).
 
 Structural foundation for Component 1 (Narration Contract Hybrid). The kernel
@@ -47,15 +47,14 @@ provider boundary, kernel validates after parse.
 
 Invariants (see spec §3.2):
 
-- **I-NARRATION-TOOL-SHAPE-1**: ``EMIT_NARRATION_TOOL`` shape is frozen —
-  changes require spec update + kernel verifier update.
-- **I-NARRATION-TOOL-REQUIRED-1**: ``mode``, ``prose``, ``per_call_verdicts``,
-  ``task_targets`` are required; ``identifiers_used`` is optional.
-- **I-NARRATION-STATUS-ENUM-1**: verdict status is one of
-  ``{"success", "error", "intercepted"}`` — must match kernel's
-  ``_functions_called[*].status`` vocabulary.
-- **I-NARRATION-FROZEN-1**: parsed ``NarrationEmission`` is immutable
-  (Pydantic ``frozen=True``) — no post-parse tampering.
+- ``EMIT_NARRATION_TOOL`` shape is frozen — changes require spec update
+  + kernel verifier update.
+- ``mode``, ``prose``, ``per_call_verdicts``, ``task_targets`` are
+  required; ``identifiers_used`` is optional.
+- Verdict status is one of ``{"success", "error", "intercepted"}`` —
+  must match the kernel's ``_functions_called[*].status`` vocabulary.
+- Parsed ``NarrationEmission`` is immutable (Pydantic ``frozen=True``)
+  — no post-parse tampering.
 """
 from __future__ import annotations
 

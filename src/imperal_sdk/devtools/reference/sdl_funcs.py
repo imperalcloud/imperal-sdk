@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """``sdl_func`` kind — the ``imperal_sdk.sdl`` helper functions.
 
 The canonical helper set (scope expansion 2026-06-19): entity, field, roles,

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Spec-level validation of every contract shipped with the SDK.
 
 Catches breakage at the contract-definition layer, before it can reach

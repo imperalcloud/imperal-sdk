@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Emit the SDK's claims about the kernel for the contract guard.
 
 Output: {"constants": {...}, "decorator_roles": {...}}. Read by the SDK-side

@@ -1,21 +1,19 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Skeleton HTTP client.
 
 v1.6.0 breaking changes:
 
 - ``SkeletonClient.update()`` removed. The kernel ``skeleton_save_section``
-  activity is the sole writer. Extensions return fresh data from their
-  ``@ext.skeleton`` tool and the kernel persists it.
+  platform operation is the sole writer. Extensions return fresh data from
+  their ``@ext.skeleton`` tool and the kernel persists it.
 - URL path rewritten to ``/v1/internal/skeleton/{app_id}/{user_id}/{section}``
-  (app_id FIRST, matches Auth GW v1.6.0 router + kernel canonical Redis key
-  ``imperal:skeleton:{app}:{user}:{section}``). Query-string ``extension_id``
+  (app_id FIRST, matches Auth GW v1.6.0 router + kernel canonical platform
+  state store key for this section). Query-string ``extension_id``
   parameter removed.
 - Constructor accepts a ``call_token`` (HMAC call-token from
   :mod:`imperal_sdk.security.call_token`). Sent as ``Authorization:
   ImperalCallToken <token>`` alongside the historical ``X-Service-Token``.
-
-Invariants: I-SKELETON-PROTOCOL-READ-ONLY, I-NO-SKELETON-PUT.
 """
 from __future__ import annotations
 from typing import Any

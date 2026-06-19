@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Concrete HTTP cache client backing ``ctx.cache``.
 
 Talks to the Auth Gateway ``/v1/internal/extcache/{app_id}/{user_id}/{model}/{key_hash}``
@@ -71,9 +71,6 @@ class CacheClient:
     class not registered via the extension, are rejected at the SDK boundary
     before any network call.
 
-    Invariants: I-CACHE-TTL-CAP-300S, I-CACHE-PYDANTIC-ONLY,
-    I-CACHE-MODEL-REGISTRATION-REQUIRED, I-CACHE-VALUE-SIZE-CAP-64KB,
-    I-CACHE-KEY-SAFETY.
     """
 
     def __init__(
@@ -194,7 +191,7 @@ class CacheClient:
             )
         # Enforce envelope-size cap regardless of transport shape — the
         # serialised body we compute above is the same bytes that end up in
-        # Redis, so the cap applies whether we send ``content=`` or ``json=``.
+        # the platform state store, so the cap applies whether we send ``content=`` or ``json=``.
         _ = payload_bytes  # kept for size validation side-effect; not sent
         resp = await self._request(
             "PUT",
@@ -207,12 +204,10 @@ class CacheClient:
     async def delete(self, key: str) -> None:
         """Delete cache entry under all registered model namespaces.
 
-        The Phase 3 Auth GW does NOT support a wildcard model segment — a
-        literal ``"*"`` would DELETE the key
-        ``imperal:extcache:{app}:{user}:*:{hash}`` (a silent no-op on any
-        real entry). Since a key can exist under any registered model, we
-        iterate all models and issue one DELETE per namespace. Idempotent;
-        404 is not an error.
+        The platform state store does NOT support a wildcard model segment —
+        a wildcard would silently match no real entry. Since a key can exist
+        under any registered model, we iterate all models and issue one DELETE
+        per namespace. Idempotent; 404 is not an error.
         """
         _validate_key(key)
         key_hash = _hash_key(key)

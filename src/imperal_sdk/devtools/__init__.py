@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Developer/CI utility scripts for the Imperal SDK.
 
 Moved from imperal_sdk.tools (which was removed — the dead ctx.tools IPC

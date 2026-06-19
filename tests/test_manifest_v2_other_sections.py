@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Task 5 — M8/M9/M10: exposed/lifecycle/tray sections in generate_manifest()."""
 from imperal_sdk import Extension
 from imperal_sdk.manifest import generate_manifest

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """``sdl_role`` kind — every facet role / marker class exported by ``imperal_sdk.sdl``.
 
 Roles are the capitalized marker classes in ``dir(sdl)`` (Entity, EntityList,

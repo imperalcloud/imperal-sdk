@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Per-kind enumerators for the SDK reference generator.
 
 Each module exposes one ``collect() -> dict[str, dict]`` function returning a

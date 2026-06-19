@@ -8,7 +8,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/imperal-sdk?color=blue&label=PyPI)](https://pypi.org/project/imperal-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/imperal-sdk)](https://pypi.org/project/imperal-sdk/)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 [Documentation](https://docs.imperal.io) · [Quickstart](https://docs.imperal.io/en/getting-started/quick-start/) · [PyPI](https://pypi.org/project/imperal-sdk/) · [imperal.io](https://imperal.io)
 
@@ -26,7 +26,7 @@
 pip install imperal-sdk
 ```
 
-> Python 3.11+ · AGPL-3.0-or-later
+> Python 3.11+ · Apache-2.0
 
 ## Why build here
 
@@ -100,7 +100,7 @@ The full API, the manifest schema, every validator, recipes, and the federal con
 | Quickstart | [docs.imperal.io/en/getting-started/quick-start](https://docs.imperal.io/en/getting-started/quick-start/) |
 | PyPI | [pypi.org/project/imperal-sdk](https://pypi.org/project/imperal-sdk/) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
-| License | [AGPL-3.0-or-later](LICENSE) |
+| License | [Apache-2.0](LICENSE) |
 
 ---
 

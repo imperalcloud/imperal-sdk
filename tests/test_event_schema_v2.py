@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """EV6..EV8: event_id, schema_version, source fields on the Event envelope.
 
 Task 1 of the UEB Phase 1 plan — adds three optional backward-compat fields

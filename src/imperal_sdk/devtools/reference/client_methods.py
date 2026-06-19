@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """``client_method`` kind — ``ctx.<ns>.<method>`` across all client namespaces.
 
 REUSES ``generate_api_surface._load_namespaces`` (federal: no parallel

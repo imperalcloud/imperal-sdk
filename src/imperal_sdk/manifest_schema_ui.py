@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Ф2 — UI surface models inside the imperal.json contract.
 
 Factored out of ``manifest_schema`` (which is already ≥300 lines) to keep

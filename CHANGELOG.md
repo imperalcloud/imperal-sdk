@@ -2,6 +2,22 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.5.0 — 2026-06-19 — Apache-2.0 relicense + engine-neutral docs
+
+Licensing + documentation — **nothing to migrate** (no API or behavior change).
+
+### Changed
+- **Relicensed from AGPL-3.0 to Apache-2.0.** The SDK — the language you build
+  Imperal apps in — is now under the permissive Apache License 2.0, removing
+  copyleft friction for commercial adopters. `LICENSE` and `pyproject.toml`
+  updated; no runtime or public-API change.
+- **Engine-neutral public docs.** Public docstrings/comments no longer name
+  internal implementation details (the orchestration engine, the state/event
+  store) or carry internal invariant IDs — they describe behavior in
+  substrate-neutral terms ("the platform", "platform execution", "the platform
+  state/event store"). Pure docstring/comment edits; the SDK↔kernel contract is
+  unchanged (contract suite green).
+
 ## 5.4.3 — 2026-06-18 — Fix secrets-panel render crash
 
 Bugfix — **nothing to migrate**.

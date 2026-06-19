@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Protocol for ``ctx.cache`` — short-lived, Pydantic-typed per-user cache.
 
 Extensions interact with a concrete :class:`imperal_sdk.cache.CacheClient`

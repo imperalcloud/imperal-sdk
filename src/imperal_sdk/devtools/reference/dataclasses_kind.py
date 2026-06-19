@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """``dataclass`` kind — the result / def types in ``imperal_sdk.__all__``.
 
 Most are ``@dataclass``; ``Page`` is a pydantic model. Both are introspected

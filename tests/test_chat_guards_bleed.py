@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """P2 Task 19/20 federal-chat-integrity — ``check_write_arg_bleed``.
 
 Defence-in-depth belt-and-suspenders: reject write/destructive calls whose

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Ф1 — sdk-reference.json generator: code is the single owner of API facts.
 
 Covers the WIDENED surface (Valentin 2026-06-19): client methods, ui

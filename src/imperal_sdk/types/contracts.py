@@ -1,19 +1,19 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """JSON Schema contracts for cross-boundary payloads.
 
-Every payload that leaves a single Python process — across Temporal
-activities, Redis pub/sub streams, SSE, or the Fast-RPC transport — is
-covered here. Inside a process, the dataclass forms in `types/` remain
-the ergonomic API; at the boundary, these Pydantic mirrors are the
-machine-enforceable contract.
+Every payload that leaves a single Python process — across platform
+execution boundaries, the platform state/event store, SSE, or the
+Fast-RPC transport — is covered here. Inside a process, the dataclass
+forms in `types/` remain the ergonomic API; at the boundary, these
+Pydantic mirrors are the machine-enforceable contract.
 
 Covered (as of v1.5.10)
 -----------------------
 - `ActionResult`  — every `@chat.function` return value. Serialized by
-  `ActionResult.to_dict()`, consumed by the kernel executor, Temporal
-  history, automation template resolver, and SSE delivery.
-- `Event`         — Redis-streams event envelope published by extensions
+  `ActionResult.to_dict()`, consumed by the kernel executor, platform
+  execution history, automation template resolver, and SSE delivery.
+- `Event`         — platform event envelope published by extensions
   (`@chat.function(event=...)`) and consumed by the automation engine,
   kernel SSE, and Panel live-refresh. Previously only documented as 10
   textual invariants (RPC-I1..I10) with no runtime schema.
@@ -110,7 +110,7 @@ class ActionResultModel(BaseModel):
 # === Event mirror ====================================================
 
 class EventModel(BaseModel):
-    """Pydantic contract for platform Event envelopes on Redis streams.
+    """Pydantic contract for platform Event envelopes on the platform state/event store.
 
     Mirrors the dataclass in `imperal_sdk.types.events.Event` — same
     five fields, strict validation.
@@ -209,7 +209,7 @@ class FunctionCallModel(BaseModel):
     """Pydantic contract for `FunctionCall.to_dict()` output.
 
     Records a single `@chat.function` invocation inside `ChatResult`.
-    Crosses Temporal activity boundaries — every field travels the wire.
+    Crosses platform execution boundaries — every field travels the wire.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -231,7 +231,7 @@ class ChatResultModel(BaseModel):
     """Pydantic contract for `ChatResult.to_dict()` output.
 
     Serialized return from the kernel's typed-dispatch layer; crosses
-    Temporal activity history on every chat turn. The on-wire keys are
+    platform execution history on every chat turn. The on-wire keys are
     underscore-prefixed (`_handled`, `_functions_called`, ...) — the
     kernel's hub dispatcher depends on that prefix to distinguish its
     transport metadata from raw tool output. Pydantic aliases map them

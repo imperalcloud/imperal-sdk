@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Federal-grade structured error taxonomy tests (P2 task 19).
 
 Closes P0-4: raw exception strings bleeding into user-visible write args.

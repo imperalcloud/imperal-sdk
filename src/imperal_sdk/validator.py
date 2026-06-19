@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Extension validator — checks V1-V24 + V31 rules.
 
 Used by ``imperal validate`` CLI and the Dev Portal publish gate.

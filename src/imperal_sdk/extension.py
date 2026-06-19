@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 from __future__ import annotations
 import inspect
 from dataclasses import dataclass, field
@@ -288,12 +288,10 @@ class Extension:
         - ``ttl`` is a hint to platform operators — the authoritative TTL lives
           in the Registry row (or the kernel's auto-derive default of 300s).
 
-        The kernel's skeleton workflow discovers this section automatically via
+        The platform discovers this section automatically via
         the ``skeleton_refresh_<X>`` naming convention — no Registry migration
         required. See `imperal_sdk/docs/skeleton.md` §"Skeleton Refresh Tools"
-        for the end-to-end contract and invariants
-        (I-SKEL-AUTO-DERIVE-1, I-SKEL-SUMMARY-VALUES-1, I-SKEL-LIVE-INVALIDATE,
-        I-PURGE-SKELETON-SCOPE).
+        for the end-to-end contract and invariants.
 
         Return contract: refresh function MUST return ``{"response": <dict>}``
         where the dict surfaces scalar fields (counts, flags, short strings) at
@@ -316,8 +314,8 @@ class Extension:
         if not section_name or not isinstance(section_name, str):
             raise ValueError("skeleton: section_name must be a non-empty string")
         # Keep section_name flat (no colons, wildcards, or separators) — the
-        # kernel's purge helper rejects these characters defence-in-depth, and
-        # they would break the Redis key path ``imperal:skeleton:{app}:{user}:{section}``.
+        # platform's purge helper rejects these characters defence-in-depth, and
+        # they would break the platform state store's section key path.
         if any(c in section_name for c in "*?[]:/"):
             raise ValueError(
                 f"skeleton: section_name {section_name!r} must not contain "
@@ -371,7 +369,6 @@ class Extension:
             class _InboxSummary(InboxSummary):
                 pass
 
-        Invariant: I-CACHE-MODEL-ON-EXTENSION-INSTANCE.
         """
         from pydantic import BaseModel
 
@@ -395,8 +392,8 @@ class Extension:
 
         Returns the registered name if ``cls`` was registered via
         :meth:`cache_model`, else ``None``. Used by
-        :class:`imperal_sdk.cache.CacheClient` to compute the Redis key
-        prefix before a set/get round-trip.
+        :class:`imperal_sdk.cache.CacheClient` to compute the platform state
+        store key prefix before a set/get round-trip.
         """
         for model_name, registered_cls in self._cache_models.items():
             if registered_cls is cls:

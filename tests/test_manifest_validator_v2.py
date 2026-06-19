@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Task 7 — M6.3/M7.3/M8.2 validator rules (uniqueness + cross-namespace block)."""
 import pytest
 from imperal_sdk.manifest_schema import validate_manifest_dict

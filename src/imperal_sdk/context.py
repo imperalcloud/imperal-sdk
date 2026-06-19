@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the AGPL-3.0 License. See LICENSE file for details.
+# Licensed under the Apache-2.0 License. See LICENSE file for details.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
@@ -36,10 +36,8 @@ class SkeletonProtocol(Protocol):
     """Read-only skeleton accessor.
 
     v1.6.0 breaking change: ``update()`` removed. The kernel
-    ``skeleton_save_section`` activity is the sole writer. Extensions
+    skeleton-save platform execution is the sole writer. Extensions
     return fresh data from their ``@ext.skeleton`` tool.
-
-    Invariants: I-SKELETON-PROTOCOL-READ-ONLY, I-NO-SKELETON-PUT.
     """
     async def get(self, section: str) -> Any: ...
 
@@ -131,8 +129,6 @@ class _SkeletonAccessGuard:
     Note the absence of an ``update`` method — consistent with
     :class:`SkeletonProtocol` v1.6.0 read-only contract; prevents a bypass
     path being re-introduced.
-
-    Invariant: I-SKELETON-LLM-ONLY.
     """
 
     __slots__ = ("_client", "_tool_type")
@@ -184,7 +180,7 @@ class Context:
     # dispatch surface (``"skeleton"`` / ``"panel"`` / ``"tool"`` /
     # ``"chat_fn"``); ``_call_token`` is the per-invocation HMAC call-token
     # minted by the kernel and verified by the Auth GW on skeleton/cache
-    # endpoints. Invariant: I-SKELETON-LLM-ONLY.
+    # endpoints.
     _tool_type: str = "tool"
     _call_token: str = ""
     # Extension instance (for ctx.cache -> cache_model reverse lookup).
@@ -193,8 +189,7 @@ class Context:
     _extension: Any = None
     # Gateway URL for cache HTTP traffic. When ``""`` (the default) the
     # Context will attempt to derive it from one of the existing clients
-    # (skeleton / store / notify) in ``__post_init__``. Invariant:
-    # I-CACHE-GW-URL-DERIVE.
+    # (skeleton / store / notify) in ``__post_init__``.
     _gateway_url: str = ""
     # Service token for cache HTTP traffic. Same derivation rules as
     # ``_gateway_url``.
@@ -314,15 +309,14 @@ class Context:
             name: Human-readable name for UI/audit (default ``"background"``).
 
         Returns:
-            task_id (str) — federal Redis key ``imperal:task:{task_id}``.
+            task_id (str) — opaque platform task identifier.
 
         Raises:
             RuntimeError: if ``ctx`` lacks kernel-injected spawn hook
                 (e.g. dev mode or non-extension dispatch context).
 
-        Federal: ``I-LONGRUN-BG-CORO-RETURNS-ACTIONRESULT`` — ``coro`` MUST
-        return ``ActionResult``; non-ActionResult return triggers a critical
-        audit row and delivers a fallback error to chat.
+        Note: ``coro`` MUST return ``ActionResult``; non-ActionResult return
+        triggers a critical audit row and delivers a fallback error to chat.
         """
         spawn = getattr(self, "_background_task_spawn", None)
         if spawn is None:
@@ -356,10 +350,8 @@ class Context:
                       ``"tool_result"`` (formatted as tool execution).
             refresh_panels: optional list of panel_ids to re-render after.
 
-        Federal: ``I-LONGRUN-CHAT-INJECT-USER-SCOPED`` — inject scoped to
-        ``(ext_id, user_id)``; cross-user inject returns 403.
-        ``I-LONGRUN-CHAT-INJECT-AUDIT-EVERY`` — every inject writes an
-        audit row in ``action_ledger``.
+        Note: inject is scoped to ``(ext_id, user_id)``; cross-user inject
+        returns 403. Every inject writes an audit row in ``action_ledger``.
         """
         MAX_BYTES = 64 * 1024
         if len(text.encode("utf-8")) > MAX_BYTES:
@@ -437,8 +429,8 @@ class Context:
         System-context only. Rewires per-user clients (store, skeleton,
         notify, billing) with new user_id; inherits ai/storage/http/config.
 
-        Invariants: I-AS-USER-1 (system-context guard),
-                    I-AS-USER-2 (only user.id changes; extension/tenant/agency preserved).
+        Guards: system-context required; only ``user.id`` changes —
+                extension, tenant, and agency context are preserved.
 
         Raises:
             RuntimeError: caller is not system-context.

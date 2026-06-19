@@ -109,12 +109,12 @@ class ExtensionsClient:
 
         SDK 3.5.0+: extension emits route through ``imperal_kernel.audit.record_action``
         which enforces user_id integrity, writes the audit_ledger row, and fires the
-        Redis pub/sub event in one atomic chokepoint call. This closes the SDK-side
+        platform event in one atomic chokepoint call. This closes the SDK-side
         bypass of the federal chokepoint that allowed empty user_id propagation.
 
         Fire-and-forget — errors are logged but not raised. If ``imperal_kernel.audit``
         is unavailable (e.g., extension running outside the kernel context, or in a
-        unit-test rig), falls back to legacy direct Redis publish with a warning.
+        unit-test rig), falls back to legacy direct platform publish with a warning.
         """
         try:
             from imperal_kernel.audit import (

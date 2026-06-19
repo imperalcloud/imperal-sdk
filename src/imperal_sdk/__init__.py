@@ -1,17 +1,17 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from typing import TYPE_CHECKING
 
-__version__ = "5.4.3"
+__version__ = "5.5.0"
 
 # 5.2.2 (2026-06-11): the package root resolves its public surface lazily
 # (PEP 562). The eager imports pulled the HTTP transport (Context / client
 # modules -> httpx) into EVERY consumer of ANY submodule — including
-# Temporal workflow code that lazily imports transport-free helpers such as
+# platform execution code that lazily imports transport-free helpers such as
 # ``imperal_sdk.chat.filters`` (httpx subclasses urllib.request.Request,
-# which the workflow sandbox restricts; kernel federal
-# I-SANDBOX-SAFE-LAZY-IMPORTS, live incident 2026-06-10). The public
-# surface is unchanged: every name resolves to the same object, star-import
-# honors __all__, and resolved names are cached back into module globals.
+# which the platform's execution sandbox restricts; live incident
+# 2026-06-10). The public surface is unchanged: every name resolves to the
+# same object, star-import honors __all__, and resolved names are cached
+# back into module globals.
 
 # name -> defining module (resolved on first attribute access)
 _LAZY_ATTRS = {

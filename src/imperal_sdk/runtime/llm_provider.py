@@ -400,7 +400,7 @@ class LLMProvider:
         ctx-build time; the SDK chat handler reads from there.
 
         Legacy: pass ``purpose=``+``user_id=`` (no ``cfg=``). Falls back
-        to ENV-only resolution (no Redis, no gateway HTTP) and emits a
+        to ENV-only resolution (no platform state store, no gateway HTTP) and emits a
         DEPRECATION warn once per process. Will be removed in SDK 4.0.0.
 
         Failover: when the primary call fails AND ``cfg.failover_config``
@@ -692,7 +692,7 @@ class LLMProvider:
     # ------------------------------------------------------------------
 
     async def _track_usage(self, usage: LLMUsage) -> None:
-        """Write usage metrics to Redis. Fire-and-forget — never raises.
+        """Write usage metrics to the platform state store. Fire-and-forget — never raises.
 
         Sprint 1.1 (2026-04-28): TEMPORARILY no-op'd with WARN-once. The
         previous body imported `shared_redis` (legacy module renamed to

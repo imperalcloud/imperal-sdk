@@ -1,7 +1,7 @@
 """ChatResult and FunctionCall — typed return envelope for extension dispatch.
 
-Provides to_dict()/from_dict() for kernel serialization (Temporal activities
-expect dict). Built by the kernel's typed-dispatch layer after each
+Provides to_dict()/from_dict() for kernel serialization (the platform
+runtime expects dict). Built by the kernel's typed-dispatch layer after each
 extension function invocation.
 """
 from __future__ import annotations
@@ -78,13 +78,13 @@ class ChatResult:
     task_cancelled: bool = False
     # P2 Task 27 — Narration Contract Hybrid. When the LLM completes a turn
     # by invoking EMIT_NARRATION_TOOL, the parsed NarrationEmission is stored
-    # here as a plain dict (model_dump) so kernel/Temporal can serialize it.
+    # here as a plain dict (model_dump) so the platform runtime can serialize it.
     # None when the LLM used free-form text or the emission failed Pydantic
     # validation (fallback to malformed-but-best-effort prose).
     narration_emission: Optional[dict] = None
 
     def to_dict(self) -> dict:
-        """Serialize to dict for kernel/Temporal transport."""
+        """Serialize to dict for kernel transport."""
         return {
             "response": self.response,
             "_handled": self.handled,
