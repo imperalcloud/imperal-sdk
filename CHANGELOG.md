@@ -2,6 +2,17 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.5.1 — 2026-06-19 — Sync chat_result schema artifact (completes Seal-B)
+
+Patch — **nothing to migrate** (no API or behavior change).
+
+### Fixed
+- Regenerated the committed `schemas/chat_result.schema.json` so its embedded
+  description matches the runtime model after the 5.5.0 engine-neutral-docs pass
+  (the static artifact still carried the old engine wording, and the full test
+  suite caught it on 3.11/3.12). Completes Seal-B — no engine-implementation
+  names remain anywhere in the shipped package; SDK suite green (1240 passed).
+
 ## 5.5.0 — 2026-06-19 — Apache-2.0 relicense + engine-neutral docs
 
 Licensing + documentation — **nothing to migrate** (no API or behavior change).

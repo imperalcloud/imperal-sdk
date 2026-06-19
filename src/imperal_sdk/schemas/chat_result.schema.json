@@ -2,7 +2,7 @@
   "$defs": {
     "FunctionCallModel": {
       "additionalProperties": false,
-      "description": "Pydantic contract for `FunctionCall.to_dict()` output.\n\nRecords a single `@chat.function` invocation inside `ChatResult`.\nCrosses Temporal activity boundaries \u2014 every field travels the wire.",
+      "description": "Pydantic contract for `FunctionCall.to_dict()` output.\n\nRecords a single `@chat.function` invocation inside `ChatResult`.\nCrosses platform execution boundaries — every field travels the wire.",
       "properties": {
         "name": {
           "minLength": 1,
@@ -61,7 +61,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Serialized return from the kernel's typed-dispatch layer \u2014 the kernel-transport form of a chat turn's output. Underscore-prefixed keys distinguish transport metadata from raw tool response. Crosses Temporal activity history.",
+  "description": "Serialized return from the kernel's typed-dispatch layer — the kernel-transport form of a chat turn's output. Underscore-prefixed keys distinguish transport metadata from raw tool response. Crosses Temporal activity history.",
   "properties": {
     "response": {
       "default": "",
