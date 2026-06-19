@@ -3,17 +3,25 @@
     "complete"
   ],
   "billing": [
+    "cancel_subscription",
     "change_plan",
     "check_limits",
+    "create_billing_portal_session",
     "create_setup_intent",
+    "get_auto_topup",
     "get_balance",
     "get_subscription",
     "list_payment_methods",
     "list_payments",
+    "list_plans",
     "remove_payment_method",
+    "renew_subscription",
+    "resume_subscription",
+    "set_auto_topup",
     "set_default_payment_method",
     "topup",
-    "track_usage"
+    "track_usage",
+    "update_billing_profile"
   ],
   "config": [
     "all",
