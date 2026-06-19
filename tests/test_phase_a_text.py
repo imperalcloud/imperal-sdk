@@ -30,10 +30,10 @@ def test_data_model_docstring_no_emit_validate_claim():
 
 
 def test_api_surface_no_skeleton_update_no_db():
-    import json
-    import pathlib
-    p = pathlib.Path(__file__).resolve().parents[1] / "api_surface.json"
-    s = json.loads(p.read_text())
+    # Source of truth is the live surface, not a frozen file (the stale SDK-root
+    # api_surface.json was deleted in Ф1; the docs_guard copy is freshness-tested).
+    from imperal_sdk.devtools.generate_api_surface import generate_surface
+    s = generate_surface()
     assert "update" not in s.get("skeleton", [])   # SkeletonClient read-only since v1.6.0
     assert "db" not in s                            # ctx.db removed in Phase A
     assert s.get("skeleton") == ["get"]             # the only skeleton method
