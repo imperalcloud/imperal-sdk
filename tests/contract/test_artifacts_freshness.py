@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from imperal_sdk.devtools.generate_api_surface import generate_surface
+from imperal_sdk.devtools.generate_reference import generate_reference
 from imperal_sdk.devtools.generate_sdk_claims import generate_claims
 
 REPO = Path(__file__).resolve().parents[2]
@@ -45,6 +46,19 @@ def test_docs_guard_api_surface_snapshot_fresh() -> None:
     }, (
         "scripts/docs_guard/inputs/api_surface.json is stale — refresh it from "
         "imperal_sdk.devtools.generate_api_surface (manual-cp rot, conformance A9)"
+    )
+
+
+def test_sdk_reference_fresh() -> None:
+    """Ф1 — the committed sdk-reference.json must equal generate_reference().
+
+    Code is the single owner of API facts; the artifact is a pure projection.
+    A stale committed copy turns the one sanctioned gate (preflight Edge 1) red.
+    """
+    committed = json.loads((REPO / "sdk-reference.json").read_text(encoding="utf-8"))
+    assert committed == generate_reference(), (
+        "sdk-reference.json is stale — regenerate with: "
+        "python -m imperal_sdk.devtools.generate_reference --output sdk-reference.json"
     )
 
 
