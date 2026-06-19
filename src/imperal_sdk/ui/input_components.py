@@ -4,6 +4,11 @@ from __future__ import annotations
 from typing import Any
 from .base import UINode, UIAction
 
+# The single source of truth for the allowed ui.Input HTML input types.
+# Consumed by Input() validation (here), the manifest schema (Ф2), the
+# reference generator (Ф1), and the docs <SdkRef> (Ф3). Add new types here only.
+INPUT_TYPES = ("text", "password", "email", "number", "url")
+
 
 def Input(
     placeholder: str = "",
@@ -20,6 +25,8 @@ def Input(
     credential entry — it's a thin convenience wrapper that pins type for
     federal EXT-SECRETS-V1 UIs.
     """
+    if type not in INPUT_TYPES:
+        raise ValueError(f"ui.Input type must be one of {INPUT_TYPES}, got {type!r}")
     props: dict[str, Any] = {"placeholder": placeholder, "value": value, "param_name": param_name}
     if type and type != "text":
         props["type"] = type
