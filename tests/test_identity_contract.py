@@ -164,5 +164,13 @@ def test_tenant_context_strict_subset_of_tenant():
 def test_module_imports_with_invariants():
     """Import alone must not raise (subset invariants live at module load)."""
     import importlib
+    import imperal_sdk
     import imperal_sdk.types.identity
     importlib.reload(imperal_sdk.types.identity)
+    # reload() rebinds this module's objects to new identities; drop the root's
+    # lazy-attr cache for names defined here so they re-resolve to the reloaded
+    # module and don't leak stale identities into later tests (test isolation).
+    from imperal_sdk import _LAZY_ATTRS
+    for _name, _src in _LAZY_ATTRS.items():
+        if _src == "imperal_sdk.types.identity":
+            imperal_sdk.__dict__.pop(_name, None)
