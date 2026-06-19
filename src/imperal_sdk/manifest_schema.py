@@ -269,6 +269,13 @@ class SecretDecl(BaseModel):
     rotation_hint_days: Optional[int] = Field(default=None, ge=1)
 
 
+# === UI surface (Ф2 — ui.* inside the contract) =======================
+# Factored into a sibling module to respect the 300-line god-file rule
+# (this file is already ≥300 lines). Imported here so callers can use
+# ``from imperal_sdk.manifest_schema import UINode, Panel`` as advertised.
+from imperal_sdk.manifest_schema_ui import Panel, UINode  # noqa: F401 (re-export)
+
+
 # === Root model =======================================================
 
 class Manifest(BaseModel):
@@ -571,6 +578,10 @@ __all__ = [
     "HealthCheckDecl",
     "LifecycleDecl",
     "TrayDecl",
+    "SecretDecl",
+    # Ф2 — UI surface models (manifest_schema_ui.py)
+    "UINode",
+    "Panel",
     "validate_manifest_dict",
     "get_schema",
     "MANIFEST_SCHEMA",
