@@ -191,6 +191,50 @@
       "title": "LifecycleDecl",
       "type": "object"
     },
+    "Panel": {
+      "additionalProperties": false,
+      "description": "One entry in ``manifest['panels']`` (\u04242, additive).\n\n``tree`` is the serialized UINode tree the panel renders. At build time\nit is present only for panels declaring a static tree; runtime-rendered\npanels emit ``{}`` (``maybe_publish_panels`` reads the live runtime node,\nnot this metadata). When a tree IS present it is validated, so an\n``Input`` with an illegal ``type`` is rejected at manifest validation.",
+      "properties": {
+        "slot": {
+          "title": "Slot",
+          "type": "string"
+        },
+        "tree": {
+          "additionalProperties": true,
+          "title": "Tree",
+          "type": "object"
+        },
+        "panel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Panel Id"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "slot"
+      ],
+      "title": "Panel",
+      "type": "object"
+    },
     "Schedule": {
       "additionalProperties": false,
       "description": "One entry in `manifest['schedules']`.",
@@ -811,6 +855,21 @@
       ],
       "default": null,
       "title": "Secrets"
+    },
+    "panels": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/Panel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Panels"
     },
     "name": {
       "anyOf": [

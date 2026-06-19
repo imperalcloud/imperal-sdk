@@ -347,6 +347,11 @@ class Manifest(BaseModel):
     # publish-time validators didn't gate through here).
     secrets: Optional[List[SecretDecl]] = None
 
+    # Federal Ф2 — UI surface inside the contract. Additive list of declared
+    # panels (slot + serialized ui tree). Validated via the Panel model, which
+    # enforces ALLOWED_PANEL_SLOTS and the Input.type enum on any present tree.
+    panels: Optional[List["Panel"]] = None
+
     # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
     name: Optional[str] = None
     description: Optional[str] = None

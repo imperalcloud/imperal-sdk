@@ -94,3 +94,97 @@ def test_panel_tree_with_valid_input_type_validates():
         }
     )
     assert p.slot == "center"
+
+
+# --- Task 2: additive generate_manifest() 'panels' emission ---------------
+
+from imperal_sdk import Extension
+from imperal_sdk import ui
+from imperal_sdk.manifest import generate_manifest
+from imperal_sdk.manifest_schema import validate_manifest_dict
+
+
+def test_manifest_without_panels_is_additive_and_tools_unchanged():
+    ext = Extension("no-panel-app", version="2.0.0")
+
+    @ext.tool("hello", scopes=["public"], description="hi")
+    async def hello(ctx, name: str = "World"):
+        pass
+
+    manifest = generate_manifest(ext)
+    # Additive: key present, empty — proves stable shape, no panels declared.
+    assert manifest["panels"] == []
+    # No regression on the tools surface.
+    assert len(manifest["tools"]) == 1
+    assert manifest["tools"][0]["name"] == "hello"
+
+
+def test_manifest_with_static_tree_panel_emits_slot_and_tree():
+    ext = Extension("panel-app", version="1.0.0")
+
+    tree = ui.Form(
+        children=[ui.Password(param_name="api_key")],
+        action="app/save",
+    )
+
+    @ext.panel("creds", slot="right", title="Credentials", tree=tree)
+    async def creds(ctx):
+        return tree
+
+    manifest = generate_manifest(ext)
+    panels = manifest["panels"]
+    entry = next(p for p in panels if p["panel_id"] == "creds")
+    assert entry["slot"] == "right"
+    assert entry["title"] == "Credentials"
+    # Serialized UINode tree — a real Form wrapping a password Input.
+    assert entry["tree"]["type"] == "Form"
+    pw = entry["tree"]["props"]["children"][0]
+    assert pw["type"] == "Input"
+    assert pw["props"]["type"] == "password"
+
+
+def test_manifest_panel_without_tree_emits_empty_tree():
+    ext = Extension("panel-app2", version="1.0.0")
+
+    @ext.panel("nav", slot="left", title="Nav")
+    async def nav(ctx):
+        return ui.Stack([])
+
+    manifest = generate_manifest(ext)
+    entry = next(p for p in manifest["panels"] if p["panel_id"] == "nav")
+    assert entry["slot"] == "left"
+    assert entry["tree"] == {}
+
+
+def test_panels_manifest_round_trips_through_validate():
+    ext = Extension("panel-app3", version="1.0.0")
+    tree = ui.Form(children=[ui.Input(param_name="x", type="password")])
+
+    @ext.panel("creds", slot="right", title="Creds", tree=tree)
+    async def creds(ctx):
+        return tree
+
+    manifest = generate_manifest(ext)
+    issues = validate_manifest_dict(manifest)
+    # No M3 extra_forbidden for the new 'panels' key; no other issues.
+    assert issues == [], [i.message for i in issues]
+
+
+def test_panels_manifest_rejects_illegal_input_type():
+    manifest = {
+        "manifest_schema_version": 3,
+        "app_id": "bad-panel-app",
+        "version": "1.0.0",
+        "panels": [
+            {
+                "slot": "right",
+                "panel_id": "creds",
+                "title": "Creds",
+                "tree": {"type": "Input", "props": {"type": "phone"}},
+            }
+        ],
+    }
+    issues = validate_manifest_dict(manifest)
+    assert issues, "expected a validation issue for the illegal Input.type"
+    joined = " ".join(i.message for i in issues)
+    assert "phone" in joined

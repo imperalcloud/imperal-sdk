@@ -188,6 +188,28 @@ def generate_manifest(ext: Extension) -> dict:
             s.to_manifest_dict() for s in ext._secrets.values()
         ]
 
+    # Ф2 — emit the ui.* surface into the contract (additive). Always present
+    # (possibly empty []) so the key shape is stable. ``tree`` is serialized
+    # only for panels declaring a STATIC ui tree via @ext.panel(..., tree=...);
+    # runtime-rendered panels emit {} (the kernel's maybe_publish_panels reads
+    # the live runtime node, not this metadata).
+    panels_block: list[dict] = []
+    for panel_id, meta in (ext.panels or {}).items():
+        tree = meta.get("tree")
+        if tree is not None and hasattr(tree, "to_dict"):
+            tree_dict = tree.to_dict()
+        elif isinstance(tree, dict):
+            tree_dict = tree
+        else:
+            tree_dict = {}
+        panels_block.append({
+            "panel_id": panel_id,
+            "slot": meta.get("slot", "center"),
+            "title": meta.get("title", ""),
+            "tree": tree_dict,
+        })
+    manifest["panels"] = panels_block
+
     return manifest
 
 
