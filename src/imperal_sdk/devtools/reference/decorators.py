@@ -18,8 +18,11 @@ from imperal_sdk.devtools.reference._introspect import (
 )
 
 # The canonical ext decorator set (scope expansion 2026-06-19, Valentin).
+# ``on_refresh`` was removed: it does not exist on Extension in SDK 5.4.x+.
+# ``lifecycle`` is a property (not a function) — kept so the completeness
+# gate can record it as a degraded placeholder with an explanatory note.
 _EXT_DECORATORS = (
-    "secret", "tool", "skeleton", "cache_model", "on_upgrade", "on_refresh",
+    "secret", "tool", "skeleton", "cache_model", "on_upgrade",
     "webhook", "emits", "tray", "panel", "widget", "lifecycle",
 )
 

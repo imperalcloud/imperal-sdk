@@ -1701,16 +1701,6 @@
       "params": [],
       "returns": null
     },
-    "ext.on_refresh": {
-      "enums": {
-        "_note": [
-          "not present on Extension in SDK 5.4.3"
-        ]
-      },
-      "kind": "decorator",
-      "params": [],
-      "returns": null
-    },
     "ext.on_upgrade": {
       "enums": {},
       "kind": "decorator",
