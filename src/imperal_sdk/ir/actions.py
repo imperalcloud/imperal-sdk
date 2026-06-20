@@ -124,7 +124,8 @@ def validate_step(step: dict) -> list[str]:
 
     Args:
         step: A declarative step mapping — must contain at least ``op`` and
-              ``args`` keys.
+              ``args`` keys (or, for ``conditional``, ``if``/``then``/``else``
+              at the step root).
 
     Returns:
         Empty list when the step is valid; list of human-readable error
@@ -133,6 +134,11 @@ def validate_step(step: dict) -> list[str]:
     op = step.get("op")
     if op not in ACTION_SCHEMAS:
         return [f"unknown op {op!r}; valid verbs: {sorted(ACTION_SCHEMAS)}"]
+
+    if op == "conditional":
+        # conditional is pure control-flow — its fields (if/then/else) live at
+        # the step ROOT, not under args. Validate the step dict itself.
+        return _validate_object(step, ACTION_SCHEMAS["conditional"])
 
     args = step.get("args", {})
     return _validate_object(args, ACTION_SCHEMAS[op])

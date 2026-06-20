@@ -19,6 +19,10 @@ from .schema import IREnvelope
 def validate_ir_dict(data: Any) -> list[ValidationIssue]:
     """Validate an IR envelope dict. Returns a list of issues (never raises).
 
+    Note: validates ENVELOPE STRUCTURE only (Pydantic). Does NOT deep-validate
+    declarative ``steps[]`` args — per-verb step validation is a separate check
+    performed by :func:`~imperal_sdk.ir.actions.validate_step`.
+
     Args:
         data: Any value. Must be a ``dict`` shaped as an :class:`IREnvelope`.
 

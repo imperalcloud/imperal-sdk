@@ -26,3 +26,64 @@ def test_validate_send_step_ok():
 def test_validate_send_missing_message():
     errors = validate_step({"id": "s1", "op": "send", "args": {}})
     assert errors, "expected error: send requires 'message'"
+
+
+# ---------------------------------------------------------------------------
+# conditional — control-flow verb (if/then/else at step root, NOT args)
+# ---------------------------------------------------------------------------
+
+def test_validate_conditional_real_shape_ok():
+    """A real interpreter-shaped conditional step must validate clean."""
+    step = {
+        "id": "s2",
+        "op": "conditional",
+        "if": {"field": "{{steps.s1.count}}", "gt": 0},
+        "then": "s3",
+        "else": None,
+    }
+    assert validate_step(step) == []
+
+
+def test_validate_conditional_else_string_ok():
+    """conditional with else as a step-id string is valid."""
+    step = {
+        "id": "s2",
+        "op": "conditional",
+        "if": {"field": "{{steps.s1.count}}", "gt": 10},
+        "then": "s3",
+        "else": "s9",
+    }
+    assert validate_step(step) == []
+
+
+def test_validate_conditional_missing_if():
+    """conditional without an 'if' key must produce an error."""
+    step = {"id": "s2", "op": "conditional", "then": "s3"}
+    errors = validate_step(step)
+    assert errors, "expected error: conditional requires 'if'"
+    assert any("if" in e for e in errors)
+
+
+def test_validate_conditional_then_not_string():
+    """conditional with 'then' not a string must produce a type error."""
+    step = {
+        "id": "s2",
+        "op": "conditional",
+        "if": {"field": "{{steps.s1.count}}", "gt": 0},
+        "then": ["s3"],  # should be a string step-id
+    }
+    errors = validate_step(step)
+    assert errors, "expected error: 'then' must be a string step-id"
+    assert any("then" in e for e in errors)
+
+
+def test_validate_conditional_missing_then():
+    """conditional without a 'then' key must produce an error."""
+    step = {
+        "id": "s2",
+        "op": "conditional",
+        "if": {"field": "{{steps.s1.count}}", "gt": 0},
+    }
+    errors = validate_step(step)
+    assert errors, "expected error: conditional requires 'then'"
+    assert any("then" in e for e in errors)
