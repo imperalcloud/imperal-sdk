@@ -18,19 +18,21 @@ def test_repeat_expands_list():
 
 
 def test_if_keep():
+    # D3 grammar: {field, eq: val} — condition true → node rendered
     tree = {
-        "$if": {"left": "{{event.ok}}", "op": "eq", "right": True},
+        "$if": {"field": "{{event.score}}", "gt": 0},
         "node": {"type": "Banner", "props": {"text": "visible"}},
     }
-    out = resolve_ui_tree(tree, {"event": {"ok": True}, "steps": {}, "prev": {}})
+    out = resolve_ui_tree(tree, {"event": {"score": 5}, "steps": {}, "prev": {}})
     assert out["type"] == "Banner"
     assert out["props"]["text"] == "visible"
 
 
 def test_if_drop():
+    # D3 grammar: {field, eq: val} — condition false → {}
     tree = {
-        "$if": {"left": "{{event.ok}}", "op": "eq", "right": True},
+        "$if": {"field": "{{event.score}}", "gt": 0},
         "node": {"type": "Banner", "props": {"text": "hidden"}},
     }
-    out = resolve_ui_tree(tree, {"event": {"ok": False}, "steps": {}, "prev": {}})
+    out = resolve_ui_tree(tree, {"event": {"score": 0}, "steps": {}, "prev": {}})
     assert out == {}

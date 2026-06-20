@@ -3,45 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..runtime.template import resolve_value
-
-
-def _eval_if(cond: dict, ctx: dict) -> bool:
-    """Evaluate a {left, op, right} condition against ctx.
-
-    Supports ops: eq, neq, gt, lt, in, exists.
-    left is resolved via resolve_value; right is literal.
-    Falls back to eval_conditional for {field, eq/neq/...} format.
-    """
-    if "field" in cond or ("left" not in cond and "op" not in cond):
-        # delegate to eval_conditional's native format
-        from ..runtime.verbs import eval_conditional
-        return eval_conditional({"if": cond, "then": "y", "else": None}, ctx) == "y"
-
-    actual = resolve_value(cond["left"], ctx)
-    op = cond.get("op", "eq")
-    right = cond.get("right")
-
-    if op == "eq":
-        return actual == right
-    if op == "neq":
-        return actual != right
-    if op == "gt":
-        try:
-            return float(actual) > float(right)
-        except (TypeError, ValueError):
-            return False
-    if op == "lt":
-        try:
-            return float(actual) < float(right)
-        except (TypeError, ValueError):
-            return False
-    if op == "in":
-        return right in actual if isinstance(actual, (list, str, dict)) else False
-    if op == "exists":
-        from ..runtime.template import MISSING
-        present = actual is not MISSING and actual not in ("", None)
-        return bool(right) == present
-    return False
+from ..runtime.verbs import eval_conditional
 
 
 def _resolve_props(props: dict, ctx: dict) -> dict:
@@ -70,11 +32,12 @@ def resolve_ui_tree(tree: dict, ctx: dict) -> dict:
     Handles:
     - {{binding}} substitution in all prop values
     - $repeat directive: expands a list expression into per-item nodes
-    - $if directive: keeps or drops a node based on a condition
+    - $if directive: keeps or drops a node based on a condition (D3 grammar:
+      {field, eq|neq|gt|lt|in|exists: <val>}); delegates to eval_conditional.
     Nested {type, props} children are resolved recursively.
     """
     if "$if" in tree:
-        keep = _eval_if(tree["$if"], ctx)
+        keep = eval_conditional({"if": tree["$if"], "then": "y", "else": None}, ctx) == "y"
         if not keep:
             return {}
         tree = tree["node"]
