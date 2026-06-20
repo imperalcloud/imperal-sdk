@@ -9746,6 +9746,19 @@
       "params": [],
       "returns": null
     },
+    "sdl.facet_resolve": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "",
+      "enums": {
+        "_note": [
+          "module, not a function"
+        ]
+      },
+      "kind": "sdl_func",
+      "params": [],
+      "returns": null
+    },
     "sdl.facets": {
       "action_vocab_safe": false,
       "declarative_capable": false,
@@ -9824,6 +9837,25 @@
         }
       ],
       "returns": "str"
+    },
+    "sdl.resolve_facets": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Resolve standard facet names to their merged ``{field: role}`` map.\n\n    Parameters\n    ----------\n    names:\n        Facet class names as exported from ``imperal_sdk.sdl.facets``\n        (e.g. ``[\"Invoiced\", \"Timestamped\"]``).\n\n    Returns\n    -------\n    dict[str, str]\n        Merged ``{field_name: dotted_role}`` for all requested facets.\n        An empty list returns an empty dict.\n\n    Raises\n    ------\n    KeyError\n        If any name in *names* is not a known facet class.",
+      "enums": {},
+      "kind": "sdl_func",
+      "params": [
+        {
+          "annotation": "list[str]",
+          "default": null,
+          "name": "names",
+          "required": true,
+          "type": {
+            "ref": "list[str]"
+          }
+        }
+      ],
+      "returns": "dict[str, str]"
     },
     "sdl.roles": {
       "action_vocab_safe": false,

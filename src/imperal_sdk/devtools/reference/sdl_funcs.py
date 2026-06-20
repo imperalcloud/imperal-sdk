@@ -20,7 +20,8 @@ from imperal_sdk.devtools.reference._introspect import (
 
 _SDL_FUNCS = (
     "entity", "field", "roles", "roles_of", "namespace_of",
-    "is_valid_role", "validate_custom_role", "facets",
+    "is_valid_role", "validate_custom_role", "facets", "resolve_facets",
+    "facet_resolve",
 )
 
 
