@@ -6,9 +6,10 @@ from __future__ import annotations
 from typing import Any
 
 from ..manifest import generate_manifest
+from ..sdl._generate_roles_json import _SCHEMA_VERSION as _SDL_VOCAB_VERSION_INT
+from .schema import IR_VERSION, CONTRACT_VERSION
 
-
-_IR_VERSION = "1.0"
+_SDL_VOCAB_VERSION = str(_SDL_VOCAB_VERSION_INT)
 
 # Tool name prefixes that belong to ui/skeleton slots — handled in later tasks
 # (E2/E5). Exclude them from the IR functions list.
@@ -105,8 +106,8 @@ def generate_ir(ext: Any) -> dict[str, Any]:
         app["skeleton"] = skeleton_ir
 
     return {
-        "ir_version": _IR_VERSION,
-        "sdl_vocab_version": "1",
-        "contract_version": "1.0",
+        "ir_version": IR_VERSION,
+        "sdl_vocab_version": _SDL_VOCAB_VERSION,
+        "contract_version": CONTRACT_VERSION,
         "app": app,
     }

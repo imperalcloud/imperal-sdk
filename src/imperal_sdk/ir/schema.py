@@ -8,6 +8,10 @@ from ._impl import Impl, ImplCode, ImplDeclarative  # noqa: F401 — re-exported
 from .skeleton import IRSkeleton
 from .ui import IRPanel
 
+# Canonical version constants — import these instead of hardcoding strings.
+IR_VERSION = "1.0"
+CONTRACT_VERSION = "1.0"
+
 
 class IRFunction(BaseModel):
     model_config = ConfigDict(extra="forbid")
