@@ -68,8 +68,10 @@
         "skeleton": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "items": {
+                "$ref": "#/$defs/IRSkeleton"
+              },
+              "type": "array"
             },
             {
               "type": "null"
@@ -255,9 +257,58 @@
       "title": "IRPanel",
       "type": "object"
     },
+    "IRSkeleton": {
+      "additionalProperties": false,
+      "description": "One skeleton section declared by an extension.\n\n``producer`` follows the same :class:`~imperal_sdk.ir.schema.Impl`\ndiscriminated union used by :class:`~imperal_sdk.ir.schema.IRFunction`.\nFor skeleton refresh tools the kind is always ``\"code\"``.",
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "shape": {
+          "additionalProperties": true,
+          "title": "Shape",
+          "type": "object"
+        },
+        "producer": {
+          "discriminator": {
+            "mapping": {
+              "code": "#/$defs/ImplCode",
+              "declarative": "#/$defs/ImplDeclarative"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ImplCode"
+            },
+            {
+              "$ref": "#/$defs/ImplDeclarative"
+            }
+          ],
+          "title": "Producer"
+        },
+        "alert": {
+          "default": false,
+          "title": "Alert",
+          "type": "boolean"
+        },
+        "ttl": {
+          "default": 300,
+          "title": "Ttl",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "section",
+        "producer"
+      ],
+      "title": "IRSkeleton",
+      "type": "object"
+    },
     "IRUi": {
       "additionalProperties": false,
-      "description": "UI section of an IR app — a list of declared panels.",
+      "description": "UI section of an IR app \u2014 a list of declared panels.",
       "properties": {
         "panels": {
           "items": {

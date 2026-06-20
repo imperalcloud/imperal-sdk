@@ -1,26 +1,12 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ._impl import Impl, ImplCode, ImplDeclarative  # noqa: F401 — re-exported
+from .skeleton import IRSkeleton
 from .ui import IRPanel
-
-
-class ImplCode(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    kind: Literal["code"]
-    module: str
-    entry: str
-
-
-class ImplDeclarative(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    kind: Literal["declarative"]
-    steps: list[dict[str, Any]] = Field(default_factory=list)
-
-
-Impl = Annotated[Union[ImplCode, ImplDeclarative], Field(discriminator="kind")]
 
 
 class IRFunction(BaseModel):
@@ -56,7 +42,7 @@ class IRApp(BaseModel):
     data: dict[str, Any] | None = None
     functions: list[IRFunction] = Field(default_factory=list)
     ui: IRUi | None = None
-    skeleton: dict[str, Any] | None = None
+    skeleton: list[IRSkeleton] | None = None
     automations: list[dict[str, Any]] = Field(default_factory=list)
     events: dict[str, Any] | None = None
     lifecycle: dict[str, Any] | None = None

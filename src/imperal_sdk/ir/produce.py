@@ -68,6 +68,29 @@ def generate_ir(ext: Any) -> dict[str, Any]:
             "render": render,
         })
 
+    # Skeleton slot — scan ext._tools for skeleton_refresh_* entries.
+    # The _skeleton meta dict (section_name, alert_on_change, ttl) is set by
+    # @ext.skeleton(...) on the in-memory ToolDef and does NOT survive into the
+    # manifest dict, so we read it from the live ext object here.
+    skeleton_ir: list[dict] = []
+    live_tools: dict = getattr(ext, "_tools", {})
+    for tool_name, tool_def in live_tools.items():
+        if not tool_name.startswith("skeleton_refresh_"):
+            continue
+        section = tool_name[len("skeleton_refresh_"):]
+        meta: dict = getattr(tool_def, "_skeleton", None) or {}
+        skeleton_ir.append({
+            "section": meta.get("section_name") or section,
+            "shape": {},
+            "producer": {
+                "kind": "code",
+                "module": "skeleton",
+                "entry": tool_name,
+            },
+            "alert": bool(meta.get("alert_on_change", False)),
+            "ttl": int(meta.get("ttl", 300)),
+        })
+
     app: dict = {
         "id": m.get("app_id", ""),
         "version": m.get("version", ""),
@@ -78,6 +101,8 @@ def generate_ir(ext: Any) -> dict[str, Any]:
     }
     if panels_ir:
         app["ui"] = {"panels": panels_ir}
+    if skeleton_ir:
+        app["skeleton"] = skeleton_ir
 
     return {
         "ir_version": _IR_VERSION,
