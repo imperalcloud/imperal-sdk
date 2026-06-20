@@ -129,3 +129,37 @@ async def test_event_available_in_args():
     ]
     out = await run_steps(steps, ctx=_ctx(caps), event={"user": "Alice"})
     assert out["steps"]["s1"] == {"action": "send", "message": "Hi Alice"}
+
+
+@pytest.mark.asyncio
+async def test_backward_conditional_jump_is_bounded():
+    """A conditional that always jumps back to an earlier step must be stopped by the budget."""
+    caps = Caps()
+    steps = [
+        {"id": "s1", "op": "send", "args": {"message": "loop"}},
+        {"id": "s2", "op": "conditional", "if": {"field": "1", "gt": 0}, "then": "s1", "else": None},
+    ]
+    with pytest.raises(RuntimeError, match="step budget"):
+        await run_steps(steps, ctx=_ctx(caps))
+
+
+@pytest.mark.asyncio
+async def test_conditional_bad_target_raises():
+    """A conditional targeting a nonexistent step id raises ValueError."""
+    caps = Caps()
+    steps = [
+        {"id": "s1", "op": "conditional", "if": {"field": "1", "gt": 0}, "then": "nope", "else": None},
+    ]
+    with pytest.raises(ValueError, match="nope"):
+        await run_steps(steps, ctx=_ctx(caps))
+
+
+@pytest.mark.asyncio
+async def test_step_missing_id_raises():
+    """A step dict with no 'id' key raises ValueError before execution."""
+    caps = Caps()
+    steps = [
+        {"op": "send", "args": {"message": "no id here"}},
+    ]
+    with pytest.raises(ValueError, match="missing required 'id'"):
+        await run_steps(steps, ctx=_ctx(caps))
