@@ -53,9 +53,11 @@ def _role_symbol(sdl: Any, name: str, obj: Any) -> dict[str, Any]:
     except Exception:
         params = []
 
+    doc = (getattr(obj, "__doc__", None) or "").strip()
     return {
         "kind": "sdl_role",
         "params": sorted(params, key=lambda p: p["name"]),
         "returns": None,
         "enums": enums,
+        "description": doc,
     }

@@ -113,6 +113,7 @@ def callable_symbol(
     enums: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Render a callable into the pinned symbol shape, degrading gracefully."""
+    doc = (getattr(func, "__doc__", None) or "").strip()
     try:
         params = params_of(func, skip_self=skip_self)
         returns = annotation_str(inspect.signature(func).return_annotation)
@@ -122,15 +123,23 @@ def callable_symbol(
             "params": [],
             "returns": None,
             "enums": {"_note": [f"uninspectable: {exc}"]},
+            "description": "",
         }
     return {
         "kind": kind,
         "params": params,
         "returns": returns,
         "enums": enums or {},
+        "description": doc,
     }
 
 
 def degraded_symbol(kind: str, note: str) -> dict[str, Any]:
     """A placeholder symbol for something present but not introspectable."""
-    return {"kind": kind, "params": [], "returns": None, "enums": {"_note": [note]}}
+    return {
+        "kind": kind,
+        "params": [],
+        "returns": None,
+        "enums": {"_note": [note]},
+        "description": "",
+    }

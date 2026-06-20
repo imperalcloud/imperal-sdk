@@ -49,6 +49,7 @@ def collect() -> dict[str, dict[str, Any]]:
 
 
 def _dataclass_symbol(obj: Any) -> dict[str, Any]:
+    doc = (getattr(obj, "__doc__", None) or "").strip()
     params: list[dict[str, Any]] = []
     for f in dataclasses.fields(obj):
         has_factory = f.default_factory is not dataclasses.MISSING
@@ -60,10 +61,11 @@ def _dataclass_symbol(obj: Any) -> dict[str, Any]:
             "default": json_default(f.default) if has_default else None,
             "required": required,
         })
-    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}}
+    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc}
 
 
 def _pydantic_symbol(obj: Any) -> dict[str, Any]:
+    doc = (getattr(obj, "__doc__", None) or "").strip()
     params: list[dict[str, Any]] = []
     for fname, field in obj.model_fields.items():
         required = field.is_required()
@@ -74,4 +76,4 @@ def _pydantic_symbol(obj: Any) -> dict[str, Any]:
             "default": default,
             "required": required,
         })
-    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}}
+    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc}

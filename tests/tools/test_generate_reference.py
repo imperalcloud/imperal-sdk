@@ -37,7 +37,7 @@ def test_deterministic() -> None:
 
 def test_every_symbol_has_the_pinned_shape() -> None:
     for name, sym in generate_reference()["symbols"].items():
-        assert set(sym.keys()) == {"kind", "params", "returns", "enums"}, name
+        assert set(sym.keys()) == {"kind", "params", "returns", "enums", "description"}, name
         assert sym["kind"] in ALL_KINDS, (name, sym["kind"])
         assert isinstance(sym["params"], list)
         for p in sym["params"]:
