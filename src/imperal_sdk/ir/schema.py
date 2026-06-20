@@ -4,6 +4,8 @@ from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .ui import IRPanel
+
 
 class ImplCode(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -33,6 +35,12 @@ class IRFunction(BaseModel):
     impl: Impl
 
 
+class IRUi(BaseModel):
+    """UI section of an IR app — a list of declared panels."""
+    model_config = ConfigDict(extra="forbid")
+    panels: list[IRPanel] = Field(default_factory=list)
+
+
 class IRApp(BaseModel):
     """The app body of an IR envelope (everything an app declares)."""
     model_config = ConfigDict(extra="forbid")
@@ -47,7 +55,7 @@ class IRApp(BaseModel):
     # Slots — typed in later tasks; opaque for now so a minimal app validates.
     data: dict[str, Any] | None = None
     functions: list[IRFunction] = Field(default_factory=list)
-    ui: dict[str, Any] | None = None
+    ui: IRUi | None = None
     skeleton: dict[str, Any] | None = None
     automations: list[dict[str, Any]] = Field(default_factory=list)
     events: dict[str, Any] | None = None

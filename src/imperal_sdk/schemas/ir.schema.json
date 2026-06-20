@@ -4,13 +4,28 @@
       "additionalProperties": false,
       "description": "The app body of an IR envelope (everything an app declares).",
       "properties": {
-        "automations": {
-          "items": {
-            "additionalProperties": true,
-            "type": "object"
-          },
-          "title": "Automations",
-          "type": "array"
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "icon": {
+          "default": "",
+          "title": "Icon",
+          "type": "string"
         },
         "capabilities": {
           "items": {
@@ -32,24 +47,6 @@
           "default": null,
           "title": "Data"
         },
-        "description": {
-          "default": "",
-          "title": "Description",
-          "type": "string"
-        },
-        "events": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Events"
-        },
         "functions": {
           "items": {
             "$ref": "#/$defs/IRFunction"
@@ -57,28 +54,16 @@
           "title": "Functions",
           "type": "array"
         },
-        "icon": {
-          "default": "",
-          "title": "Icon",
-          "type": "string"
-        },
-        "id": {
-          "minLength": 1,
-          "title": "Id",
-          "type": "string"
-        },
-        "lifecycle": {
+        "ui": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/$defs/IRUi"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Lifecycle"
+          "default": null
         },
         "skeleton": {
           "anyOf": [
@@ -93,11 +78,15 @@
           "default": null,
           "title": "Skeleton"
         },
-        "title": {
-          "title": "Title",
-          "type": "string"
+        "automations": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Automations",
+          "type": "array"
         },
-        "ui": {
+        "events": {
           "anyOf": [
             {
               "additionalProperties": true,
@@ -108,11 +97,20 @@
             }
           ],
           "default": null,
-          "title": "Ui"
+          "title": "Events"
         },
-        "version": {
-          "title": "Version",
-          "type": "string"
+        "lifecycle": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifecycle"
         }
       },
       "required": [
@@ -126,6 +124,34 @@
     "IRFunction": {
       "additionalProperties": false,
       "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "params_schema": {
+          "additionalProperties": true,
+          "title": "Params Schema",
+          "type": "object"
+        },
+        "return_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Return Schema"
+        },
         "action_type": {
           "anyOf": [
             {
@@ -137,11 +163,6 @@
           ],
           "default": null,
           "title": "Action Type"
-        },
-        "description": {
-          "default": "",
-          "title": "Description",
-          "type": "string"
         },
         "effects": {
           "items": {
@@ -172,29 +193,6 @@
             }
           ],
           "title": "Impl"
-        },
-        "name": {
-          "minLength": 1,
-          "title": "Name",
-          "type": "string"
-        },
-        "params_schema": {
-          "additionalProperties": true,
-          "title": "Params Schema",
-          "type": "object"
-        },
-        "return_schema": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Return Schema"
         }
       },
       "required": [
@@ -204,13 +202,77 @@
       "title": "IRFunction",
       "type": "object"
     },
+    "IRPanel": {
+      "additionalProperties": false,
+      "description": "A single panel declared by an extension in the IR envelope.",
+      "properties": {
+        "panel_id": {
+          "title": "Panel Id",
+          "type": "string"
+        },
+        "slot": {
+          "title": "Slot",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "icon": {
+          "default": "",
+          "title": "Icon",
+          "type": "string"
+        },
+        "render": {
+          "discriminator": {
+            "mapping": {
+              "code": "#/$defs/RenderCode",
+              "static": "#/$defs/RenderStatic",
+              "template": "#/$defs/RenderTemplate"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/RenderStatic"
+            },
+            {
+              "$ref": "#/$defs/RenderTemplate"
+            },
+            {
+              "$ref": "#/$defs/RenderCode"
+            }
+          ],
+          "title": "Render"
+        }
+      },
+      "required": [
+        "panel_id",
+        "slot",
+        "render"
+      ],
+      "title": "IRPanel",
+      "type": "object"
+    },
+    "IRUi": {
+      "additionalProperties": false,
+      "description": "UI section of an IR app — a list of declared panels.",
+      "properties": {
+        "panels": {
+          "items": {
+            "$ref": "#/$defs/IRPanel"
+          },
+          "title": "Panels",
+          "type": "array"
+        }
+      },
+      "title": "IRUi",
+      "type": "object"
+    },
     "ImplCode": {
       "additionalProperties": false,
       "properties": {
-        "entry": {
-          "title": "Entry",
-          "type": "string"
-        },
         "kind": {
           "const": "code",
           "title": "Kind",
@@ -218,6 +280,10 @@
         },
         "module": {
           "title": "Module",
+          "type": "string"
+        },
+        "entry": {
+          "title": "Entry",
           "type": "string"
         }
       },
@@ -251,20 +317,79 @@
       ],
       "title": "ImplDeclarative",
       "type": "object"
+    },
+    "RenderCode": {
+      "additionalProperties": false,
+      "description": "Tier-3 render: a Python module + callable entry point (code panel).",
+      "properties": {
+        "kind": {
+          "const": "code",
+          "title": "Kind",
+          "type": "string"
+        },
+        "module": {
+          "title": "Module",
+          "type": "string"
+        },
+        "entry": {
+          "title": "Entry",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "module",
+        "entry"
+      ],
+      "title": "RenderCode",
+      "type": "object"
+    },
+    "RenderStatic": {
+      "additionalProperties": false,
+      "description": "Tier-1 render: a plain serialisable UI-node tree (no runtime needed).",
+      "properties": {
+        "kind": {
+          "const": "static",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tree": {
+          "additionalProperties": true,
+          "title": "Tree",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "RenderStatic",
+      "type": "object"
+    },
+    "RenderTemplate": {
+      "additionalProperties": false,
+      "description": "Tier-2 render: a declarative template tree evaluated at render time.",
+      "properties": {
+        "kind": {
+          "const": "template",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tree": {
+          "additionalProperties": true,
+          "title": "Tree",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "RenderTemplate",
+      "type": "object"
     }
   },
-  "$id": "https://imperal.io/schemas/ir.schema.json",
   "additionalProperties": false,
   "description": "Versioned root of the Imperal IR.",
   "properties": {
-    "app": {
-      "$ref": "#/$defs/IRApp"
-    },
-    "contract_version": {
-      "default": "1.0",
-      "title": "Contract Version",
-      "type": "string"
-    },
     "ir_version": {
       "title": "Ir Version",
       "type": "string"
@@ -273,6 +398,14 @@
       "default": "1",
       "title": "Sdl Vocab Version",
       "type": "string"
+    },
+    "contract_version": {
+      "default": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "app": {
+      "$ref": "#/$defs/IRApp"
     }
   },
   "required": [
@@ -280,5 +413,6 @@
     "app"
   ],
   "title": "Imperal IR Envelope",
-  "type": "object"
+  "type": "object",
+  "$id": "https://imperal.io/schemas/ir.schema.json"
 }
