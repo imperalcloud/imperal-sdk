@@ -37,3 +37,41 @@ def eval_conditional(spec: dict, ctx: dict) -> str | None:
         present = actual is not MISSING and actual not in ("", None)
         result = present if cond["exists"] else not present
     return spec.get("then") if result else spec.get("else")
+
+
+async def run_store(op: str, args: dict, store) -> dict:
+    """Execute a store.* step against a StoreProtocol-compatible object.
+
+    Supported ops: get / list / create / update / delete.
+    Step args: kind (collection), where, ids, id, set, data, limit.
+    list maps to store.query; bulk update/delete loop per id (no native bulk).
+    """
+    coll = args.get("kind", "")
+    if op == "create":
+        doc = await store.create(coll, args["data"])
+        doc_id = doc.get("id") if isinstance(doc, dict) else getattr(doc, "id", None)
+        return {"id": doc_id}
+    if op == "get":
+        doc = await store.get(coll, args.get("id"))
+        return {"doc": doc}
+    if op == "list":
+        page = await store.query(coll, where=args.get("where"), limit=args.get("limit", 100))
+        items = list(getattr(page, "items", []) or [])
+        ids = [
+            (it.get("id") if isinstance(it, dict) else getattr(it, "id", None))
+            for it in items
+        ]
+        return {"docs": items, "ids": ids, "count": len(items)}
+    if op == "update":
+        ids = args.get("ids") or ([args["id"]] if "id" in args else [])
+        for doc_id in ids:
+            await store.update(coll, doc_id, args.get("set", {}))
+        return {"ids": list(ids), "count": len(ids)}
+    if op == "delete":
+        ids = args.get("ids") or ([args["id"]] if "id" in args else [])
+        n = 0
+        for doc_id in ids:
+            if await store.delete(coll, doc_id):
+                n += 1
+        return {"count": n}
+    raise ValueError(f"Unknown store op {op!r}")
