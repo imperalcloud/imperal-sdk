@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
+from imperal_sdk.devtools.reference._flags import flags_for
 from imperal_sdk.devtools.reference._introspect import (
     annotation_str,
     degraded_symbol,
@@ -37,18 +38,18 @@ def collect() -> dict[str, dict[str, Any]]:
         obj = getattr(imperal_sdk, name, None)
         if obj is None:
             symbols[name] = degraded_symbol(
-                "dataclass", "not exported by imperal_sdk")
+                name, "dataclass", "not exported by imperal_sdk")
         elif dataclasses.is_dataclass(obj):
-            symbols[name] = _dataclass_symbol(obj)
+            symbols[name] = _dataclass_symbol(name, obj)
         elif hasattr(obj, "model_fields"):  # pydantic v2
-            symbols[name] = _pydantic_symbol(obj)
+            symbols[name] = _pydantic_symbol(name, obj)
         else:
             symbols[name] = degraded_symbol(
-                "dataclass", f"{type(obj).__name__}, neither dataclass nor model")
+                name, "dataclass", f"{type(obj).__name__}, neither dataclass nor model")
     return symbols
 
 
-def _dataclass_symbol(obj: Any) -> dict[str, Any]:
+def _dataclass_symbol(name: str, obj: Any) -> dict[str, Any]:
     doc = (getattr(obj, "__doc__", None) or "").strip()
     params: list[dict[str, Any]] = []
     for f in dataclasses.fields(obj):
@@ -61,10 +62,10 @@ def _dataclass_symbol(obj: Any) -> dict[str, Any]:
             "default": json_default(f.default) if has_default else None,
             "required": required,
         })
-    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc}
+    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc, **flags_for(name)}
 
 
-def _pydantic_symbol(obj: Any) -> dict[str, Any]:
+def _pydantic_symbol(name: str, obj: Any) -> dict[str, Any]:
     doc = (getattr(obj, "__doc__", None) or "").strip()
     params: list[dict[str, Any]] = []
     for fname, field in obj.model_fields.items():
@@ -76,4 +77,4 @@ def _pydantic_symbol(obj: Any) -> dict[str, Any]:
             "default": default,
             "required": required,
         })
-    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc}
+    return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc, **flags_for(name)}

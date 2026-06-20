@@ -13,6 +13,8 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
+from imperal_sdk.devtools.reference._flags import flags_for
+
 # Capitalized sdl exports that are NOT facet roles.
 _NON_ROLE_CAPS = {"CORE_ROLES", "RESERVED_NAMESPACES", "ROLE_KEY"}
 
@@ -54,10 +56,12 @@ def _role_symbol(sdl: Any, name: str, obj: Any) -> dict[str, Any]:
         params = []
 
     doc = (getattr(obj, "__doc__", None) or "").strip()
+    catalog_key = f"sdl.{name}"
     return {
         "kind": "sdl_role",
         "params": sorted(params, key=lambda p: p["name"]),
         "returns": None,
         "enums": enums,
         "description": doc,
+        **flags_for(catalog_key),
     }

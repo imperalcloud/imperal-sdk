@@ -33,22 +33,22 @@ def collect() -> dict[str, dict[str, Any]]:
 
     symbols: dict[str, dict[str, Any]] = {
         "chat.function": callable_symbol(
-            ChatExtension.function, kind="decorator", skip_self=True),
+            ChatExtension.function, name="chat.function", kind="decorator", skip_self=True),
     }
     for name in _EXT_DECORATORS:
         qual = f"ext.{name}"
         member = inspect.getattr_static(Extension, name, None)
         if member is None:
             symbols[qual] = degraded_symbol(
-                "decorator", f"not present on Extension in SDK {_version()}")
+                qual, "decorator", f"not present on Extension in SDK {_version()}")
             continue
         if not (inspect.isfunction(member) or inspect.ismethod(member)):
             # e.g. ``lifecycle`` is a read-only property, not a decorator.
             symbols[qual] = degraded_symbol(
-                "decorator", f"{type(member).__name__}, not a decorator method")
+                qual, "decorator", f"{type(member).__name__}, not a decorator method")
             continue
         symbols[qual] = callable_symbol(
-            member, kind="decorator", skip_self=True)
+            member, name=qual, kind="decorator", skip_self=True)
     return symbols
 
 

@@ -13,6 +13,8 @@ import inspect
 import json
 from typing import Any, Literal, get_args, get_origin
 
+from imperal_sdk.devtools.reference._flags import flags_for
+
 # Sentinels that mean "no value" across inspect, dataclasses, and pydantic.
 _EMPTY = inspect.Parameter.empty
 
@@ -108,6 +110,7 @@ def enums_from_literals(func: Any) -> dict[str, list[str]]:
 def callable_symbol(
     func: Any,
     *,
+    name: str,
     kind: str,
     skip_self: bool,
     enums: dict[str, Any] | None = None,
@@ -124,6 +127,7 @@ def callable_symbol(
             "returns": None,
             "enums": {"_note": [f"uninspectable: {exc}"]},
             "description": "",
+            **flags_for(name),
         }
     return {
         "kind": kind,
@@ -131,10 +135,11 @@ def callable_symbol(
         "returns": returns,
         "enums": enums or {},
         "description": doc,
+        **flags_for(name),
     }
 
 
-def degraded_symbol(kind: str, note: str) -> dict[str, Any]:
+def degraded_symbol(name: str, kind: str, note: str) -> dict[str, Any]:
     """A placeholder symbol for something present but not introspectable."""
     return {
         "kind": kind,
@@ -142,4 +147,5 @@ def degraded_symbol(kind: str, note: str) -> dict[str, Any]:
         "returns": None,
         "enums": {"_note": [note]},
         "description": "",
+        **flags_for(name),
     }

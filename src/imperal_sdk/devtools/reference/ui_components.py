@@ -36,7 +36,7 @@ def collect() -> dict[str, dict[str, Any]]:
         qual = f"ui.{name}"
         enums = enums_from_literals(obj)
         enums.update(enum_overrides.get(qual, {}))
-        sym = callable_symbol(obj, kind="ui_component", skip_self=False,
+        sym = callable_symbol(obj, name=qual, kind="ui_component", skip_self=False,
                               enums=enums)
         # All factories return a UINode regardless of the source annotation.
         sym["returns"] = "UINode"

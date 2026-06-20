@@ -32,11 +32,11 @@ def collect() -> dict[str, dict[str, Any]]:
         qual = f"sdl.{name}"
         obj = getattr(sdl, name, None)
         if obj is None:
-            symbols[qual] = degraded_symbol("sdl_func", "not exported by sdl")
+            symbols[qual] = degraded_symbol(qual, "sdl_func", "not exported by sdl")
         elif inspect.isfunction(obj) or inspect.isbuiltin(obj):
             symbols[qual] = callable_symbol(
-                obj, kind="sdl_func", skip_self=False)
+                obj, name=qual, kind="sdl_func", skip_self=False)
         else:
             symbols[qual] = degraded_symbol(
-                "sdl_func", f"{type(obj).__name__}, not a function")
+                qual, "sdl_func", f"{type(obj).__name__}, not a function")
     return symbols

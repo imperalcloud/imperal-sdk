@@ -20,6 +20,7 @@ def collect() -> dict[str, dict[str, Any]]:
         for name, member in inspect.getmembers(cls, predicate=callable):
             if name.startswith("_"):
                 continue
-            symbols[f"ctx.{ns}.{name}"] = callable_symbol(
-                member, kind="client_method", skip_self=True)
+            qual = f"ctx.{ns}.{name}"
+            symbols[qual] = callable_symbol(
+                member, name=qual, kind="client_method", skip_self=True)
     return symbols
