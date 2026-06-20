@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "sdl_vocab_version": "1",
   "roles": [
     {
       "role": "catalog.age_restriction",

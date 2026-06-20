@@ -31,7 +31,7 @@ def build_catalog() -> dict:
             seen.add(role)
             roles.append({"role": role, "field": field_name, "tier": "facet", "facet": facet_name})
     roles.sort(key=lambda r: r["role"])
-    return {"schema_version": _SCHEMA_VERSION, "roles": roles}
+    return {"schema_version": _SCHEMA_VERSION, "sdl_vocab_version": str(_SCHEMA_VERSION), "roles": roles}
 
 
 def _target_path() -> pathlib.Path:
