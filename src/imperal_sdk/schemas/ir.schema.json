@@ -1,0 +1,284 @@
+{
+  "$defs": {
+    "IRApp": {
+      "additionalProperties": false,
+      "description": "The app body of an IR envelope (everything an app declares).",
+      "properties": {
+        "automations": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Automations",
+          "type": "array"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "events": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Events"
+        },
+        "functions": {
+          "items": {
+            "$ref": "#/$defs/IRFunction"
+          },
+          "title": "Functions",
+          "type": "array"
+        },
+        "icon": {
+          "default": "",
+          "title": "Icon",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "lifecycle": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lifecycle"
+        },
+        "skeleton": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skeleton"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "ui": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ui"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "title"
+      ],
+      "title": "IRApp",
+      "type": "object"
+    },
+    "IRFunction": {
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Type"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "event": {
+          "default": "",
+          "title": "Event",
+          "type": "string"
+        },
+        "impl": {
+          "discriminator": {
+            "mapping": {
+              "code": "#/$defs/ImplCode",
+              "declarative": "#/$defs/ImplDeclarative"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ImplCode"
+            },
+            {
+              "$ref": "#/$defs/ImplDeclarative"
+            }
+          ],
+          "title": "Impl"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "params_schema": {
+          "additionalProperties": true,
+          "title": "Params Schema",
+          "type": "object"
+        },
+        "return_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Return Schema"
+        }
+      },
+      "required": [
+        "name",
+        "impl"
+      ],
+      "title": "IRFunction",
+      "type": "object"
+    },
+    "ImplCode": {
+      "additionalProperties": false,
+      "properties": {
+        "entry": {
+          "title": "Entry",
+          "type": "string"
+        },
+        "kind": {
+          "const": "code",
+          "title": "Kind",
+          "type": "string"
+        },
+        "module": {
+          "title": "Module",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "module",
+        "entry"
+      ],
+      "title": "ImplCode",
+      "type": "object"
+    },
+    "ImplDeclarative": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "declarative",
+          "title": "Kind",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "ImplDeclarative",
+      "type": "object"
+    }
+  },
+  "$id": "https://imperal.io/schemas/ir.schema.json",
+  "additionalProperties": false,
+  "description": "Versioned root of the Imperal IR.",
+  "properties": {
+    "app": {
+      "$ref": "#/$defs/IRApp"
+    },
+    "contract_version": {
+      "default": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "ir_version": {
+      "title": "Ir Version",
+      "type": "string"
+    },
+    "sdl_vocab_version": {
+      "default": "1",
+      "title": "Sdl Vocab Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ir_version",
+    "app"
+  ],
+  "title": "Imperal IR Envelope",
+  "type": "object"
+}

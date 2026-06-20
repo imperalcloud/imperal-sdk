@@ -73,6 +73,7 @@ packages = ["src/imperal_sdk"]
 "src/imperal_sdk/schemas/balance_info.schema.json" = "imperal_sdk/schemas/balance_info.schema.json"
 "src/imperal_sdk/schemas/file_info.schema.json" = "imperal_sdk/schemas/file_info.schema.json"
 "src/imperal_sdk/schemas/http_response.schema.json" = "imperal_sdk/schemas/http_response.schema.json"
+"src/imperal_sdk/schemas/ir.schema.json" = "imperal_sdk/schemas/ir.schema.json"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
