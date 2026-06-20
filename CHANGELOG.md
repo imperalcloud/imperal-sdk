@@ -2,6 +2,17 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.7.0 — 2026-06-20 — Metering rails (L0-4 core)
+
+Minor — additive metering contract + identity hardening. The one behavior tightening: an empty `imperal_id`/`tenant_id` on `UserContext` is now rejected (was always invalid).
+
+### Added
+- **`MeteredEvent`** — the sealed, dimension-only usage-metering DTO (frozen Pydantic; two version axes `v` + `meter.meter_version`; nested `identity`/`meter`/`attribution` + open `dimensions`). Carries WHAT was consumed, never the price — price resolution stays platform-closed-side. Exported lazily (`from imperal_sdk import MeteredEvent`), cataloged in `sdk-reference.json`, with a vendored, freshness-gated JSON schema (`schemas/metered_event.schema.json`). A `model_validator` forbids the price keys (`base_price`/`platform_fee`/`cost`/`model_tier`/`price`) anywhere in `dimensions` — the canonical dimension-only seal. (The published JSON schema leaves `dimensions` open; validate via the Pydantic model to inherit the seal.)
+- Cross-repo metered-XADD envelope contract test (`tests/contract/test_meter_lua_contract.py`) pinning the `event_id` → `type` → `data` field order shared by the billing-stream Lua copies.
+
+### Changed
+- **`UserContext.imperal_id` and `tenant_id` now require `min_length=1`** — an empty identity raises `ValidationError` at construction. `agency_id` stays nullable (B2B known-gap). Mirrors the `RpcRequest` precedent.
+
 ## 5.6.1 — 2026-06-20 — Engine-seal completion (L0-3)
 
 Patch — **nothing to migrate** (internal/cosmetic; no public API changed or removed).
