@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.7.2 — 2026-06-21 — Fix: store.create schema required `set`, interpreter reads `data`
+
+Patch — declarative action-schema ↔ interpreter alignment; no API change.
+
+### Fixed
+- **`store.create` step schema now requires `data`** (`schemas/actions/store_create.json`), matching what the interpreter's `run_store` reads (`args["data"]`) and the create-with-`data` / update-with-`set` convention. The schema previously required `set`, so a declarative `store.create` step could pass `validate_step` XOR run — never both. A full audit of the 11-verb action vocabulary confirms this was the only hard schema↔interpreter mismatch. Added `test_store_create_schema_agrees_with_interpreter` to pin them together.
+
 ## 5.7.1 — 2026-06-20 — Fix: declarative `store.list` returned count=0
 
 Patch — bug fix in the declarative interpreter; no API change.

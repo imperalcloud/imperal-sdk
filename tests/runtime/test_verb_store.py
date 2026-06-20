@@ -89,3 +89,15 @@ async def test_store_list_against_real_mock_store_counts():
     out = await run_store("list", {"kind": "c", "where": {"status": "ended"}}, ctx.store)
     assert out["count"] == 2
     assert len(out["ids"]) == 2 and all(out["ids"])
+
+
+def test_store_create_schema_agrees_with_interpreter():
+    """The store.create action schema must require the SAME arg the interpreter
+    reads (``data``). 5.7.x shipped with the schema requiring ``set`` while
+    run_store reads args['data'] — a declarative create could validate XOR run.
+    This pins them together."""
+    from imperal_sdk.ir.actions import validate_step
+    good = {"id": "s1", "op": "store.create", "args": {"kind": "c", "data": {"x": 1}}}
+    assert validate_step(good) == []
+    missing_data = {"id": "s1", "op": "store.create", "args": {"kind": "c"}}
+    assert validate_step(missing_data)  # non-empty: missing required 'data'

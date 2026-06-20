@@ -4,10 +4,10 @@
   "title": "store.create step args",
   "description": "Args for the 'store.create' declarative step verb — insert a new record.",
   "type": "object",
-  "required": ["kind", "set"],
+  "required": ["kind", "data"],
   "properties": {
     "kind": {"type": "string", "description": "Data store entity kind (collection name)"},
-    "set":  {"type": "object", "description": "Field values for the new record"}
+    "data": {"type": "object", "description": "Field values for the new record (the interpreter's run_store reads args['data'])"}
   },
   "additionalProperties": true
 }
