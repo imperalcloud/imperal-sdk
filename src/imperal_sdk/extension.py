@@ -457,7 +457,7 @@ class Extension:
     def webhook(self, path: str, method: str = "POST", secret_header: str = ""):
         """Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.
 
-        Also registers __webhook__{path} as a ToolDef so DirectCallWorkflow
+        Also registers __webhook__{path} as a ToolDef so the platform runtime
         can dispatch it without LLM routing. The handler receives:
             ctx       — minimal context (user_id="__webhook__")
             headers   — dict of request headers (hop-by-hop stripped)

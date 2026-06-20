@@ -2787,7 +2787,7 @@
     "ext.webhook": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.\n\n        Also registers __webhook__{path} as a ToolDef so DirectCallWorkflow\n        can dispatch it without LLM routing. The handler receives:\n            ctx       \u2014 minimal context (user_id=\"__webhook__\")\n            headers   \u2014 dict of request headers (hop-by-hop stripped)\n            body      \u2014 raw request body as string\n            query_params \u2014 dict of URL query parameters\n\n        Secret verification must be done inside the handler using secret_header.",
+      "description": "Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.\n\n        Also registers __webhook__{path} as a ToolDef so the platform runtime\n        can dispatch it without LLM routing. The handler receives:\n            ctx       \u2014 minimal context (user_id=\"__webhook__\")\n            headers   \u2014 dict of request headers (hop-by-hop stripped)\n            body      \u2014 raw request body as string\n            query_params \u2014 dict of URL query parameters\n\n        Secret verification must be done inside the handler using secret_header.",
       "enums": {},
       "kind": "decorator",
       "params": [
