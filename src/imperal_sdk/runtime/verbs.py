@@ -85,3 +85,23 @@ async def run_ai(args: dict, ai) -> dict:
     """
     res = await ai.complete(args["prompt"], model=args.get("model", ""))
     return {"text": getattr(res, "text", "")}
+
+
+async def run_call(args: dict, extensions, current_app_id: str) -> dict:
+    """Route a call.* step through ExtensionsProtocol.call — never the kernel activity.
+
+    args: function (required), app_id (optional, defaults to current_app_id), params (optional).
+    Returns whatever the extension returns.
+    """
+    app_id = args.get("app_id", current_app_id)
+    method = args["function"]
+    params = args.get("params", {})
+    return await extensions.call(app_id, method, **params)
+
+
+def make_directive(op: str, args: dict) -> dict:
+    """Build a terminal client directive dict (navigate / send / open).
+
+    Mirrors UIAction.to_dict(): {"action": op, **args}.
+    """
+    return {"action": op, **args}
