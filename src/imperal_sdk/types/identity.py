@@ -20,7 +20,7 @@ Excluded from canonical wire contract:
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class User(BaseModel):
@@ -61,9 +61,9 @@ class UserContext(BaseModel):
     """Lean User — runtime/extension-facing. Strict subset of `User`."""
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    imperal_id: str
+    imperal_id: str = Field(min_length=1)
     email: str
-    tenant_id: str
+    tenant_id: str = Field(min_length=1)
     agency_id: str | None = None
     org_id: str | None = None
     role: str
