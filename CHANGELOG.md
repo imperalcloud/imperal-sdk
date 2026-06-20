@@ -2,6 +2,26 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.6.1 — 2026-06-20 — Engine-seal completion (L0-3)
+
+Patch — **nothing to migrate** (internal/cosmetic; no public API changed or removed).
+
+### Changed
+- **Guarded-import shim** (`runtime/_platform`, internal): the SDK's optional
+  platform-runtime imports are now owned by a single substrate-neutral module.
+  Runtime fallback warnings/tracebacks (when the platform runtime is absent, e.g.
+  standalone unit tests) no longer name internal engine modules — they read
+  "platform runtime unavailable" / "platform event store unavailable". `emit()`
+  and the target-scope check route through it; behavior is unchanged.
+- Scrubbed the remaining engine-module references from public docstrings
+  (`chat/error_codes`, `chat/narration`, `runtime/llm_provider`).
+
+### Added (tests only)
+- Permanent boundary-seal guards: `tests/rpc/test_boundary_seal.py` (RpcReply/RpcError
+  can never carry an engine token — structural + behavioral) and a public-docstring
+  engine-neutrality gate. (A companion kernel-side federal SSE-event guard ships in
+  the kernel repo.)
+
 ## 5.6.0 — 2026-06-20 — IR envelope + minimal declarative executor (L0-2)
 
 Minor — **nothing to migrate** (purely additive; no existing API changed or removed).
