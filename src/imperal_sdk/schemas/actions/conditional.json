@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imperal.io/schemas/actions/conditional.json",
+  "title": "conditional step args",
+  "description": "Args for the 'conditional' declarative step verb — branch execution based on a condition expression.",
+  "type": "object",
+  "required": ["condition"],
+  "properties": {
+    "condition": {"type": "string", "description": "Boolean expression referencing step outputs or context vars"},
+    "then":      {"type": "array",  "description": "Steps to execute when condition is truthy", "items": {"type": "object"}},
+    "else":      {"type": "array",  "description": "Steps to execute when condition is falsy", "items": {"type": "object"}}
+  },
+  "additionalProperties": true
+}

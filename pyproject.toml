@@ -82,6 +82,17 @@ packages = ["src/imperal_sdk"]
 "src/imperal_sdk/schemas/ui_children/timeline.json" = "imperal_sdk/schemas/ui_children/timeline.json"
 "src/imperal_sdk/schemas/ui_children/tree.json" = "imperal_sdk/schemas/ui_children/tree.json"
 "src/imperal_sdk/schemas/ui_children/menu.json" = "imperal_sdk/schemas/ui_children/menu.json"
+"src/imperal_sdk/schemas/actions/call.json" = "imperal_sdk/schemas/actions/call.json"
+"src/imperal_sdk/schemas/actions/navigate.json" = "imperal_sdk/schemas/actions/navigate.json"
+"src/imperal_sdk/schemas/actions/send.json" = "imperal_sdk/schemas/actions/send.json"
+"src/imperal_sdk/schemas/actions/open.json" = "imperal_sdk/schemas/actions/open.json"
+"src/imperal_sdk/schemas/actions/store_get.json" = "imperal_sdk/schemas/actions/store_get.json"
+"src/imperal_sdk/schemas/actions/store_list.json" = "imperal_sdk/schemas/actions/store_list.json"
+"src/imperal_sdk/schemas/actions/store_create.json" = "imperal_sdk/schemas/actions/store_create.json"
+"src/imperal_sdk/schemas/actions/store_update.json" = "imperal_sdk/schemas/actions/store_update.json"
+"src/imperal_sdk/schemas/actions/store_delete.json" = "imperal_sdk/schemas/actions/store_delete.json"
+"src/imperal_sdk/schemas/actions/ai_complete.json" = "imperal_sdk/schemas/actions/ai_complete.json"
+"src/imperal_sdk/schemas/actions/conditional.json" = "imperal_sdk/schemas/actions/conditional.json"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
