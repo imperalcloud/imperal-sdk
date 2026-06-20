@@ -8,10 +8,10 @@ Replace ad-hoc ``str(exception)`` content that historically leaked into
 user-visible writes (email bodies, note titles, SMS). Every kernel- or
 SDK-side error that surfaces to an LLM tool_result MUST map to one of the
 10 codes below; the corresponding i18n key drives the actual user-facing
-copy via :mod:`imperal_kernel.responses.templates`.
+copy via the platform's canonical response templates.
 
 This module is *read-only data* — no logic, no fabrication surface.
-Mirror at :mod:`imperal_kernel.narration.error_codes` is kept byte-for-byte
+Mirror at the platform narration mirror is kept byte-for-byte
 compatible (enforced by ``scripts/validate_error_taxonomy.py`` in the
 kernel).
 

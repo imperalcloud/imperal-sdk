@@ -176,7 +176,7 @@ class LLMConfig:
     """Resolved LLM configuration for a single call.
 
     Sprint 1.2 (2026-04-28): aligned field shape with
-    imperal_kernel.llm.provider.LLMConfig so kernel-built configs
+    the platform LLM config so kernel-built configs
     deserialize cleanly into SDK code via ctx._llm_configs injection.
     api_key is field(repr=False) — NEVER in default __repr__.
 
@@ -696,7 +696,7 @@ class LLMProvider:
 
         Sprint 1.1 (2026-04-28): TEMPORARILY no-op'd with WARN-once. The
         previous body imported `shared_redis` (legacy module renamed to
-        `imperal_kernel.core.redis` during a kernel refactor) which silently
+        the platform state store during a kernel refactor) which silently
         ImportError'd on every LLM call since the rename. Telemetry has been
         broken for unknown duration. Sprint 1.2 architectural cleanup will
         restore tracking via kernel-side resolution + ctx-injection (or via

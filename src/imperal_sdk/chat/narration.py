@@ -33,7 +33,7 @@ can run strict mode, and enforce ``>= 0`` at the Pydantic layer).
 
 Option A wins here because the schema contains ``identifiers_used`` which is
 *intentionally optional* (not in top-level ``required``). The kernel's
-``_is_oai_strict_eligible`` (see ``imperal_kernel/llm/adapter.py``) requires
+``_is_oai_strict_eligible`` (see the platform LLM adapter) requires
 that every property be listed in ``required[]`` — so this schema is
 **already ineligible** for OpenAI strict mode regardless of whether we keep
 ``minimum``. Dropping ``minimum`` would surrender a defense-in-depth wire
