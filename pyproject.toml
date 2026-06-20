@@ -74,6 +74,14 @@ packages = ["src/imperal_sdk"]
 "src/imperal_sdk/schemas/file_info.schema.json" = "imperal_sdk/schemas/file_info.schema.json"
 "src/imperal_sdk/schemas/http_response.schema.json" = "imperal_sdk/schemas/http_response.schema.json"
 "src/imperal_sdk/schemas/ir.schema.json" = "imperal_sdk/schemas/ir.schema.json"
+"src/imperal_sdk/schemas/ui_children/tabs.json" = "imperal_sdk/schemas/ui_children/tabs.json"
+"src/imperal_sdk/schemas/ui_children/accordion.json" = "imperal_sdk/schemas/ui_children/accordion.json"
+"src/imperal_sdk/schemas/ui_children/datatable_columns.json" = "imperal_sdk/schemas/ui_children/datatable_columns.json"
+"src/imperal_sdk/schemas/ui_children/datatable_rows.json" = "imperal_sdk/schemas/ui_children/datatable_rows.json"
+"src/imperal_sdk/schemas/ui_children/select.json" = "imperal_sdk/schemas/ui_children/select.json"
+"src/imperal_sdk/schemas/ui_children/timeline.json" = "imperal_sdk/schemas/ui_children/timeline.json"
+"src/imperal_sdk/schemas/ui_children/tree.json" = "imperal_sdk/schemas/ui_children/tree.json"
+"src/imperal_sdk/schemas/ui_children/menu.json" = "imperal_sdk/schemas/ui_children/menu.json"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
