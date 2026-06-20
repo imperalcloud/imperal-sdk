@@ -43,6 +43,8 @@ _LAZY_ATTRS = {
     "LLMConfig": "imperal_sdk.runtime.llm_provider",
     "LLMUsage": "imperal_sdk.runtime.llm_provider",
     "MessageAdapter": "imperal_sdk.runtime.message_adapter",
+    # Engine SPI
+    "KernelEngine": "imperal_sdk.runtime.engine",
     # IPC
     "ExtensionsClient": "imperal_sdk.extensions.client",
     "CircularCallError": "imperal_sdk.extensions.client",
