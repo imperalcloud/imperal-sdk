@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.7.1 — 2026-06-20 — Fix: declarative `store.list` returned count=0
+
+Patch — bug fix in the declarative interpreter; no API change.
+
+### Fixed
+- **`run_store` `list` now reads `Page.data`** (`runtime/verbs.py`). It previously read a non-existent `Page.items`, so `store.list` silently returned `count=0`/empty against the real `Page`/`MockStore` — breaking every declarative app that lists (the L1 prerequisite). Unit-test fakes had masked it by exposing `.items`; the fakes are corrected to the real `Page` contract and a real-`MockStore` regression test added (`tests/runtime/test_verb_store.py`).
+
 ## 5.7.0 — 2026-06-20 — Metering rails (L0-4 core)
 
 Minor — additive metering contract + identity hardening. The one behavior tightening: an empty `imperal_id`/`tenant_id` on `UserContext` is now rejected (was always invalid).

@@ -56,7 +56,10 @@ async def run_store(op: str, args: dict, store) -> dict:
         return {"doc": doc}
     if op == "list":
         page = await store.query(coll, where=args.get("where"), limit=args.get("limit", 100))
-        items = list(getattr(page, "items", []) or [])
+        # Page (types/pagination.py) exposes .data and is iterable; legacy code read a
+        # non-existent .items, so store.list silently returned count=0. Read .data,
+        # falling back to iterating any list-like.
+        items = list(page.data) if hasattr(page, "data") else list(page or [])
         ids = [
             (it.get("id") if isinstance(it, dict) else getattr(it, "id", None))
             for it in items

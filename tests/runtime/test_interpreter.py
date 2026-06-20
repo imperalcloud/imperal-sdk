@@ -1,6 +1,7 @@
 """Integration test for run_steps — the multi-step declarative interpreter loop."""
 import pytest
 from imperal_sdk.runtime.interpreter import run_steps
+from imperal_sdk.types.pagination import Page
 
 
 class Caps:
@@ -11,8 +12,7 @@ class Caps:
 
     async def query(self, c, where=None, order_by=None, limit=100, cursor=None):
         rows = [d for d in self.docs.values() if all(d.get(k) == v for k, v in (where or {}).items())]
-        class P: items = rows
-        return P()
+        return Page(data=rows)  # the REAL Page contract (.data), not a fake .items
 
     async def update(self, c, doc_id, data): self.docs[doc_id].update(data); return self.docs[doc_id]
 

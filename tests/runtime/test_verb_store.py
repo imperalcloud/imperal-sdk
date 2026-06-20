@@ -1,5 +1,6 @@
 import pytest
 from imperal_sdk.runtime.verbs import run_store
+from imperal_sdk.types.pagination import Page
 
 
 class FakeStore:
@@ -7,9 +8,7 @@ class FakeStore:
     async def create(self, collection, data): self.docs[data["id"]] = data; return data
     async def query(self, collection, where=None, order_by=None, limit=100, cursor=None):
         rows = [d for d in self.docs.values() if all(d.get(k) == v for k, v in (where or {}).items())]
-        class P:  # minimal Page
-            items = rows
-        return P()
+        return Page(data=rows)  # the REAL Page contract (.data), not a fake .items
     async def update(self, collection, doc_id, data): self.docs[doc_id].update(data); return self.docs[doc_id]
     async def delete(self, collection, doc_id): return self.docs.pop(doc_id, None) is not None
     async def count(self, collection, where=None): return len(self.docs)
@@ -75,3 +74,18 @@ async def test_store_unknown_op_raises():
     s = FakeStore()
     with pytest.raises(ValueError, match="Unknown store op"):
         await run_store("explode", {"kind": "c"}, s)
+
+
+@pytest.mark.asyncio
+async def test_store_list_against_real_mock_store_counts():
+    """Regression: run_store('list') must read Page.data. The prior code read a
+    non-existent Page.items, so store.list returned count=0 against the REAL store
+    (MockStore/Page) while the old fake (.items) masked it. Exercise the real store."""
+    from imperal_sdk.testing import MockContext
+    ctx = MockContext(tenant_id="store_list_real")
+    await ctx.store.create("c", {"status": "ended"})
+    await ctx.store.create("c", {"status": "ended"})
+    await ctx.store.create("c", {"status": "running"})
+    out = await run_store("list", {"kind": "c", "where": {"status": "ended"}}, ctx.store)
+    assert out["count"] == 2
+    assert len(out["ids"]) == 2 and all(out["ids"])
