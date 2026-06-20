@@ -75,3 +75,13 @@ async def run_store(op: str, args: dict, store) -> dict:
                 n += 1
         return {"count": n}
     raise ValueError(f"Unknown store op {op!r}")
+
+
+async def run_ai(args: dict, ai) -> dict:
+    """Execute an ai.complete step against an AIProtocol-compatible object.
+
+    args: prompt (required), model (optional, default "").
+    Returns {"text": <completion text>}.
+    """
+    res = await ai.complete(args["prompt"], model=args.get("model", ""))
+    return {"text": getattr(res, "text", "")}
