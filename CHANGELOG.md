@@ -2,6 +2,37 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.6.0 — 2026-06-20 — IR envelope + minimal declarative executor (L0-2)
+
+Minor — **nothing to migrate** (purely additive; no existing API changed or removed).
+
+### Added
+- **IR envelope** (`imperal_sdk.ir`) — a versioned, schema'd definition of what an
+  app *is*: `IREnvelope`/`IRApp` (+ committed `schemas/ir.schema.json`), the explicit
+  `impl` discriminator (`code` | `declarative`), `validate_ir_dict()`, `generate_ir(ext)`
+  (maps an Extension's manifest onto the IR with zero rewrite), and a versioned
+  `migrate_ir()` registry. `ir_version`/`contract_version`/`sdl_vocab_version` are
+  stamped from canonical sources.
+- **Engine SPI + minimal declarative executor** (`imperal_sdk.runtime`) — the abstract
+  `KernelEngine`, `LocalDevEngine` (in-process, no engine), and `HostedClient`
+  (injected transport), all provably interchangeable via the engine-parity test. A
+  small, **non-Turing** step interpreter executes the declarative vocabulary
+  (`call`/`navigate`/`send`/`open` · `store.{get,list,create,update,delete}` ·
+  `ai.complete` · static `conditional`) over the `{{event/steps/prev}}` binding-DSL,
+  with a step-budget guard. Real logic stays `impl=code`.
+- **Bounded SDL projection** — by-name facet resolution (`resolve_facets`), inline
+  `custom_roles` (reserved-namespace-validated), and a non-Turing `canon` projection
+  (`id_from` fallback chains · `kind_const` · `title_template` with a closed
+  `count`/`default`/`format` filter whitelist).
+- **3-tier UI + first-class skeleton** in the IR — `static` tree | data-bound
+  `template` (server-resolved bindings + `$repeat`/`$if`) | `impl=code` render;
+  typed binding-point schemas for the renderer-interpreted `list[dict]` children
+  (Tabs/Accordion/DataTable/Select/Timeline/Tree/Menu); a first-class `skeleton` slot.
+- **Enriched symbol catalog** — `sdk-reference.json` now carries per-symbol
+  `description`, a structured `type` graph per param, and `declarative_capable` /
+  `action_vocab_safe` flags; per-verb action JSON Schemas under `schemas/actions/`.
+  A new gate asserts the catalog generator emits no engine-implementation names.
+
 ## 5.5.1 — 2026-06-19 — Sync chat_result schema artifact (completes Seal-B)
 
 Patch — **nothing to migrate** (no API or behavior change).
