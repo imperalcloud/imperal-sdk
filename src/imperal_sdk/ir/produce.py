@@ -50,16 +50,38 @@ def generate_ir(ext: Any) -> dict[str, Any]:
             },
         })
 
+    panels_ir: list[dict] = []
+    for p in m.get("panels", []):
+        tree = p.get("tree") or {}
+        if tree:
+            render: dict = {"kind": "static", "tree": tree}
+        else:
+            render = {
+                "kind": "code",
+                "module": "panels",
+                "entry": f"__panel__{p['panel_id']}",
+            }
+        panels_ir.append({
+            "panel_id": p["panel_id"],
+            "slot": p.get("slot", "center"),
+            "title": p.get("title", ""),
+            "render": render,
+        })
+
+    app: dict = {
+        "id": m.get("app_id", ""),
+        "version": m.get("version", ""),
+        "title": m.get("name", "") or m.get("app_id", ""),
+        "description": m.get("description", ""),
+        "capabilities": list(m.get("capabilities") or []),
+        "functions": functions,
+    }
+    if panels_ir:
+        app["ui"] = {"panels": panels_ir}
+
     return {
         "ir_version": _IR_VERSION,
         "sdl_vocab_version": "1",
         "contract_version": "1.0",
-        "app": {
-            "id": m.get("app_id", ""),
-            "version": m.get("version", ""),
-            "title": m.get("name", "") or m.get("app_id", ""),
-            "description": m.get("description", ""),
-            "capabilities": list(m.get("capabilities") or []),
-            "functions": functions,
-        },
+        "app": app,
     }
