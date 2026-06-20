@@ -46,6 +46,7 @@ _LAZY_ATTRS = {
     # Engine SPI
     "KernelEngine": "imperal_sdk.runtime.engine",
     "LocalDevEngine": "imperal_sdk.runtime.local_engine",
+    "HostedClient": "imperal_sdk.runtime.hosted_client",
     # IPC
     "ExtensionsClient": "imperal_sdk.extensions.client",
     "CircularCallError": "imperal_sdk.extensions.client",
