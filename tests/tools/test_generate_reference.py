@@ -41,7 +41,7 @@ def test_every_symbol_has_the_pinned_shape() -> None:
         assert sym["kind"] in ALL_KINDS, (name, sym["kind"])
         assert isinstance(sym["params"], list)
         for p in sym["params"]:
-            assert set(p.keys()) == {"name", "annotation", "default", "required"}
+            assert set(p.keys()) == {"name", "annotation", "default", "required", "type"}
         assert isinstance(sym["enums"], dict)
 
 

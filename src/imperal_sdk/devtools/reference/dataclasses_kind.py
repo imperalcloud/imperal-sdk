@@ -17,6 +17,7 @@ from imperal_sdk.devtools.reference._introspect import (
     annotation_str,
     degraded_symbol,
     json_default,
+    type_graph,
 )
 
 # Result / def types declared in imperal_sdk.__all__ (scope expansion).
@@ -56,11 +57,13 @@ def _dataclass_symbol(name: str, obj: Any) -> dict[str, Any]:
         has_factory = f.default_factory is not dataclasses.MISSING
         has_default = f.default is not dataclasses.MISSING
         required = not (has_factory or has_default)
+        raw_type = f.type if isinstance(f.type, str) else f.type
         params.append({
             "name": f.name,
             "annotation": f.type if isinstance(f.type, str) else annotation_str(f.type),
             "default": json_default(f.default) if has_default else None,
             "required": required,
+            "type": type_graph(raw_type),
         })
     return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc, **flags_for(name)}
 
@@ -76,5 +79,6 @@ def _pydantic_symbol(name: str, obj: Any) -> dict[str, Any]:
             "annotation": annotation_str(field.annotation),
             "default": default,
             "required": required,
+            "type": type_graph(field.annotation),
         })
     return {"kind": "dataclass", "params": params, "returns": None, "enums": {}, "description": doc, **flags_for(name)}

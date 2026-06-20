@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import typing
 from typing import Any, Literal, get_args, get_origin
 
 from imperal_sdk.devtools.reference._flags import flags_for
@@ -66,6 +67,48 @@ def literal_enum(ann: Any) -> list[str] | None:
     return None
 
 
+def type_graph(annotation: Any) -> dict:
+    """Render an annotation as a structured, machine-readable type graph.
+
+    Produces a minimal graph that covers the types actually used by the SDK:
+    union / none / list / dict / named-ref / any.  Free-dict children
+    (``list[dict]``) are *not* expanded here — that is handled in Phase E.
+
+    This function **never raises**: any annotation it cannot classify degrades
+    to ``{"kind": "any"}`` so a bad third-party annotation never breaks the
+    whole reference build.
+    """
+    try:
+        # Missing annotation (inspect sentinel)
+        if annotation is _EMPTY or annotation is inspect.Parameter.empty:
+            return {"kind": "any"}
+        # NoneType
+        if annotation is type(None):
+            return {"kind": "none"}
+        # String annotations (PEP 563 forward references) — treat as named ref
+        if isinstance(annotation, str):
+            return {"ref": annotation}
+        origin = get_origin(annotation)
+        # Union / Optional
+        if origin is typing.Union:
+            return {"kind": "union", "of": [type_graph(a) for a in get_args(annotation)]}
+        # list / set / tuple generics
+        if origin in (list, set, tuple):
+            args = get_args(annotation)
+            return {"kind": "list", "of": type_graph(args[0]) if args else {"kind": "any"}}
+        # dict generics
+        if origin is dict:
+            return {"kind": "dict"}
+        # Named class or built-in (e.g. str, int, MyClass)
+        name = getattr(annotation, "__name__", None)
+        if name:
+            return {"ref": name}
+        return {"kind": "any"}
+    except Exception:
+        # Defensive: never let an exotic annotation propagate
+        return {"kind": "any"}
+
+
 def params_of(func: Any, *, skip_self: bool) -> list[dict[str, Any]]:
     """Introspect a callable's parameters into the pinned param shape.
 
@@ -83,6 +126,7 @@ def params_of(func: Any, *, skip_self: bool) -> list[dict[str, Any]]:
             "annotation": annotation_str(p.annotation),
             "default": json_default(p.default),
             "required": p.default is _EMPTY,
+            "type": type_graph(p.annotation),
         })
     return out
 

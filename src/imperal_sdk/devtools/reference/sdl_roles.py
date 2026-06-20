@@ -14,6 +14,7 @@ import inspect
 from typing import Any
 
 from imperal_sdk.devtools.reference._flags import flags_for
+from imperal_sdk.devtools.reference._introspect import type_graph
 
 # Capitalized sdl exports that are NOT facet roles.
 _NON_ROLE_CAPS = {"CORE_ROLES", "RESERVED_NAMESPACES", "ROLE_KEY"}
@@ -51,6 +52,7 @@ def _role_symbol(sdl: Any, name: str, obj: Any) -> dict[str, Any]:
                 "annotation": role,
                 "default": None,
                 "required": False,
+                "type": type_graph(role),
             })
     except Exception:
         params = []
