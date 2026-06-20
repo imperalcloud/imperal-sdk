@@ -26,8 +26,8 @@ _TYPES = (
     "HealthCheckDef", "EventHandlerDef", "TrayDef", "ExposedMethod",
     "SignalDef", "Page", "Document", "HTTPResponse", "ChatResult",
     "FunctionCall", "CompletionResult", "LimitsResult", "SubscriptionInfo",
-    "BalanceInfo", "FileInfo", "Event", "WebhookRequest", "WebhookResponse",
-    "HealthStatus",
+    "BalanceInfo", "FileInfo", "MeteredEvent", "Event", "WebhookRequest",
+    "WebhookResponse", "HealthStatus",
 )
 
 

@@ -763,6 +763,79 @@
       ],
       "returns": null
     },
+    "MeteredEvent": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "A single metered unit. DIMENSIONS only \u2014 never resolved price.",
+      "enums": {},
+      "kind": "dataclass",
+      "params": [
+        {
+          "annotation": "Literal",
+          "default": 1,
+          "name": "v",
+          "required": false,
+          "type": {
+            "ref": "Literal"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "event_id",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": null,
+          "name": "ts",
+          "required": true,
+          "type": {
+            "ref": "int"
+          }
+        },
+        {
+          "annotation": "MeteredIdentity",
+          "default": null,
+          "name": "identity",
+          "required": true,
+          "type": {
+            "ref": "MeteredIdentity"
+          }
+        },
+        {
+          "annotation": "MeteredMeter",
+          "default": null,
+          "name": "meter",
+          "required": true,
+          "type": {
+            "ref": "MeteredMeter"
+          }
+        },
+        {
+          "annotation": "MeteredAttribution",
+          "default": null,
+          "name": "attribution",
+          "required": true,
+          "type": {
+            "ref": "MeteredAttribution"
+          }
+        },
+        {
+          "annotation": "dict",
+          "default": null,
+          "name": "dimensions",
+          "required": false,
+          "type": {
+            "kind": "dict"
+          }
+        }
+      ],
+      "returns": null
+    },
     "Page": {
       "action_vocab_safe": false,
       "declarative_capable": false,

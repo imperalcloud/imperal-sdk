@@ -39,6 +39,7 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field
 
 from imperal_sdk.types.contracts import _shape_schema, _validate_against_model
+from imperal_sdk.types.metered_event import MeteredEvent
 
 
 # === Models ===========================================================
@@ -230,6 +231,20 @@ def get_http_response_schema() -> Dict[str, Any]:
     return _shape_schema(m.model_json_schema(), id_slug=s, title=t, description=d)
 
 
+def get_metered_event_schema() -> Dict[str, Any]:
+    """JSON Schema for `MeteredEvent` — the open<->closed metering interface."""
+    return _shape_schema(
+        MeteredEvent.model_json_schema(),
+        id_slug="metered_event",
+        title="Imperal MeteredEvent",
+        description=(
+            "A single metered unit crossing the open<->closed boundary. "
+            "Carries dimensions (quantities) only — price resolution is the "
+            "platform's (closed) concern."
+        ),
+    )
+
+
 DOCUMENT_SCHEMA: Dict[str, Any] = get_document_schema()
 COMPLETION_RESULT_SCHEMA: Dict[str, Any] = get_completion_result_schema()
 LIMITS_RESULT_SCHEMA: Dict[str, Any] = get_limits_result_schema()
@@ -237,6 +252,7 @@ SUBSCRIPTION_INFO_SCHEMA: Dict[str, Any] = get_subscription_info_schema()
 BALANCE_INFO_SCHEMA: Dict[str, Any] = get_balance_info_schema()
 FILE_INFO_SCHEMA: Dict[str, Any] = get_file_info_schema()
 HTTP_RESPONSE_SCHEMA: Dict[str, Any] = get_http_response_schema()
+METERED_EVENT_SCHEMA: Dict[str, Any] = get_metered_event_schema()
 
 
 __all__ = [
@@ -253,9 +269,9 @@ __all__ = [
     "get_document_schema", "get_completion_result_schema",
     "get_limits_result_schema", "get_subscription_info_schema",
     "get_balance_info_schema", "get_file_info_schema",
-    "get_http_response_schema",
+    "get_http_response_schema", "get_metered_event_schema",
     # Schema constants
     "DOCUMENT_SCHEMA", "COMPLETION_RESULT_SCHEMA", "LIMITS_RESULT_SCHEMA",
     "SUBSCRIPTION_INFO_SCHEMA", "BALANCE_INFO_SCHEMA", "FILE_INFO_SCHEMA",
-    "HTTP_RESPONSE_SCHEMA",
+    "HTTP_RESPONSE_SCHEMA", "METERED_EVENT_SCHEMA",
 ]

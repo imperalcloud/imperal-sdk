@@ -19,12 +19,13 @@ from imperal_sdk.types import (
 from imperal_sdk.types.client_contracts import (
     BALANCE_INFO_SCHEMA, COMPLETION_RESULT_SCHEMA, DOCUMENT_SCHEMA,
     FILE_INFO_SCHEMA, HTTP_RESPONSE_SCHEMA, LIMITS_RESULT_SCHEMA,
-    SUBSCRIPTION_INFO_SCHEMA,
+    METERED_EVENT_SCHEMA, SUBSCRIPTION_INFO_SCHEMA,
     BalanceInfoModel, CompletionResultModel, DocumentModel, FileInfoModel,
     HTTPResponseModel, LimitsResultModel, SubscriptionInfoModel,
     get_balance_info_schema, get_completion_result_schema,
     get_document_schema, get_file_info_schema, get_http_response_schema,
-    get_limits_result_schema, get_subscription_info_schema,
+    get_limits_result_schema, get_metered_event_schema,
+    get_subscription_info_schema,
     validate_balance_info_dict, validate_completion_result_dict,
     validate_document_dict, validate_file_info_dict,
     validate_http_response_dict, validate_limits_result_dict,
@@ -218,6 +219,7 @@ def test_HRS_roundtrip_dict_body():
     ("balance_info", get_balance_info_schema, BALANCE_INFO_SCHEMA),
     ("file_info", get_file_info_schema, FILE_INFO_SCHEMA),
     ("http_response", get_http_response_schema, HTTP_RESPONSE_SCHEMA),
+    ("metered_event", get_metered_event_schema, METERED_EVENT_SCHEMA),
 ])
 def test_client_schema_file_in_sync(name, fn, const):
     """Constant == fresh export == committed static file."""

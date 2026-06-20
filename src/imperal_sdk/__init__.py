@@ -70,6 +70,7 @@ _LAZY_ATTRS = {
     "BalanceInfo": "imperal_sdk.types",
     "FileInfo": "imperal_sdk.types",
     "HTTPResponse": "imperal_sdk.types",
+    "MeteredEvent": "imperal_sdk.types.metered_event",
     "Event": "imperal_sdk.types",
     "WebhookRequest": "imperal_sdk.types",
     "WebhookResponse": "imperal_sdk.types",
@@ -124,6 +125,7 @@ if TYPE_CHECKING:  # pragma: no cover — IDE / type-checker surface only
         BalanceInfo, FileInfo, HTTPResponse,
         Event, WebhookRequest, WebhookResponse, HealthStatus,
     )
+    from imperal_sdk.types.metered_event import MeteredEvent
     from imperal_sdk.protocols import ExtensionProtocol
     from imperal_sdk.validator import validate_extension, ValidationReport, ValidationIssue
     from imperal_sdk.validator_v1_6_0 import (
@@ -181,6 +183,7 @@ __all__ = [
     "Page", "ChatResult", "FunctionCall",
     "Document", "CompletionResult", "LimitsResult", "SubscriptionInfo",
     "BalanceInfo", "FileInfo", "HTTPResponse",
+    "MeteredEvent",
     "Event", "WebhookRequest", "WebhookResponse", "HealthStatus",
     # Protocol + Validator
     "ExtensionProtocol", "validate_extension", "ValidationReport", "ValidationIssue",
