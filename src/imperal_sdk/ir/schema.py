@@ -1,8 +1,36 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class ImplCode(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["code"]
+    module: str
+    entry: str
+
+
+class ImplDeclarative(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["declarative"]
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+
+
+Impl = Annotated[Union[ImplCode, ImplDeclarative], Field(discriminator="kind")]
+
+
+class IRFunction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(..., min_length=1)
+    description: str = ""
+    params_schema: dict[str, Any] = Field(default_factory=dict)
+    return_schema: dict[str, Any] | None = None
+    action_type: str | None = None
+    effects: list[str] = Field(default_factory=list)
+    event: str = ""
+    impl: Impl
 
 
 class IRApp(BaseModel):
@@ -18,7 +46,7 @@ class IRApp(BaseModel):
 
     # Slots — typed in later tasks; opaque for now so a minimal app validates.
     data: dict[str, Any] | None = None
-    functions: list[dict[str, Any]] = Field(default_factory=list)
+    functions: list[IRFunction] = Field(default_factory=list)
     ui: dict[str, Any] | None = None
     skeleton: dict[str, Any] | None = None
     automations: list[dict[str, Any]] = Field(default_factory=list)
