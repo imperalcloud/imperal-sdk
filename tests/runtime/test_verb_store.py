@@ -101,3 +101,16 @@ def test_store_create_schema_agrees_with_interpreter():
     assert validate_step(good) == []
     missing_data = {"id": "s1", "op": "store.create", "args": {"kind": "c"}}
     assert validate_step(missing_data)  # non-empty: missing required 'data'
+
+
+def test_validate_step_accepts_whole_binding_in_typed_field():
+    """A whole-match {{binding}} resolves to a runtime value of unknown type, so
+    validate_step must accept it in any typed field (e.g. ids: array). An
+    interpolated string still type-checks as str."""
+    from imperal_sdk.ir.actions import validate_step
+    bound = {"id": "s3", "op": "store.update",
+             "args": {"kind": "c", "ids": "{{steps.s1.ids}}", "set": {"archived": True}}}
+    assert validate_step(bound) == []
+    interpolated = {"id": "s3", "op": "store.update",
+                    "args": {"kind": "c", "ids": "x{{steps.s1.ids}}", "set": {}}}
+    assert validate_step(interpolated)  # ids interpolated -> str -> expected array -> error

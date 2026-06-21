@@ -1,0 +1,24 @@
+{
+  "ir_version": "1.0",
+  "app": {
+    "id": "link-saver",
+    "version": "1.0.0",
+    "title": "Link Saver",
+    "description": "Save, list, and delete links.",
+    "capabilities": ["store:write"],
+    "functions": [
+      {"name": "save_link", "description": "Save a link", "action_type": "write",
+       "params_schema": {"type": "object", "properties": {"url": {"type": "string"}, "title": {"type": "string"}}, "required": ["url"]},
+       "impl": {"kind": "declarative", "steps": [
+         {"id": "s1", "op": "store.create", "args": {"kind": "link", "data": {"url": "{{event.url}}", "title": "{{event.title}}"}}}]}},
+      {"name": "list_links", "description": "List saved links", "action_type": "read",
+       "params_schema": {"type": "object", "properties": {}},
+       "impl": {"kind": "declarative", "steps": [
+         {"id": "s1", "op": "store.list", "args": {"kind": "link"}}]}},
+      {"name": "delete_link", "description": "Delete a link by id", "action_type": "destructive",
+       "params_schema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]},
+       "impl": {"kind": "declarative", "steps": [
+         {"id": "s1", "op": "store.delete", "args": {"kind": "link", "id": "{{event.id}}"}}]}}
+    ]
+  }
+}

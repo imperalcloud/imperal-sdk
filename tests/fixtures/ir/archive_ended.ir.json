@@ -1,0 +1,20 @@
+{
+  "ir_version": "1.0",
+  "app": {
+    "id": "campaign-archiver",
+    "version": "1.0.0",
+    "title": "Campaign Archiver",
+    "description": "Archive ended ad campaigns and report how many.",
+    "capabilities": ["store:write"],
+    "functions": [
+      {"name": "archive_ended", "description": "Archive all ended campaigns", "action_type": "write",
+       "params_schema": {"type": "object", "properties": {}},
+       "impl": {"kind": "declarative", "steps": [
+         {"id": "s1", "op": "store.list", "args": {"kind": "campaign", "where": {"status": "ended"}}},
+         {"id": "s2", "op": "conditional", "if": {"field": "{{steps.s1.count}}", "gt": 0}, "then": "s3"},
+         {"id": "s3", "op": "store.update", "args": {"kind": "campaign", "ids": "{{steps.s1.ids}}", "set": {"archived": true}}},
+         {"id": "s4", "op": "send", "args": {"message": "Archived {{steps.s3.count}} ended campaign(s)."}}
+       ]}}
+    ]
+  }
+}

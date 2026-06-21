@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.7.3 — 2026-06-21 — Fix: validate_step is now binding-DSL-aware
+
+Patch — declarative validation; no API change.
+
+### Fixed
+- **`validate_step` accepts a whole-match binding-DSL value (`{{ path }}`) in any typed field.** A binding resolves at runtime to the raw referenced object (any type), so its static type is unknowable. E.g. `store.update`'s `ids: "{{steps.s1.ids}}"` (resolves to a list) previously failed with `ids: expected array, got str`, blocking every declarative flow that binds a prior step's list into an array field. Whole-match `{{...}}` now skips the static type-check; interpolated strings (`"...{{x}}..."`) still type-check as `str` (they always resolve to a string). The interpreter already handled bindings at runtime — this aligns the validator (`ir/actions.py`).
+
 ## 5.7.2 — 2026-06-21 — Fix: store.create schema required `set`, interpreter reads `data`
 
 Patch — declarative action-schema ↔ interpreter alignment; no API change.
