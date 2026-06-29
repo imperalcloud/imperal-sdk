@@ -2,6 +2,17 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.8.0 — 2026-06-29 — Feature: app-level (shared) secrets (`scope="app"`)
+
+Minor — additive `@ext.secret` kwargs; fully back-compatible (absent `scope` ⇒ `"user"`, the existing behaviour).
+
+### Added
+- **`@ext.secret(scope="user" | "app")`** — a secret can now be **developer-owned and shared by every user** (`scope="app"`) instead of per-user (`scope="user"`, the default). An app-scope secret is stored ONCE for the extension (keyed by `ext_id`, not by user), set by the app owner in the Developer Portal, and read transparently by your handlers for **every** user via the same `await ctx.secrets.get(name)` — no code change. This is for credentials *you* own: OAuth client_id/client_secret, a shared API key you pay for. Per-user credentials (the user's own key, their OAuth refresh token after they authorize) stay `scope="user"`. See the [Secrets concept — two scopes](/en/concepts/secrets/) guide and the [`@ext.secret` reference](/en/sdk/decorator-secret-reference/).
+- **`@ext.secret(env_fallback="IMPERAL_APPSECRET_<EXT>_<NAME>")`** — optional, `scope="app"` only: a temporary migration bridge that lets an app-scope read fall back to an env var until the value is saved in the Dev Portal. **Security:** the name MUST be in the `IMPERAL_APPSECRET_` namespace — `SecretSpec` rejects anything else at build time so an extension can never point a fallback at an arbitrary platform secret.
+
+### Federal contract (gateway-enforced)
+`scope="app"` is keyed under a shared sentinel; app-scope **writes/deletes require the app owner** (Developer Portal) or an admin — extension code and end-users get `403`; app-scope **plaintext reads are kernel-only** — an end-user can neither read nor list an app-scope secret, and the value never reaches the LLM. New invariants `I-SECRET-SCOPE-APP-SHARED`, `I-SECRET-APP-WRITE-OWNER-ONLY`, `I-SECRET-APP-READ-NOT-USER`, `I-SECRET-APP-NO-LLM-EGRESS`.
+
 ## 5.7.3 — 2026-06-21 — Fix: validate_step is now binding-DSL-aware
 
 Patch — declarative validation; no API change.
