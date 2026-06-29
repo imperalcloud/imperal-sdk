@@ -5,6 +5,7 @@ from typing import Literal, Optional
 
 SECRET_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 ALLOWED_WRITE_MODES = frozenset({"user", "extension", "both"})
+ALLOWED_SCOPES = frozenset({"user", "app"})
 
 
 @dataclass(frozen=True)
@@ -12,7 +13,9 @@ class SecretSpec:
     """One secret an extension declares it needs.
 
     Federal contract:
-    - ``name`` is snake_case; auth-gw stores it scoped under (user_id, ext_id, name)
+    - ``name`` is snake_case; auth-gw stores it under (user_id, ext_id, name)
+      for scope='user', or under the shared ("__app__", ext_id, name) for
+      scope='app' (developer-owned, read by all users transparently)
     - ``write_mode`` determines who can write the value: 'user' (Panel UI only),
       'extension' (ctx.secrets.set only), or 'both'
     - ``required=True`` triggers a dispatch-time gate — kernel blocks handler
@@ -26,6 +29,8 @@ class SecretSpec:
     write_mode: Literal["user", "extension", "both"] = "user"
     max_bytes: int = 4096
     rotation_hint_days: Optional[int] = None
+    scope: Literal["user", "app"] = "user"
+    env_fallback: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not SECRET_NAME_RE.match(self.name):
@@ -52,6 +57,20 @@ class SecretSpec:
                 "SecretSpec.description must be non-empty — Panel UI shows it "
                 "to the user when they're entering the value"
             )
+        if self.scope not in ALLOWED_SCOPES:
+            raise ValueError(
+                f"SecretSpec.scope {self.scope!r} must be one of "
+                f"{sorted(ALLOWED_SCOPES)}"
+            )
+        if self.scope == "app" and self.write_mode != "user":
+            # write_mode governs USER-scope writes only; for app-scope the
+            # gateway enforces owner-only writes regardless. Warn, don't fail.
+            import warnings
+            warnings.warn(
+                f"SecretSpec {self.name!r}: write_mode is ignored for "
+                f"scope='app' (app-scope writes are owner-only).",
+                stacklevel=2,
+            )
 
     def to_manifest_dict(self) -> dict:
         d = {
@@ -60,7 +79,10 @@ class SecretSpec:
             "required": self.required,
             "write_mode": self.write_mode,
             "max_bytes": self.max_bytes,
+            "scope": self.scope,
         }
         if self.rotation_hint_days is not None:
             d["rotation_hint_days"] = self.rotation_hint_days
+        if self.env_fallback:
+            d["env_fallback"] = self.env_fallback
         return d
