@@ -13,11 +13,21 @@ def test_app_scope_in_manifest_with_env_fallback():
         name="google_client_secret",
         description="Google OAuth client secret (shared).",
         scope="app",
-        env_fallback="GMAIL_CLIENT_SECRET",
+        env_fallback="IMPERAL_APPSECRET_MAIL_GOOGLE_CLIENT_SECRET",
     )
     d = s.to_manifest_dict()
     assert d["scope"] == "app"
-    assert d["env_fallback"] == "GMAIL_CLIENT_SECRET"
+    assert d["env_fallback"] == "IMPERAL_APPSECRET_MAIL_GOOGLE_CLIENT_SECRET"
+
+
+def test_env_fallback_must_be_namespaced():
+    with pytest.raises(ValueError):
+        SecretSpec(name="x_key", description="d", scope="app", env_fallback="STRIPE_SECRET_KEY")
+
+
+def test_env_fallback_requires_app_scope():
+    with pytest.raises(ValueError):
+        SecretSpec(name="x_key", description="d", env_fallback="IMPERAL_APPSECRET_X_KEY")
 
 
 def test_invalid_scope_rejected():

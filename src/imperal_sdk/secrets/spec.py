@@ -71,6 +71,18 @@ class SecretSpec:
                 f"scope='app' (app-scope writes are owner-only).",
                 stacklevel=2,
             )
+        if self.env_fallback is not None:
+            if self.scope != "app":
+                raise ValueError(
+                    "SecretSpec.env_fallback is only valid for scope='app'"
+                )
+            if not self.env_fallback.startswith("IMPERAL_APPSECRET_"):
+                raise ValueError(
+                    "SecretSpec.env_fallback must name an env var in the "
+                    "IMPERAL_APPSECRET_<EXT>_<NAME> namespace (got "
+                    f"{self.env_fallback!r}); arbitrary env vars are forbidden "
+                    "to prevent secret exfiltration."
+                )
 
     def to_manifest_dict(self) -> dict:
         d = {
