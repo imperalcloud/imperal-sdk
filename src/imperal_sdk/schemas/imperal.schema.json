@@ -191,6 +191,47 @@
       "title": "LifecycleDecl",
       "type": "object"
     },
+    "OAuthDecl": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['oauth']` \u2014 unified OAuth-connect declaration.",
+      "properties": {
+        "provider": {
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "collection": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collection"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "has_hook": {
+          "default": false,
+          "title": "Has Hook",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "title": "OAuthDecl",
+      "type": "object"
+    },
     "Panel": {
       "additionalProperties": false,
       "description": "One entry in ``manifest['panels']`` (\u04242, additive).\n\n``tree`` is the serialized UINode tree the panel renders. At build time\nit is present only for panels declaring a static tree; runtime-rendered\npanels emit ``{}`` (``maybe_publish_panels`` reads the live runtime node,\nnot this metadata). When a tree IS present it is validated, so an\n``Input`` with an illegal ``type`` is rejected at manifest validation.",
@@ -855,6 +896,21 @@
       ],
       "default": null,
       "title": "Secrets"
+    },
+    "oauth": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/OAuthDecl"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Oauth"
     },
     "panels": {
       "anyOf": [

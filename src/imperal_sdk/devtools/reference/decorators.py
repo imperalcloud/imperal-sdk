@@ -24,6 +24,7 @@ from imperal_sdk.devtools.reference._introspect import (
 _EXT_DECORATORS = (
     "secret", "tool", "skeleton", "cache_model", "on_upgrade",
     "webhook", "emits", "tray", "panel", "widget", "lifecycle",
+    "oauth",
 )
 
 

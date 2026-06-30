@@ -423,6 +423,54 @@ class Context:
             )
         return f"https://{host}/v1/ext/{app_id}/webhook/{clean_path}"
 
+    async def oauth_authorize_url(self, provider: str, *, login_hint: str | None = None) -> str:
+        """Build the provider authorize URL for the unified OAuth-connect flow.
+
+        The user's browser opens this URL; the platform's generic route
+        ``/v1/ext/{app_id}/oauth/{provider}/callback`` handles the redirect back,
+        exchanges the code, and saves the account. Reads the public ``client_id``
+        from this app's app-scope secret ``{provider}_client_id`` and the scopes
+        from the ``ext.oauth(provider, ...)`` declaration. The redirect URI (the
+        callback this points back to) must be registered in the provider console.
+        """
+        import os as _os_oa
+        from urllib.parse import urlencode as _urlencode
+        from imperal_sdk.oauth_state import build_oauth_state as _build_oauth_state
+
+        _AUTHORIZE = {
+            "google": ("https://accounts.google.com/o/oauth2/v2/auth",
+                       {"access_type": "offline", "prompt": "consent"}),
+            "microsoft": ("https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+                          {"response_mode": "query"}),
+            "yahoo": ("https://api.login.yahoo.com/oauth2/request_auth", {}),
+        }
+        if provider not in _AUTHORIZE:
+            raise ValueError(f"unknown oauth provider {provider!r}")
+        authorize_url, extra = _AUTHORIZE[provider]
+
+        app_id = self._extension_id or getattr(self._extension, "app_id", "")
+        if not app_id:
+            raise RuntimeError("ctx.oauth_authorize_url() requires an extension_id")
+        decl = (getattr(self._extension, "_oauth_providers", {}) or {}).get(provider)
+        scopes = (decl.scopes if decl else None) or []
+        client_id = await self.secrets.get(f"{provider}_client_id")
+
+        host = _os_oa.environ.get("IMPERAL_PUBLIC_HOST", "panel.imperal.io")
+        redirect_uri = f"https://{host}/v1/ext/{app_id}/oauth/{provider}/callback"
+        state = _build_oauth_state(app_id, self.user.imperal_id, self.user.tenant_id, provider)
+
+        params = {
+            "client_id": client_id or "",
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "scope": " ".join(scopes),
+            "state": state,
+            **extra,
+        }
+        if login_hint:
+            params["login_hint"] = login_hint
+        return f"{authorize_url}?{_urlencode(params)}"
+
     def as_user(self, user_id: str) -> "Context":
         """Return scoped Context for target user_id.
 

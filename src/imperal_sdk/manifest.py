@@ -152,6 +152,9 @@ def generate_manifest(ext: Extension) -> dict:
     if ext.webhooks:
         manifest["webhooks"] = [wh.to_manifest() for wh in ext.webhooks.values()]
 
+    if getattr(ext, "_oauth_providers", None):
+        manifest["oauth"] = [o.to_manifest() for o in ext._oauth_providers.values()]
+
     if ext.event_handlers or ext.declared_emits:
         manifest["events"] = {
             "subscribes": [eh.to_manifest() for eh in ext.event_handlers],

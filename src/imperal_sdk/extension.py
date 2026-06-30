@@ -50,6 +50,22 @@ class WebhookDef:
         }
 
 @dataclass
+class OAuthDef:
+    """One @ext.oauth provider declaration for the unified OAuth-connect flow."""
+    provider: str
+    collection: str | None = None
+    scopes: list | None = None
+    has_hook: bool = False
+
+    def to_manifest(self) -> dict:
+        return {
+            "provider": self.provider,
+            "collection": self.collection,
+            "scopes": list(self.scopes or []),
+            "has_hook": self.has_hook,
+        }
+
+@dataclass
 class EventHandlerDef:
     event_type: str
     func: Callable
@@ -133,6 +149,7 @@ class Extension:
         self._lifecycle: dict[str, LifecycleHook] = {}
         self._health_check: HealthCheckDef | None = None
         self._webhooks: dict[str, WebhookDef] = {}
+        self._oauth_providers: dict[str, OAuthDef] = {}
         self._event_handlers: list[EventHandlerDef] = []
         self._declared_emits: list[EmitsDef] = []
         self._exposed: dict[str, ExposedMethod] = {}
@@ -641,6 +658,24 @@ class Extension:
     @property
     def webhooks(self) -> dict[str, WebhookDef]:
         return self._webhooks
+
+    def oauth(self, provider: str, *, collection: str | None = None,
+              scopes: list | None = None) -> None:
+        """Declare an OAuth provider connected on this extension's behalf.
+
+        The unified gateway route ``/v1/ext/{app_id}/oauth/{provider}/callback``
+        runs the dance and writes a standard account record to ``collection``
+        (default ``f"{provider}_accounts"``). Client creds come from this app's
+        app-scope secrets ``{provider}_client_id`` / ``{provider}_client_secret``.
+        For a custom account schema, also declare ``@ext.on_oauth_success(provider)``.
+        """
+        self._oauth_providers[provider] = OAuthDef(
+            provider=provider, collection=collection, scopes=list(scopes or []),
+        )
+
+    @property
+    def oauth_providers(self) -> dict[str, OAuthDef]:
+        return self._oauth_providers
 
     @property
     def event_handlers(self) -> list[EventHandlerDef]:

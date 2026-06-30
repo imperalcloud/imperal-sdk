@@ -182,6 +182,17 @@ class Webhook(BaseModel):
     secret_header: str = ""
 
 
+class OAuthDecl(BaseModel):
+    """One entry in `manifest['oauth']` — unified OAuth-connect declaration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(..., min_length=1)
+    collection: Optional[str] = Field(None, pattern=r"^[a-z][a-z0-9_]*$")
+    scopes: List[str] = Field(default_factory=list)
+    has_hook: bool = False
+
+
 class EventSubscription(BaseModel):
     """One entry in `manifest['events']['subscribes']` (M7)."""
 
@@ -346,6 +357,11 @@ class Manifest(BaseModel):
     # had no matching field (extra="forbid" would have rejected — but
     # publish-time validators didn't gate through here).
     secrets: Optional[List[SecretDecl]] = None
+
+    # Unified OAuth-connect (2026-06-30). Additive list of provider declarations
+    # the platform connects on the extension's behalf via the generic gateway
+    # route /v1/ext/{app_id}/oauth/{provider}/callback.
+    oauth: Optional[List[OAuthDecl]] = None
 
     # Federal Ф2 — UI surface inside the contract. Additive list of declared
     # panels (slot + serialized ui tree). Validated via the Panel model, which

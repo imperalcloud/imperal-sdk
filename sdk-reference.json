@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.8.2",
+  "sdk_version": "5.9.0",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -2589,6 +2589,43 @@
       "kind": "decorator",
       "params": [],
       "returns": null
+    },
+    "ext.oauth": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Declare an OAuth provider connected on this extension's behalf.\n\n        The unified gateway route ``/v1/ext/{app_id}/oauth/{provider}/callback``\n        runs the dance and writes a standard account record to ``collection``\n        (default ``f\"{provider}_accounts\"``). Client creds come from this app's\n        app-scope secrets ``{provider}_client_id`` / ``{provider}_client_secret``.\n        For a custom account schema, also declare ``@ext.on_oauth_success(provider)``.",
+      "enums": {},
+      "kind": "decorator",
+      "params": [
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "provider",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str | None",
+          "default": null,
+          "name": "collection",
+          "required": false,
+          "type": {
+            "ref": "str | None"
+          }
+        },
+        {
+          "annotation": "list | None",
+          "default": null,
+          "name": "scopes",
+          "required": false,
+          "type": {
+            "ref": "list | None"
+          }
+        }
+      ],
+      "returns": "None"
     },
     "ext.on_upgrade": {
       "action_vocab_safe": false,

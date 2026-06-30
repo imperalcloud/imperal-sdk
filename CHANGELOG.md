@@ -2,6 +2,18 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.0 — 2026-06-30 — Feature: unified OAuth-connect (`ext.oauth` + `ctx.oauth_authorize_url`)
+
+Minor — additive. Lets an extension hand OAuth account-connect to the platform instead of hand-rolling the dance.
+
+### Added
+- **`ext.oauth(provider, *, collection=None, scopes=None)`** — declare an OAuth provider the platform connects on your behalf. The unified gateway route `/v1/ext/{app_id}/oauth/{provider}/callback` runs the whole dance (code exchange → profile → save) and writes a standard account record to `collection` (default `f"{provider}_accounts"`). Client creds come from your **app-scope secrets** `{provider}_client_id` / `{provider}_client_secret` — never from env. Emitted to the manifest `oauth[]` section (schema rule, `manifest_schema_version` unchanged — additive optional field). Built-in providers: `google` (Gmail getProfile), `microsoft` (Graph `/me`), `yahoo`.
+- **`await ctx.oauth_authorize_url(provider, *, login_hint=None)`** — build the provider authorize URL the user's browser opens. Reads the public `client_id` from the app-scope secret and the scopes from your `ext.oauth(...)` declaration; the redirect URI targets the unified callback; `state` is signed (HMAC) so the gateway can verify it. Your `connect()` returns this URL — no hardcoded scopes/redirect.
+
+### Notes
+- The optional per-extension `on_oauth_success` persistence hook is reserved (manifest `oauth[].has_hook`) and ships with its gateway-side dispatch in a later release; the default platform writer covers the common case with zero extension OAuth code.
+- Shared signing key: set `IMPERAL_OAUTH_STATE_SECRET` to the same value on the kernel and the gateway so SDK-signed `state` verifies.
+
 ## 5.8.2 — 2026-06-30 — Fix: `@ext.webhook` path is slash-normalized (OAuth callback dispatch)
 
 Patch — bug fix; no API change. Affects any extension whose webhook path was declared with a leading slash.
