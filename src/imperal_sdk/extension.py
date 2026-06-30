@@ -201,6 +201,8 @@ class Extension:
         write_mode: str = "user",
         max_bytes: int = 4096,
         rotation_hint_days: int | None = None,
+        scope: str = "user",
+        env_fallback: str | None = None,
     ):
         """Declare a secret the extension needs.
 
@@ -238,6 +240,8 @@ class Extension:
             write_mode=write_mode,
             max_bytes=max_bytes,
             rotation_hint_days=rotation_hint_days,
+            scope=scope,
+            env_fallback=env_fallback,
         )
         if name in self._secrets:
             raise SecretDeclarationConflict(

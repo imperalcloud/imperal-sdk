@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.2 — 2026-06-30 — Fix: `@ext.secret(scope=, env_fallback=)` now reach the manifest
+
+Patch — completes the 5.8.0 app-level secrets feature on the decorator.
+
+### Fixed
+- **`ext.secret(scope="app")` no longer raises `TypeError`.** 5.8.0 added `scope` / `env_fallback` to `SecretSpec` + the manifest schema, but the `ext.secret(...)` decorator never accepted or forwarded them — so declaring an app-scope secret from code (the documented way) failed. The decorator now accepts `scope="user"|"app"` (default `"user"`) and `env_fallback=...` and forwards both to `SecretSpec`, so `@ext.secret(scope="app")` declarations emit `scope`/`env_fallback` into `secrets[]` as documented.
+
 ## 5.9.1 — 2026-06-30 — Security: OAuth `state` requires a configured signing secret
 
 Patch — hardens the 5.9.0 OAuth-connect `state` signing.

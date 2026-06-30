@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.1",
+  "sdk_version": "5.9.2",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -2769,6 +2769,24 @@
           "required": false,
           "type": {
             "ref": "int | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "user",
+          "name": "scope",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str | None",
+          "default": null,
+          "name": "env_fallback",
+          "required": false,
+          "type": {
+            "ref": "str | None"
           }
         }
       ],
