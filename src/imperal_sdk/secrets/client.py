@@ -14,6 +14,7 @@ Dev mode (when ``IMPERAL_DEV_MODE=true``):
 
 Pytest: inject a MockSecretStore via fixture; see imperal_sdk.testing.MockSecretStore.
 """
+import copy
 import logging
 import os
 from dataclasses import dataclass
@@ -70,6 +71,24 @@ class SecretClient:
         self._base = auth_gw_base.rstrip("/")
         self._token = session_token
         self._declared = declared
+
+    def for_user(self, user_id: str) -> "SecretClient":
+        """Return a copy of this client bound to a different acting-user.
+
+        Used by ``Context.as_user()`` so a system-context fan-out
+        (``ctx.as_user(uid).secrets.get(...)``) reads *that* user's secrets.
+        App-scope secrets still resolve to the shared ``__app__`` storage on
+        the gateway regardless of acting-user, so this is correct for both
+        ``scope:"user"`` and ``scope:"app"``.
+
+        Implemented as a shallow copy so kernel subclasses (which swap the
+        auth headers via an overridden ``_headers``) and any bound state are
+        preserved without coupling to this constructor's signature. NEVER
+        copies plaintext — this client holds none between calls
+        (I-SECRETS-HANDLER-SCOPE-MEMORY)."""
+        clone = copy.copy(self)
+        clone._imperal_id = user_id
+        return clone
 
     def _headers(self, *, json: bool = False) -> dict:
         h = {

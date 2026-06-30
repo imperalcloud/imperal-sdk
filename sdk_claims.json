@@ -1,5 +1,5 @@
 {
-  "_sdk_version": "5.8.0",
+  "_sdk_version": "5.8.1",
   "constants": {
     "max_call_depth": {
       "counts_root": true,

@@ -460,7 +460,7 @@ class Context:
         new_notify = self._rebuild_notify_for(user_id) if self.notify else None
         new_billing = self._rebuild_billing_for(user_id) if self.billing else None
 
-        return Context(
+        scoped = Context(
             user=new_user,
             tenant=self.tenant,
             store=new_store,
@@ -484,6 +484,22 @@ class Context:
             _gateway_url=self._gateway_url,
             _service_token=self._service_token,
         )
+
+        # ``secrets`` is attached to the Context by the kernel AFTER
+        # construction (it is not a constructor field), so it must be carried
+        # across here — rebound to the new acting-user, mirroring store /
+        # skeleton / notify. Without this, ``ctx.as_user(uid).secrets`` raised
+        # AttributeError in system / scheduled fan-out, violating the
+        # I-SECRETS-CONTRACT-DECLARED rule that handlers never see one.
+        _secrets = getattr(self, "secrets", None)
+        if _secrets is not None:
+            scoped.secrets = (
+                _secrets.for_user(user_id)
+                if hasattr(_secrets, "for_user")
+                else _secrets
+            )
+
+        return scoped
 
     def _rebuild_store_for(self, user_id: str):
         from imperal_sdk.store.client import StoreClient

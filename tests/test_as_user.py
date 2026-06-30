@@ -70,3 +70,41 @@ def test_as_user_reuses_ai_storage_http_config(mock_store_factory):
     assert scoped.storage is ctx.storage
     assert scoped.http is ctx.http
     assert scoped.config is ctx.config
+
+
+def test_as_user_carries_secrets_rebound_to_new_user():
+    """I-SECRETS-CONTRACT-DECLARED — ``secrets`` is attached to the Context by
+    the kernel AFTER construction (not a constructor field), so as_user() must
+    carry it across, rebound to the new acting-user — mirroring store/skeleton/
+    notify. Regression: without this, ``ctx.as_user(uid).secrets`` raised
+    ``AttributeError: 'Context' object has no attribute 'secrets'`` in system /
+    scheduled fan-out (e.g. the mail extension's process_google_pending cron)."""
+    from imperal_sdk.secrets.client import SecretClient
+
+    ctx = _make_ctx(ext_id="mail")
+    ctx.secrets = SecretClient(
+        ext_id="mail",
+        imperal_id="__system__",
+        auth_gw_base="http://gw",
+        session_token="tok",
+        declared={},
+    )
+
+    scoped = ctx.as_user("user-42")
+
+    # Must not raise AttributeError, and must be rebound to the target user.
+    assert scoped.secrets is not None
+    assert scoped.secrets._imperal_id == "user-42"   # acting-user rebound
+    assert scoped.secrets._ext_id == "mail"          # ext preserved
+    assert scoped.secrets is not ctx.secrets         # fresh instance, not shared
+    # Original client is left untouched.
+    assert ctx.secrets._imperal_id == "__system__"
+
+
+def test_as_user_without_secrets_does_not_crash():
+    """Backward-compat: a Context with no kernel-injected ``secrets`` (e.g. an
+    older kernel, or a non-secret code path) must still scope cleanly."""
+    ctx = _make_ctx()
+    assert not hasattr(ctx, "secrets")
+    scoped = ctx.as_user("user-42")  # must not raise
+    assert scoped.user.imperal_id == "user-42"

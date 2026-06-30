@@ -2,7 +2,12 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-## 5.8.0 — 2026-06-29 — Feature: app-level (shared) secrets (`scope="app"`)
+## 5.8.1 — 2026-06-30 — Fix: `ctx.as_user(uid).secrets` works in system-context fan-out
+
+Patch — bug fix; no API surface change. Required if an extension reads secrets from a `@ext.schedule` cron or any `ctx.as_user(...)` fan-out.
+
+### Fixed
+- **`ctx.as_user(uid).secrets` no longer raises `AttributeError`.** `ctx.secrets` is attached to the Context after construction, so the scoped Context returned by `ctx.as_user(uid)` did not carry it — `await ctx.as_user(uid).secrets.get(...)` raised `'Context' object has no attribute 'secrets'`. `as_user()` now carries the secrets client across, **rebound to the target user** (mirroring `store` / `skeleton` / `notify`). A new `SecretClient.for_user(user_id)` returns a copy bound to a different acting-user; app-scope secrets still resolve to the shared store regardless of acting-user, so reads are correct for both `scope="user"` and `scope="app"`. A Context with no `secrets` attached still scopes cleanly (back-compatible).
 
 Minor — additive `@ext.secret` kwargs; fully back-compatible (absent `scope` ⇒ `"user"`, the existing behaviour).
 
