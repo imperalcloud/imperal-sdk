@@ -466,16 +466,32 @@ class Extension:
 
         Secret verification must be done inside the handler using secret_header.
         """
+        # Normalize the path so the two canonical forms always agree, whether
+        # the author writes "callback", "/callback", or "/callback/":
+        #   • manifest path  -> exactly one leading slash ("/callback"); the
+        #     manifest schema (rule M4) requires `^/[a-z0-9_/-]+$`.
+        #   • dispatch name   -> slash-free ("callback"); the gateway derives
+        #     the tool name from the URL path it receives
+        #     (/v1/ext/{app}/webhook/{path}), which is always slash-free.
+        # A leading slash leaking into the tool name was the real production
+        # bug: `@ext.webhook("/callback")` registered `__webhook__/callback`
+        # while the gateway dispatched `__webhook__callback` → the OAuth
+        # callback failed with "function not found". Internal separators
+        # (e.g. "oauth/callback") are preserved; only leading/trailing "/" go.
+        bare = path.strip("/")
+        manifest_path = f"/{bare}"
+
         def decorator(func: Callable) -> Callable:
-            self._webhooks[path] = WebhookDef(
-                path=path, func=func, method=method, secret_header=secret_header,
+            self._webhooks[manifest_path] = WebhookDef(
+                path=manifest_path, func=func, method=method, secret_header=secret_header,
             )
-            # Register as a ToolDef so DirectCallWorkflow can dispatch via /call
-            tool_name = f"__webhook__{path}"
+            # Register as a ToolDef so DirectCallWorkflow can dispatch via /call.
+            # Slash-free name to match the gateway's URL-derived dispatch.
+            tool_name = f"__webhook__{bare}"
             self._tools[tool_name] = ToolDef(
                 name=tool_name,
                 func=func,
-                description=f"Webhook handler for path: {path}",
+                description=f"Webhook handler for path: {manifest_path}",
             )
             return func
         return decorator

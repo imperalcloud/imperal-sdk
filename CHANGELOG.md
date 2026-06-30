@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.8.2 — 2026-06-30 — Fix: `@ext.webhook` path is slash-normalized (OAuth callback dispatch)
+
+Patch — bug fix; no API change. Affects any extension whose webhook path was declared with a leading slash.
+
+### Fixed
+- **`@ext.webhook("/callback")` now dispatches correctly.** A leading slash in the declared path leaked into the dispatch tool name (`__webhook__/callback`), but the platform routes incoming webhooks by the URL path it receives — always slash-free — so it looked up `__webhook__callback` and failed with *"System function not found"*. This broke OAuth callbacks (the user's "connect account" step). The decorator now normalizes the path: the **dispatch tool name is slash-free** (`__webhook__callback`) regardless of how you declare it (`"callback"`, `"/callback"`, `"/callback/"` all work), while the **manifest `webhooks[].path` keeps its single leading slash** (`/callback`) as the manifest schema requires. Internal separators are preserved (`"/oauth/callback"` → tool `__webhook__oauth/callback`, manifest `/oauth/callback`).
+
 ## 5.8.1 — 2026-06-30 — Fix: `ctx.as_user(uid).secrets` works in system-context fan-out
 
 Patch — bug fix; no API surface change. Required if an extension reads secrets from a `@ext.schedule` cron or any `ctx.as_user(...)` fan-out.
