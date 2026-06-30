@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.1 — 2026-06-30 — Security: OAuth `state` requires a configured signing secret
+
+Patch — hardens the 5.9.0 OAuth-connect `state` signing.
+
+### Security
+- **No hardcoded fallback signing key.** `oauth_state` previously fell back to a constant string when no env secret was set. Since this package is published, that constant is world-readable — an attacker could forge a `state` (provider, user_id) and drive an OAuth CSRF / account-takeover. The signer now **requires `IMPERAL_OAUTH_STATE_SECRET`** (set to the same value on the kernel and the gateway) and raises loudly if it is unset — no insecure fallback. Set it before using the unified OAuth-connect flow. (Stronger defense-in-depth — a per-request nonce bound to the user session — is a planned follow-up.)
+
 ## 5.9.0 — 2026-06-30 — Feature: unified OAuth-connect (`ext.oauth` + `ctx.oauth_authorize_url`)
 
 Minor — additive. Lets an extension hand OAuth account-connect to the platform instead of hand-rolling the dance.

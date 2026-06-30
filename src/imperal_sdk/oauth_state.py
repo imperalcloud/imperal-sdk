@@ -16,12 +16,17 @@ import os
 
 
 def _key() -> bytes:
-    return (
-        os.getenv("IMPERAL_OAUTH_STATE_SECRET")
-        or os.getenv("IMPERAL_CALL_TOKEN_HMAC_SECRET")
-        or os.getenv("IMPERAL_SERVICE_TOKEN")
-        or "imperal-oauth-state-v1"
-    ).encode()
+    # No constant/public fallback: this package is published, so a hardcoded
+    # key would be world-readable and let anyone forge `state` (OAuth CSRF /
+    # account-takeover). Require an explicitly configured secret, identical on
+    # the kernel (where this signs) and the gateway (where it verifies).
+    key = os.getenv("IMPERAL_OAUTH_STATE_SECRET")
+    if not key:
+        raise RuntimeError(
+            "IMPERAL_OAUTH_STATE_SECRET must be set (same value on the kernel and "
+            "the gateway) to sign OAuth state — refusing an insecure fallback."
+        )
+    return key.encode()
 
 
 def _b64e(b: bytes) -> str:

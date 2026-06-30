@@ -8,6 +8,12 @@ from imperal_sdk.context import Context
 from imperal_sdk.types.identity import UserContext
 
 
+@pytest.fixture(autouse=True)
+def _state_secret(monkeypatch):
+    # build_oauth_state now requires a configured secret (no public fallback).
+    monkeypatch.setenv("IMPERAL_OAUTH_STATE_SECRET", "test-state-secret")
+
+
 class _FakeSecrets:
     async def get(self, name):
         return "CID123" if name.endswith("_client_id") else None
