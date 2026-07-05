@@ -2,6 +2,16 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.3 — 2026-07-05 — Fix: `ctx.cache.set()` size guard measures the exact wire body
+
+Patch — bug fix; no API surface change. Fixes intermittent `413 Request Entity Too Large` on large cache writes.
+
+### Fixed
+- **`CacheClient.set()` no longer under-measures the PUT body.** The 64 KB guard measured a *compact* re-serialization of only the inner envelope, while the actual request body (httpx `json=`) was serialized with *default* (spaced) separators plus the `{envelope, ttl_seconds}` wrapper — a strictly larger payload. Separator-heavy values (many small fields) could pass the guard by several KB and still be rejected by the gateway with `413`, and because `get_or_fetch` writes fail after the fetch, callers silently lost caching on every TTL expiry. `set()` now serializes the final request body exactly once with compact separators (`(",", ":")`) and uses those same bytes for **both** the size check **and** the wire body (`content=` with explicit `Content-Type: application/json`). The guard is now truthful, and the wire body is ~7-8% smaller for separator-heavy payloads. The 64 KB cap (`I-CACHE-VALUE-SIZE-CAP-64KB`) is unchanged.
+
+### Notes
+- Pairs with the Auth Gateway extcache fix that measures and stores the envelope with the same compact separators. Values that fit compact now fit end-to-end.
+
 ## 5.9.2 — 2026-06-30 — Fix: `@ext.secret(scope=, env_fallback=)` now reach the manifest
 
 Patch — completes the 5.8.0 app-level secrets feature on the decorator.

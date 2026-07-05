@@ -277,9 +277,12 @@ async def test_set_sends_auth_headers():
 
 @pytest.mark.asyncio
 async def test_set_sends_envelope_and_ttl_seconds_body_shape():
-    """PUT body must be {'envelope': {...}, 'ttl_seconds': N} per Auth GW
-    CacheSetRequest schema (Phase 3). Assert the absence of the old shapes
-    (params={'ttl': ...} and content=<bytes>) so regressions are loud."""
+    """PUT body must decode to {'envelope': {...}, 'ttl_seconds': N} per Auth GW
+    CacheSetRequest schema (Phase 3). The body is sent as pre-serialized COMPACT
+    bytes via ``content=`` (not httpx ``json=``) so the exact bytes we size-check
+    are the exact bytes on the wire (see the size-guard fix). Assert the absence
+    of the old shapes (params={'ttl': ...} and json=<dict>) so regressions are
+    loud."""
     ext, Model = _make_ext_with_model()
     http = FakeHttp()
     client = _make_client(ext, http)
@@ -289,9 +292,9 @@ async def test_set_sends_envelope_and_ttl_seconds_body_shape():
     method, called_url, kw = http.calls[0]
     assert method == "PUT"
     assert called_url == url
-    # New body shape — exact keys + ttl_seconds value
-    assert "json" in kw, "set() must send PUT body via json= kwarg"
-    body = kw["json"]
+    # New transport — pre-serialized compact bytes via content=
+    assert "content" in kw, "set() must send PUT body via content= (exact bytes)"
+    body = json.loads(kw["content"])
     assert set(body.keys()) == {"envelope", "ttl_seconds"}, (
         f"PUT body keys must be exactly {{'envelope','ttl_seconds'}}, "
         f"got {set(body.keys())}"
@@ -302,13 +305,58 @@ async def test_set_sends_envelope_and_ttl_seconds_body_shape():
     assert env["version"] == 1
     assert env["data"] == {"unread": 3, "latest_subject": ""}
     assert "cached_at" in env
+    # Content-Type must be explicit since content= does not set it
+    assert kw["headers"].get("Content-Type") == "application/json"
     # Old-shape absence
     assert "params" not in kw, (
         "set() must NOT send ttl as query param (Phase 3 contract uses body)"
     )
-    assert "content" not in kw, (
-        "set() must NOT send bytes body (Phase 3 contract uses JSON body)"
+    assert "json" not in kw, (
+        "set() must NOT use httpx json= (default separators re-inflate the "
+        "body past what the size guard measured — the 413 bug)"
     )
+
+
+@pytest.mark.asyncio
+async def test_set_guard_measures_exact_wire_bytes_compact():
+    """Regression for the guard-vs-wire size mismatch that caused live 413s.
+
+    OLD behaviour: the guard measured ``json.dumps(envelope, compact)`` (inner
+    envelope only) but httpx ``json={"envelope":..,"ttl_seconds":..}`` put a
+    strictly LARGER body on the wire (default separators + wrapper dict). A
+    payload could pass the guard yet exceed the server cap → 413.
+
+    NEW behaviour: exactly ONE compact serialization of the full
+    ``{envelope, ttl_seconds}`` body is both size-checked and sent. This test
+    pins that the bytes on the wire are compact (no ``", "`` / ``": "`` spacing)
+    and are byte-identical to a compact re-serialization of the decoded body."""
+    ext = Extension(app_id="mail")
+
+    @ext.cache_model("blob")
+    class Blob(BaseModel):
+        data: str = ""
+
+    http = FakeHttp()
+    client = _make_client(ext, http)
+    url = client._url("blob", "k")
+    http.program("PUT", url, FakeResponse(200, {}))
+
+    # A payload that is comfortably under 64 KB either way, so it must SEND
+    # (not raise) — the point is to inspect the exact wire bytes.
+    await client.set("k", Blob(data="z" * 4096), ttl_seconds=120)
+    _method, _url, kw = http.calls[0]
+    wire = kw["content"]
+    assert isinstance(wire, (bytes, bytearray)), "wire body must be raw bytes"
+    # Compact: no whitespace after JSON separators anywhere in the body.
+    assert b", " not in wire and b": " not in wire, (
+        "wire body must be COMPACT (separators=(',',':')) — spaced separators "
+        "are the ~7% bloat that re-inflated the body past the guard"
+    )
+    # Byte-identical to a compact re-dump of what the server will parse.
+    decoded = json.loads(wire)
+    assert wire == json.dumps(decoded, separators=(",", ":")).encode("utf-8")
+    assert decoded["ttl_seconds"] == 120
+    assert decoded["envelope"]["data"] == {"data": "z" * 4096}
 
 
 @pytest.mark.asyncio

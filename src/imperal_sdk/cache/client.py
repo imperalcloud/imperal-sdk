@@ -183,21 +183,30 @@ class CacheClient:
             "data": value.model_dump(mode="json"),
             "cached_at": datetime.now(timezone.utc).isoformat(),
         }
-        payload_bytes = json.dumps(envelope, separators=(",", ":")).encode("utf-8")
-        if len(payload_bytes) > _VALUE_MAX_BYTES:
+        # Serialize the FINAL request body exactly ONCE, compact (no
+        # whitespace), and reuse those very bytes for BOTH the size guard and
+        # the wire body. Previously the guard measured a compact re-dump of
+        # only the inner ``envelope`` while httpx ``json=`` re-serialized the
+        # whole ``{envelope, ttl_seconds}`` wrapper with default (spaced)
+        # separators — a strictly larger body than what was checked, so an
+        # envelope that passed the guard could still be rejected by the gateway
+        # with 413. One serialization ⇒ the guard is truthful about what goes
+        # on the wire, and the body is smaller (no separator whitespace, no
+        # double standard).
+        body_bytes = json.dumps(
+            {"envelope": envelope, "ttl_seconds": ttl_seconds},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(body_bytes) > _VALUE_MAX_BYTES:
             raise ValueError(
-                f"cache value envelope too large: {len(payload_bytes)} > "
+                f"cache value too large: {len(body_bytes)} > "
                 f"{_VALUE_MAX_BYTES} bytes (I-CACHE-VALUE-SIZE-CAP-64KB)"
             )
-        # Enforce envelope-size cap regardless of transport shape — the
-        # serialised body we compute above is the same bytes that end up in
-        # the platform state store, so the cap applies whether we send ``content=`` or ``json=``.
-        _ = payload_bytes  # kept for size validation side-effect; not sent
         resp = await self._request(
             "PUT",
             self._url(model_name, key),
-            headers=self._headers(),
-            json={"envelope": envelope, "ttl_seconds": ttl_seconds},
+            headers={**self._headers(), "Content-Type": "application/json"},
+            content=body_bytes,
         )
         resp.raise_for_status()
 
