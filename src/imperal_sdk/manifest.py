@@ -205,12 +205,23 @@ def generate_manifest(ext: Extension) -> dict:
             tree_dict = tree
         else:
             tree_dict = {}
-        panels_block.append({
+        entry = {
             "panel_id": panel_id,
             "slot": meta.get("slot", "center"),
             "title": meta.get("title", ""),
             "tree": tree_dict,
-        })
+        }
+        # Emit the REST of the decorator metadata too (icon, refresh,
+        # center_overlay, default_width, ...). The generator used to drop
+        # these, silently regressing manifests whose panels declared them —
+        # live 2026-07-12: automations' workshop panel lost
+        # center_overlay:true on rebuild and the Dev-Portal validator
+        # rejected the deploy against the repo's own manifest test.
+        for k, v in meta.items():
+            if k in ("tree", "func") or callable(v):
+                continue
+            entry.setdefault(k, v)
+        panels_block.append(entry)
     manifest["panels"] = panels_block
 
     return manifest
