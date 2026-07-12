@@ -494,3 +494,30 @@ async def test_get_or_fetch_wrong_type_raises():
 
     with pytest.raises(TypeError, match="expected InboxSummary"):
         await client.get_or_fetch("k", Model, fetcher, ttl_seconds=60)
+
+
+@pytest.mark.asyncio
+async def test_get_or_fetch_oversized_write_serves_fresh_value():
+    # Live 2026-07-12: an 83KB capability catalog tripped the 64KB size cap on
+    # the WRITE inside get_or_fetch and the raised ValueError blanked the
+    # caller's whole catalog — with the fetched value already in hand. The
+    # write is an optimization: on ANY set failure the fresh value is served.
+    ext, Model = _make_ext_with_model()
+    http = FakeHttp()
+    client = _make_client(ext, http)
+    url = client._url("inbox_summary", "k")
+    http.program("GET", url, FakeResponse(404))
+    # No PUT programmed — but we don't even reach it: monkeypatch set to raise
+    # the exact size-cap error.
+
+    async def _boom(key, value, ttl_seconds=60):
+        raise ValueError("cache value too large: 83460 > 65536 bytes "
+                         "(I-CACHE-VALUE-SIZE-CAP-64KB)")
+
+    client.set = _boom  # type: ignore[method-assign]
+
+    async def fetcher():
+        return Model(unread=7)
+
+    got = await client.get_or_fetch("k", Model, fetcher, ttl_seconds=60)
+    assert got.unread == 7            # fresh value served, no exception

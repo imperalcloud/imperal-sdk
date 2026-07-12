@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, TypeVar
 
 import httpx
 from pydantic import BaseModel
+
+logger = logging.getLogger("imperal_sdk.cache")
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -254,5 +257,15 @@ class CacheClient:
                 f"cache.get_or_fetch: fetcher returned {type(fresh).__name__}, "
                 f"expected {model.__name__} (I-CACHE-PYDANTIC-ONLY)"
             )
-        await self.set(key, fresh, ttl_seconds=ttl_seconds)
+        try:
+            await self.set(key, fresh, ttl_seconds=ttl_seconds)
+        except Exception as exc:
+            # The WRITE is an optimization, never the correctness path. Live
+            # 2026-07-12: an 83KB capability catalog tripped the 64KB size cap
+            # here and the raised ValueError blanked the caller's whole
+            # catalog every turn — the fetched value was already in hand.
+            logger.warning(
+                "cache.get_or_fetch: write skipped for %r (serving fresh "
+                "value uncached): %s", key, exc,
+            )
         return fresh
