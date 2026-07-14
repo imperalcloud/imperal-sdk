@@ -38,6 +38,7 @@ _HTTP_PAYLOADS: dict[str, list[str]] = {
     "POST /v1/billing/change-plan": ["plan_id", "period"],
     "POST /v1/billing/topup": ["tokens", "price_cents", "save_payment_method", "off_session"],
     "POST /v1/billing/payment-methods/setup": [],
+    "POST /v1/internal/notify": ["user_id", "message", "extension_id"],
 }
 
 

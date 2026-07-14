@@ -160,6 +160,27 @@
       },
       "source": "gateway_spec (auth-gateway billing/stripe_schemas.py::TopUpRequest)"
     },
+    "POST /v1/internal/notify": {
+      "fields": {
+        "channel": {
+          "required": false,
+          "type": "str"
+        },
+        "extension_id": {
+          "required": false,
+          "type": "str"
+        },
+        "message": {
+          "required": true,
+          "type": "str"
+        },
+        "user_id": {
+          "required": true,
+          "type": "str"
+        }
+      },
+      "source": "gateway_spec (auth-gateway notify/router.py::NotifyRequest)"
+    },
     "PUT /v1/billing/auto-topup": {
       "fields": {
         "enabled": {

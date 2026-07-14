@@ -22,10 +22,12 @@ import httpx
 
 
 class NotifyClient:
-    def __init__(self, gateway_url: str, auth_token: str = "", user_id: str = "", service_token: str = ""):
+    def __init__(self, gateway_url: str, auth_token: str = "", user_id: str = "",
+                 service_token: str = "", extension_id: str = ""):
         self._gateway_url = gateway_url.rstrip("/")
         self._auth_token = auth_token or service_token
         self._user_id = user_id
+        self._extension_id = extension_id
 
     async def __call__(self, message: str, **kwargs) -> None:
         """Send a notification (preferred call-style).
@@ -35,10 +37,16 @@ class NotifyClient:
         ``channel`` (``"in_app"``/``"email"``/``"telegram"`` …), ``subject``,
         ``body``. The gateway applies per-channel transport rules.
         """
+        payload: dict = {"user_id": self._user_id, "message": message}
+        if self._extension_id:
+            # Attribution for the gateway's per-app notification matrix
+            # (Notification Preferences v1). Explicit caller kwargs still win.
+            payload["extension_id"] = self._extension_id
+        payload.update(kwargs)
         async with httpx.AsyncClient() as client:
             await client.post(
                 f"{self._gateway_url}/v1/internal/notify",
-                json={"user_id": self._user_id, "message": message, **kwargs},
+                json=payload,
                 headers={"Authorization": f"Bearer {self._auth_token}"},
                 timeout=10,
             )

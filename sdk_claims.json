@@ -1,5 +1,5 @@
 {
-  "_sdk_version": "5.9.3",
+  "_sdk_version": "5.9.4",
   "constants": {
     "max_call_depth": {
       "counts_root": true,
@@ -33,6 +33,11 @@
       "price_cents",
       "save_payment_method",
       "off_session"
+    ],
+    "POST /v1/internal/notify": [
+      "user_id",
+      "message",
+      "extension_id"
     ]
   }
 }

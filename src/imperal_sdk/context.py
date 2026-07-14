@@ -580,6 +580,7 @@ class Context:
             gateway_url=self.notify._gateway_url,
             service_token=self.notify._auth_token,
             user_id=user_id,
+            extension_id=getattr(self.notify, "_extension_id", ""),
         )
 
     def _rebuild_billing_for(self, user_id: str):

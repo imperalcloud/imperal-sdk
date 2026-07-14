@@ -2,6 +2,16 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.4 — 2026-07-14 — Feature: `NotifyClient` extension_id attribution
+
+Patch — additive, backwards-compatible. First piece of Notification Preferences v1 (per-app notification routing).
+
+### Added
+- **`ctx.notify` now attributes outgoing notifications to the calling extension.** `NotifyClient` gains an optional `extension_id: str = ""` constructor kwarg; when set, `POST /v1/internal/notify` includes `extension_id` in the wire payload so the gateway's per-app notification matrix can gate delivery. An explicit `extension_id=` kwarg passed to `ctx.notify(...)` still wins over the constructor value. `ctx.as_user(...)` threads the acting extension's `extension_id` through to the rebuilt `NotifyClient`, matching the existing `store`/`skeleton` rebuild pattern. Omitted when empty — no wire-shape change for callers that don't set it.
+
+### Notes
+- Kernel-side attribution (`imperal_kernel.core.context_factory` passing `extension_id=extension_id` into `NotifyClient(...)`) and the federal invariant `I-NOTIFY-APP-ATTRIBUTED` land separately.
+
 ## 5.9.3 — 2026-07-05 — Fix: `ctx.cache.set()` size guard measures the exact wire body
 
 Patch — bug fix; no API surface change. Fixes intermittent `413 Request Entity Too Large` on large cache writes.
