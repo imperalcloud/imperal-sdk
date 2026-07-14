@@ -66,14 +66,33 @@ class Panel(BaseModel):
     panels emit ``{}`` (``maybe_publish_panels`` reads the live runtime node,
     not this metadata). When a tree IS present it is validated, so an
     ``Input`` with an illegal ``type`` is rejected at manifest validation.
+
+    ``icon``/``refresh``/``center_overlay`` mirror the ``@ext.panel(...)``
+    decorator kwargs of the same name — ``Extension.panel()`` always stores
+    them on ``ext._panels[panel_id]`` (they have defaults, so they are
+    present even when the caller doesn't pass them explicitly), and
+    ``generate_manifest()`` re-emits the entire decorator metadata dict
+    (fixed 2026-07-12 after automations' workshop panel silently lost
+    ``center_overlay: true`` on rebuild). ``default_width``/``min_width``/
+    ``max_width`` are the additional sidebar-sizing kwargs extensions pass
+    via ``**kwargs`` (see imperal-ext-billing's left sidebar panel).
+    ``extra="allow"`` keeps this model in sync with any further ad hoc
+    kwargs a panel decorator forwards, instead of requiring a schema edit
+    for every new one — panel metadata is intentionally open-ended.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     slot: str
     tree: Dict[str, Any] = Field(default_factory=dict)
     panel_id: Optional[str] = None
     title: Optional[str] = None
+    icon: Optional[str] = None
+    refresh: Optional[str] = None
+    center_overlay: Optional[bool] = None
+    default_width: Optional[int] = None
+    min_width: Optional[int] = None
+    max_width: Optional[int] = None
 
     @field_validator("slot")
     @classmethod

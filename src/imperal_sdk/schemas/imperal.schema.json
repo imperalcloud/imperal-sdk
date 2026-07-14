@@ -233,8 +233,8 @@
       "type": "object"
     },
     "Panel": {
-      "additionalProperties": false,
-      "description": "One entry in ``manifest['panels']`` (\u04242, additive).\n\n``tree`` is the serialized UINode tree the panel renders. At build time\nit is present only for panels declaring a static tree; runtime-rendered\npanels emit ``{}`` (``maybe_publish_panels`` reads the live runtime node,\nnot this metadata). When a tree IS present it is validated, so an\n``Input`` with an illegal ``type`` is rejected at manifest validation.",
+      "additionalProperties": true,
+      "description": "One entry in ``manifest['panels']`` (\u04242, additive).\n\n``tree`` is the serialized UINode tree the panel renders. At build time\nit is present only for panels declaring a static tree; runtime-rendered\npanels emit ``{}`` (``maybe_publish_panels`` reads the live runtime node,\nnot this metadata). When a tree IS present it is validated, so an\n``Input`` with an illegal ``type`` is rejected at manifest validation.\n\n``icon``/``refresh``/``center_overlay`` mirror the ``@ext.panel(...)``\ndecorator kwargs of the same name \u2014 ``Extension.panel()`` always stores\nthem on ``ext._panels[panel_id]`` (they have defaults, so they are\npresent even when the caller doesn't pass them explicitly), and\n``generate_manifest()`` re-emits the entire decorator metadata dict\n(fixed 2026-07-12 after automations' workshop panel silently lost\n``center_overlay: true`` on rebuild). ``default_width``/``min_width``/\n``max_width`` are the additional sidebar-sizing kwargs extensions pass\nvia ``**kwargs`` (see imperal-ext-billing's left sidebar panel).\n``extra=\"allow\"`` keeps this model in sync with any further ad hoc\nkwargs a panel decorator forwards, instead of requiring a schema edit\nfor every new one \u2014 panel metadata is intentionally open-ended.",
       "properties": {
         "slot": {
           "title": "Slot",
@@ -268,6 +268,78 @@
           ],
           "default": null,
           "title": "Title"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "refresh": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Refresh"
+        },
+        "center_overlay": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Center Overlay"
+        },
+        "default_width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Width"
+        },
+        "min_width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Width"
+        },
+        "max_width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Width"
         }
       },
       "required": [
