@@ -2,6 +2,19 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## Unreleased — Fix: generator↔validator manifest parity closed both ways
+
+Patch — bug fixes + CI hardening; no intended API surface change. Kills the `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift class that shipped in 5.9.4.
+
+### Fixed
+- **`Panel` schema accepts generator-emitted panel metadata.** 5.9.4's generator started re-emitting the full `@ext.panel` decorator metadata (`icon`/`refresh`/`center_overlay` + `default_width`/`min_width`/`max_width` + ad hoc kwargs), but the `Panel` model still had `extra="forbid"` without those fields — `imperal build && imperal validate` failed with 12 M3 errors on any extension with sized sidebar panels. The model now declares them and uses `extra="allow"` (panel metadata is intentionally open-ended); static `imperal.schema.json` regenerated.
+- **`secrets[].scope` / `env_fallback` validate.** `SecretSpec.to_manifest_dict()` has emitted `scope` unconditionally (and `env_fallback` for app scope) since 5.8.0, but `SecretDecl` never gained the fields — every secret-declaring extension failed local `imperal validate` (and `imperal deploy`) with M3. `SecretDecl` now mirrors the spec's own rules: `scope: "user"|"app"`, `env_fallback` only for app scope and only in the `IMPERAL_APPSECRET_` namespace. Static schema regenerated.
+- **`imperal build` no longer drops schema-known hand-maintained manifest fields.** The disk merge preserved a hand-copied 10-field marketplace tuple; anything else (e.g. `hidden_in_sidebar`) was silently deleted on every rebuild. The preserved set is now derived from the `Manifest` model minus the generator-owned fields (`GENERATOR_OWNED_FIELDS` / `disk_preserved_fields()` in `imperal_sdk.manifest`), so a field added to the schema can never be silently lost again.
+
+### CI
+- **Roundtrip parity gate is now maximal and bidirectional.** The `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` canary exercises every manifest emission site the SDK offers (secrets in both scopes, oauth, emits, tray, full lifecycle, panels with sizing/overlay/custom kwargs/static tree, migrations/config/system, chat functions) and asserts a structural closure: every schema field is either emitted by the canary or preserved by the disk merge, and every emission is schema-known. It also validates the merged on-disk manifest through the exact path `imperal validate` uses, plus the live-extension V-rules.
+- **Publishing a red suite is now impossible.** `publish.yml` runs the full pytest suite (py3.11 + 3.12) as a `test` job the PyPI publish job `needs` — 5.9.4 was published from a tag with the parity gate failing because the publish workflow never ran tests. OIDC publish mechanics unchanged.
+
 ## 5.9.4 — 2026-07-14 — Feature: `NotifyClient` extension_id attribution
 
 Patch — additive, backwards-compatible. First piece of Notification Preferences v1 (per-app notification routing).

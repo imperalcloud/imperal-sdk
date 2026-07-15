@@ -19,8 +19,36 @@ permissions:
   contents: write   # required if we end up creating a Release
 
 jobs:
+  # Release gate — publishing a red suite must be impossible. v5.9.4
+  # shipped with the manifest roundtrip parity gate failing because this
+  # workflow built straight from the tag without running tests; the
+  # federal I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC violation reached PyPI.
+  test:
+    name: Test gate (pytest)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package with dev extras
+        run: pip install -e ".[dev,fastapi,db]"
+
+      - name: Run pytest
+        run: pytest -q --tb=short
+
   publish:
     name: Build and publish to PyPI
+    needs: test
     runs-on: ubuntu-latest
     environment: pypi
 
