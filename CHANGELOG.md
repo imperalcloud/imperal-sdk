@@ -2,7 +2,7 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-## Unreleased — Fix: generator↔validator manifest parity closed both ways
+## 5.9.5 — Fix: generator↔validator manifest parity closed both ways
 
 Patch — bug fixes + CI hardening; no intended API surface change. Kills the `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift class that shipped in 5.9.4.
 
