@@ -20,6 +20,8 @@ from imperal_sdk.manifest_schema import (
 __all__ = [
     "generate_manifest",
     "save_manifest",
+    "GENERATOR_OWNED_FIELDS",
+    "disk_preserved_fields",
     "validate_manifest_dict",
     "get_schema",
     "MANIFEST_SCHEMA",
@@ -227,15 +229,39 @@ def generate_manifest(ext: Extension) -> dict:
     return manifest
 
 
+# Manifest fields `generate_manifest` computes fresh from the Extension
+# object on every build — a stale on-disk copy must never override them.
+# `name`/`description`/`icon` are deliberately NOT listed: the generator
+# emits defaults from the Extension object, but marketplace curation in
+# the on-disk imperal.json wins on rebuild.
+GENERATOR_OWNED_FIELDS = frozenset({
+    "manifest_schema_version", "sdk_version", "app_id", "version",
+    "actions_explicit", "system", "capabilities", "tools", "signals",
+    "schedules", "required_scopes", "icon_size_bytes", "webhooks", "oauth",
+    "events", "exposed", "lifecycle", "lifecycle_hooks", "tray",
+    "migrations_dir", "config_defaults", "secrets", "panels",
+})
+
+
+def disk_preserved_fields() -> frozenset:
+    """Schema-known manifest fields `imperal build` preserves from disk.
+
+    Derived from the ``Manifest`` model rather than a hand-copied tuple, so
+    a field added to the schema (e.g. ``hidden_in_sidebar``, silently
+    dropped by the old 10-field list) can never be lost on rebuild again —
+    it is either claimed in ``GENERATOR_OWNED_FIELDS`` or preserved here.
+    """
+    return frozenset(Manifest.model_fields) - GENERATOR_OWNED_FIELDS
+
+
 def _merge_disk_manifest(manifest: dict, path: str) -> dict:
-    """Merge marketplace-only fields from on-disk imperal.json if it exists."""
+    """Merge hand-maintained fields from on-disk imperal.json if it exists."""
     disk_path = os.path.join(path, "imperal.json")
     if not os.path.exists(disk_path):
         return manifest
     with open(disk_path) as f:
         disk = json.load(f)
-    for field in ("name", "description", "author", "license", "homepage",
-                  "icon", "category", "tags", "marketplace", "pricing"):
+    for field in sorted(disk_preserved_fields()):
         if field in disk:
             manifest[field] = disk[field]
     return manifest
