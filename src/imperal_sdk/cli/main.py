@@ -76,7 +76,18 @@ def init(name: str, template: str):
     os.makedirs(name, exist_ok=True)
     os.makedirs(f"{name}/tests", exist_ok=True)
 
-    title = name.replace("-", " ").replace("_", " ").title()
+    # `name` is the TARGET DIRECTORY; the app identity derives from its
+    # basename — `imperal init ~/code/my-app` must scaffold app_id "my-app",
+    # not a path (V1/M4 reject slashes; found by the 5.9.5 fresh-app E2E).
+    app_id = os.path.basename(os.path.normpath(name))
+    title = app_id.replace("-", " ").replace("_", " ").title()
+    # M5: tool identifiers must be valid identifiers — an app_id like
+    # "my-cool-app" scaffolded a tool literally named "my-cool-app", so a
+    # fresh author hit a validation error before writing any code
+    # (found by the 5.9.5 fresh-app E2E). The app_id itself keeps hyphens.
+    ident = re.sub(r"[^0-9a-zA-Z_]", "_", app_id)
+    if ident and ident[0].isdigit():
+        ident = f"x_{ident}"
     # V14 requires description ≥40 chars, V15 requires display_name ≥3 chars
     # ≠ app_id, V16 requires per-function description ≥20 chars. We seed
     # values that satisfy all three so `imperal build && imperal validate`
@@ -98,18 +109,18 @@ from imperal_sdk import Extension, ChatExtension, ActionResult
 # V21 (icon.svg required, XML <svg> root + viewBox) are all satisfied
 # by these defaults. Edit display_name + description before publish.
 ext = Extension(
-    "{name}",
+    "{app_id}",
     version="1.0.0",
     display_name={display_name!r},
     description={description!r},
     icon="icon.svg",
     actions_explicit=True,
-    capabilities=[{name!r} + ":read"],
+    capabilities=[{app_id!r} + ":read"],
 )
 
 chat = ChatExtension(
     ext,
-    tool_name={name.replace('-', '_')!r},
+    tool_name={ident!r},
     description={f"{title} — chat tool entrypoint."!r},
 )
 
@@ -119,9 +130,16 @@ class GreetParams(BaseModel):
     name: str = Field(default="World", description="Person to greet")
 
 
+class GreetResult(BaseModel):
+    """Typed return shape — V23 federal: read tools declare a data_model so
+    the platform can validate $REF paths and prevent naming drift."""
+    message: str = Field(description="The rendered greeting")
+
+
 @chat.function(
     "greet",
     action_type="read",
+    data_model=GreetResult,
     description="Greet someone by name with a friendly message.",
 )
 async def fn_greet(ctx, params: GreetParams) -> ActionResult:
@@ -137,17 +155,17 @@ from imperal_sdk import Extension
 
 
 ext = Extension(
-    "{name}",
+    "{app_id}",
     version="1.0.0",
     display_name={display_name!r},
     description={description!r},
     icon="icon.svg",
     actions_explicit=True,
-    capabilities=[{name!r} + ":read"],
+    capabilities=[{app_id!r} + ":read"],
 )
 
 
-@ext.tool({name!r}, scopes=[{name!r} + ":read"], description={f"{title} — invoke from automations or chains."!r})
+@ext.tool({ident!r}, scopes=[{app_id!r} + ":read"], description={f"{title} — invoke from automations or chains."!r})
 async def fn_default(ctx, **kwargs):
     """Stub tool. Replace with your own."""
     return {{"message": "ok"}}
@@ -185,7 +203,7 @@ async def fn_default(ctx, **kwargs):
         test_content += (
             f'from main import GreetParams, fn_greet\n\n\n'
             f'def test_extension_registered():\n'
-            f'    assert ext.app_id == "{name}"\n'
+            f'    assert ext.app_id == "{app_id}"\n'
             f'    assert ext.version == "1.0.0"\n'
             f'    assert ext.display_name and ext.display_name != ext.app_id\n'
             f'    assert len(ext.description) >= 40\n\n\n'
@@ -199,9 +217,9 @@ async def fn_default(ctx, **kwargs):
     else:
         test_content += (
             f'\n\ndef test_extension_registered():\n'
-            f'    assert ext.app_id == "{name}"\n'
+            f'    assert ext.app_id == "{app_id}"\n'
             f'    assert ext.version == "1.0.0"\n'
-            f'    assert "{name}" in ext.tools\n'
+            f'    assert "{ident}" in ext.tools\n'
         )
 
     with open(f"{name}/tests/test_main.py", "w") as f:

@@ -2,6 +2,19 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.6 — Fix: `imperal init` scaffolds validate out of the box
+
+- The tool template scaffolded a tool literally named after the app_id — a
+  hyphenated id (`my-cool-app`) failed M5 before the author wrote any code.
+  Tool identifiers are now sanitized; the app_id keeps its hyphens.
+- `imperal init path/to/my-app` leaked the whole path into app_id (V1/M4
+  reject slashes) — identity now derives from the basename; the argument is
+  the target directory.
+- The chat template predated V23: the scaffolded read function now declares
+  a typed `data_model`, as the contract requires.
+- New onboarding gate test: both templates must `build` + `validate` with
+  zero errors straight from `imperal init`.
+
 ## 5.9.5 — Fix: generator↔validator manifest parity closed both ways
 
 Patch — bug fixes + CI hardening; no intended API surface change. Kills the `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift class that shipped in 5.9.4.
