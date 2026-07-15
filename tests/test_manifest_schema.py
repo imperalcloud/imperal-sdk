@@ -120,6 +120,46 @@ def test_M4_bad_required_scope():
     assert any(i.rule == "M4" for i in issues)
 
 
+# --- secrets[] scope / env_fallback (EXT-SECRETS-V1 + v5.8.0 scoping) ---
+# Missing from SecretDecl 5.8.0→5.9.4: the emitter always wrote `scope`
+# (and `env_fallback` for app scope) but extra="forbid" rejected both —
+# every secret-declaring extension failed local `imperal validate`.
+
+_SECRET = {"name": "api_key", "description": "Test key."}
+
+
+def test_secret_scope_and_env_fallback_accepted():
+    good = {**BASE, "secrets": [
+        {**_SECRET, "scope": "user"},
+        {**_SECRET, "name": "shared_key", "scope": "app",
+         "env_fallback": "IMPERAL_APPSECRET_MY_APP_SHARED_KEY"},
+    ]}
+    assert validate_manifest_dict(good) == []
+
+
+def test_secret_bad_scope_value():
+    bad = {**BASE, "secrets": [{**_SECRET, "scope": "global"}]}
+    issues = validate_manifest_dict(bad)
+    assert any(i.rule == "M4" and "scope" in i.message for i in issues)
+
+
+def test_secret_env_fallback_requires_appsecret_prefix():
+    bad = {**BASE, "secrets": [
+        {**_SECRET, "scope": "app", "env_fallback": "PATH"},
+    ]}
+    issues = validate_manifest_dict(bad)
+    assert any(i.rule == "M4" and "IMPERAL_APPSECRET_" in i.message for i in issues)
+
+
+def test_secret_env_fallback_forbidden_on_user_scope():
+    bad = {**BASE, "secrets": [
+        {**_SECRET, "scope": "user",
+         "env_fallback": "IMPERAL_APPSECRET_MY_APP_API_KEY"},
+    ]}
+    issues = validate_manifest_dict(bad)
+    assert any(i.rule == "M4" and "scope='app'" in i.message for i in issues)
+
+
 def test_M5_bad_cron():
     bad = {**BASE, "schedules": [{"name": "daily", "cron": "not-cron"}]}
     issues = validate_manifest_dict(bad)

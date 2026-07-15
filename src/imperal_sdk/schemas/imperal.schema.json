@@ -429,6 +429,28 @@
           ],
           "default": null,
           "title": "Rotation Hint Days"
+        },
+        "scope": {
+          "default": "user",
+          "enum": [
+            "user",
+            "app"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "env_fallback": {
+          "anyOf": [
+            {
+              "pattern": "^IMPERAL_APPSECRET_",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Env Fallback"
         }
       },
       "required": [

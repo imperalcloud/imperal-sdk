@@ -278,6 +278,27 @@ class SecretDecl(BaseModel):
     write_mode: Literal["user", "extension", "both"] = "user"
     max_bytes: int = Field(default=4096, ge=1, le=65536)
     rotation_hint_days: Optional[int] = Field(default=None, ge=1)
+    # v5.8.0 secrets scoping — ``to_manifest_dict`` ALWAYS emits ``scope``
+    # (spec.py), so the schema must accept it; missing here from 5.8.0 →
+    # 5.9.4 meant every secret-declaring extension failed local
+    # ``imperal validate`` with M3 (I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC).
+    scope: Literal["user", "app"] = "user"
+    # Only valid for scope='app'; must live in the IMPERAL_APPSECRET_
+    # namespace — arbitrary env vars are forbidden to prevent secret
+    # exfiltration. Mirrors SecretSpec.__post_init__ (secrets/spec.py).
+    env_fallback: Optional[str] = Field(
+        default=None, pattern=r"^IMPERAL_APPSECRET_",
+    )
+
+    @model_validator(mode="after")
+    def _env_fallback_app_scope_only(self) -> "SecretDecl":
+        if self.env_fallback is not None and self.scope != "app":
+            raise ValueError(
+                "env_fallback is only valid for scope='app' "
+                "(mirrors SecretSpec — user-scope secrets have no "
+                "process-environment fallback)"
+            )
+        return self
 
 
 # === UI surface (Ф2 — ui.* inside the contract) =======================
