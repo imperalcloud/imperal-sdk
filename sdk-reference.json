@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.10",
+  "sdk_version": "5.9.11",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -10877,8 +10877,14 @@
     "ui.FileUpload": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "File upload dropzone with validation.\n    blocked_extensions: reject these file types (e.g. [\"exe\", \"bat\"]).\n    max_total_mb: total size limit across all files (0 = no limit).\n    max_files: max number of files (0 = no limit).\n    Frontend sends base64 file data in on_upload action.",
-      "enums": {},
+      "description": "File upload dropzone with validation.\n    blocked_extensions: reject these file types (e.g. [\"exe\", \"bat\"]).\n    max_total_mb: total size limit across all files (0 = no limit).\n    max_files: max number of files (0 = no limit).\n    Frontend sends base64 file data in on_upload action.\n\n    Presentational hints (renderer owns pixels; wire stays declarative):\n    title/hint \u2014 heading + sub-line over the dropzone; variant \u2014 one of\n    ``FILEUPLOAD_VARIANTS`` (``\"futuristic\"`` = animated per-file rows with\n    progress/status; ``\"compact\"`` = dense); show_previews \u2014 image thumbnails.\n    All hints stay off the wire at their defaults, so older renderers are\n    unaffected.",
+      "enums": {
+        "variant": [
+          "default",
+          "futuristic",
+          "compact"
+        ]
+      },
       "kind": "ui_component",
       "params": [
         {
@@ -10951,6 +10957,42 @@
           "required": false,
           "type": {
             "ref": "int"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "title",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "hint",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "default",
+          "name": "variant",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "show_previews",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],

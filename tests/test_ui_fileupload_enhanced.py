@@ -1,5 +1,37 @@
 """Tests for enhanced ui.FileUpload."""
+import pytest
+
 from imperal_sdk import ui
+
+
+def test_fileupload_presentational_props():
+    node = ui.FileUpload(
+        title="Upload documents",
+        hint="PDF, DOCX or images",
+        variant="futuristic",
+        show_previews=True,
+    )
+    d = node.to_dict()
+    assert d["props"]["title"] == "Upload documents"
+    assert d["props"]["hint"] == "PDF, DOCX or images"
+    assert d["props"]["variant"] == "futuristic"
+    assert d["props"]["show_previews"] is True
+
+
+def test_fileupload_default_variant_omitted():
+    # Presentational hints stay out of the wire when at their defaults, so old
+    # renderers see the same payload they always did (to_dict drops None too).
+    node = ui.FileUpload()
+    d = node.to_dict()
+    assert "variant" not in d["props"]
+    assert "title" not in d["props"]
+    assert "hint" not in d["props"]
+    assert "show_previews" not in d["props"]
+
+
+def test_fileupload_rejects_unknown_variant():
+    with pytest.raises(ValueError):
+        ui.FileUpload(variant="hologram")
 
 
 def test_fileupload_blocked_extensions():

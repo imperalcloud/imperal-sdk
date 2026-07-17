@@ -9,6 +9,11 @@ from .base import UINode, UIAction
 # reference generator (Ф1), and the docs <SdkRef> (Ф3). Add new types here only.
 INPUT_TYPES = ("text", "password", "email", "number", "url")
 
+# The single source of truth for ui.FileUpload presentational variants. The
+# panel renderer picks pixels off this hint; the wire contract stays declarative
+# (kernel emits the node, renderer owns the look). Add new variants here only.
+FILEUPLOAD_VARIANTS = ("default", "futuristic", "compact")
+
 
 def Input(
     placeholder: str = "",
@@ -150,13 +155,27 @@ def FileUpload(
     blocked_extensions: list[str] | None = None,
     max_total_mb: int = 0,
     max_files: int = 0,
+    title: str = "",
+    hint: str = "",
+    variant: str = "default",
+    show_previews: bool = False,
 ) -> UINode:
     """File upload dropzone with validation.
     blocked_extensions: reject these file types (e.g. ["exe", "bat"]).
     max_total_mb: total size limit across all files (0 = no limit).
     max_files: max number of files (0 = no limit).
     Frontend sends base64 file data in on_upload action.
+
+    Presentational hints (renderer owns pixels; wire stays declarative):
+    title/hint — heading + sub-line over the dropzone; variant — one of
+    ``FILEUPLOAD_VARIANTS`` (``"futuristic"`` = animated per-file rows with
+    progress/status; ``"compact"`` = dense); show_previews — image thumbnails.
+    All hints stay off the wire at their defaults, so older renderers are
+    unaffected.
     """
+    if variant not in FILEUPLOAD_VARIANTS:
+        raise ValueError(
+            f"ui.FileUpload variant must be one of {FILEUPLOAD_VARIANTS}, got {variant!r}")
     props: dict[str, Any] = {
         "accept": accept,
         "max_size_mb": max_size_mb,
@@ -167,6 +186,10 @@ def FileUpload(
     if blocked_extensions: props["blocked_extensions"] = blocked_extensions
     if max_total_mb: props["max_total_mb"] = max_total_mb
     if max_files: props["max_files"] = max_files
+    if title: props["title"] = title
+    if hint: props["hint"] = hint
+    if variant and variant != "default": props["variant"] = variant
+    if show_previews: props["show_previews"] = True
     return UINode(type="FileUpload", props=props)
 
 

@@ -20,12 +20,13 @@ from imperal_sdk.devtools.reference._introspect import (
 
 def collect() -> dict[str, dict[str, Any]]:
     import imperal_sdk.ui as ui
-    from imperal_sdk.ui.input_components import INPUT_TYPES
+    from imperal_sdk.ui.input_components import INPUT_TYPES, FILEUPLOAD_VARIANTS
 
     # Declared per-param enums whose single source is a code constant rather
     # than a Literal annotation. Merged on top of any auto-detected Literals.
     enum_overrides: dict[str, dict[str, list[str]]] = {
         "ui.Input": {"type": list(INPUT_TYPES)},
+        "ui.FileUpload": {"variant": list(FILEUPLOAD_VARIANTS)},
     }
 
     symbols: dict[str, dict[str, Any]] = {}
