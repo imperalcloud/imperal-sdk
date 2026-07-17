@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.8 — Validator V33: provider tool-name length
+
+- New validator rule **V33** (WARN): flags an LLM-facing tool name
+  `{app_id}__{tool}` longer than the 64-char provider cap. The kernel
+  aliases over-limit names automatically so nothing breaks, but the model
+  then reasons over a hash-suffixed alias instead of your real tool name —
+  keep `len(app_id) + 2 + len(tool) <= 64` for first-class naming.
+
 ## 5.9.7 — Structured error codes become first-class
 
 - `ActionResult.error(..., code=)`: errors can (and should) carry a stable

@@ -783,6 +783,40 @@ def validate_extension(ext) -> ValidationReport:
         # Defensive: never let the new check block existing rules.
         pass
 
+    # === V33 — provider tool-name length (WARN, 2026-07-17) =============
+    #
+    # Providers cap tool names at 64 chars, and the platform's LLM-facing
+    # name is ``f"{app_id}__{tool}"``. The kernel aliases over-limit names
+    # at the provider boundary (I-TOOL-NAME-PROVIDER-SAFE) so nothing
+    # breaks — but the model then reasons over a hash-suffixed alias
+    # instead of your real tool name. Keep len(app_id) + 2 + len(tool)
+    # within 64 for first-class naming.
+    try:
+        _app_id33 = str(getattr(ext, "app_id", "") or "")
+        _chat_exts = getattr(ext, "_chat_extensions", {}) or {}
+        for _tool_name, _chat_ext in _chat_exts.items():
+            _fns = getattr(_chat_ext, "_functions", {}) or {}
+            for _fn_name in _fns:
+                _llm_name = f"{_app_id33}__{_fn_name}"
+                if len(_llm_name) > 64:
+                    report.issues.append(ValidationIssue(
+                        rule="V33", level="WARN",
+                        message=(
+                            f"{_fn_name}: LLM-facing name '{_llm_name}' is "
+                            f"{len(_llm_name)} chars — over the 64-char "
+                            f"provider cap; the kernel will alias it"
+                        ),
+                        fix=(
+                            "Shorten the tool name (or the app_id) so "
+                            "len(app_id) + 2 + len(tool) <= 64. The kernel "
+                            "alias keeps it working, but the model sees a "
+                            "hash-suffixed alias instead of your real name."
+                        ),
+                    ))
+    except Exception:
+        # Defensive: never let the new check block existing rules.
+        pass
+
     return report
 
 
