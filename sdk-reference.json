@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.6",
+  "sdk_version": "5.9.7",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -69,6 +69,15 @@
           "required": false,
           "type": {
             "ref": "list[str] | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error_code",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],

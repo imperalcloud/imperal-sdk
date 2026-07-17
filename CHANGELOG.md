@@ -2,6 +2,20 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.7 — Structured error codes become first-class
+
+- `ActionResult.error(..., code=)`: errors can (and should) carry a stable
+  structured code — a platform taxonomy code or an app-declared
+  `^[A-Z][A-Z0-9_]{2,63}$` code. `to_dict()` emits `error_code` when set;
+  omitted code keeps the wire shape byte-identical (fully backward
+  compatible).
+- New taxonomy entry `EXT_UNSTRUCTURED_ERROR` — stamped by the kernel at the
+  dispatch boundary when an extension reports an error without a code, so
+  the platform error taxonomy, self-diagnosis and honest narration always
+  have a stable code to key on.
+- New validator rule **V32** (WARN): flags `ActionResult.error(...)` call
+  sites without `code=`. WARN-only this release — promote post-soak.
+
 ## 5.9.6 — Fix: `imperal init` scaffolds validate out of the box
 
 - The tool template scaffolded a tool literally named after the app_id — a

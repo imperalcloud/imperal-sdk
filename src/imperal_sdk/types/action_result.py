@@ -45,6 +45,11 @@ class ActionResult(Generic[T]):
     retryable: bool = False
     ui: Any | None = None
     refresh_panels: list[str] | None = None
+    # Structured error code (platform taxonomy `imperal_sdk.chat.error_codes`
+    # or an app-declared code, `^[A-Z][A-Z0-9_]{2,63}$`). Errors that reach
+    # the user MUST carry a stable code; a code-less error is stamped
+    # EXT_UNSTRUCTURED_ERROR by the kernel at the dispatch boundary.
+    error_code: str = ""
 
     @staticmethod
     def success(
@@ -71,11 +76,23 @@ class ActionResult(Generic[T]):
         )
 
     @staticmethod
-    def error(error: str, retryable: bool = False) -> ActionResult:
-        """Create an error result."""
+    def error(error: str, retryable: bool = False, *, code: str = "") -> ActionResult:
+        """Create an error result.
+
+        Args:
+            error: Human-readable error message (prose — the narrator's raw
+                material; never fold the code into it).
+            retryable: If True, the user can retry the action.
+            code: Structured error code — a platform taxonomy code
+                (``imperal_sdk.chat.error_codes``) or an app-declared code
+                matching ``^[A-Z][A-Z0-9_]{2,63}$``. Always pass one: it is
+                what the platform taxonomy, self-diagnosis and honest
+                narration key on. A code-less error is stamped
+                ``EXT_UNSTRUCTURED_ERROR`` by the kernel.
+        """
         return ActionResult(
             status="error", data={}, summary="", error=error,
-            retryable=retryable,
+            retryable=retryable, error_code=str(code or ""),
         )
 
     def to_dict(self) -> dict:
@@ -89,6 +106,9 @@ class ActionResult(Generic[T]):
         err = self.error
         if err is not None and isinstance(err, str):
             d["error"] = err
+        ec = getattr(self, "error_code", "")
+        if ec and isinstance(ec, str):
+            d["error_code"] = ec
         if self.retryable:
             d["retryable"] = self.retryable
         if self.ui is not None:

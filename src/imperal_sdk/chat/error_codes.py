@@ -41,6 +41,7 @@ BACKEND_TIMEOUT = "BACKEND_TIMEOUT"
 BACKEND_5XX = "BACKEND_5XX"
 RATE_LIMITED = "RATE_LIMITED"
 INTERNAL = "INTERNAL"
+EXT_UNSTRUCTURED_ERROR = "EXT_UNSTRUCTURED_ERROR"
 
 
 ERROR_TAXONOMY: dict[str, dict[str, str]] = {
@@ -94,6 +95,16 @@ ERROR_TAXONOMY: dict[str, dict[str, str]] = {
         "default_en": "An internal error occurred",
         "default_ru": "Внутренняя ошибка",
     },
+    # Attached by the KERNEL at the dispatch boundary when an extension emits
+    # status="error" WITHOUT a structured code (I-EXT-ERROR-CODE-NORMALIZED):
+    # the narrator always gets a stable code FACT even for extensions that
+    # only ship prose. Extensions should pass ActionResult.error(code=...)
+    # instead — validator rule V32 flags code-less error call sites.
+    "EXT_UNSTRUCTURED_ERROR": {
+        "user_hint_i18n_key": "errors.ext.unstructured",
+        "default_en": "The app reported an error without a structured code",
+        "default_ru": "Приложение сообщило об ошибке без структурного кода",
+    },
 }
 
 
@@ -109,4 +120,5 @@ __all__ = [
     "BACKEND_5XX",
     "RATE_LIMITED",
     "INTERNAL",
+    "EXT_UNSTRUCTURED_ERROR",
 ]

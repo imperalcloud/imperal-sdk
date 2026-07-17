@@ -14,6 +14,10 @@ def test_taxonomy_exhaustive():
         "VALIDATION_MISSING_FIELD", "VALIDATION_TYPE_ERROR", "FABRICATED_ID_SHAPE",
         "UNKNOWN_TOOL", "UNKNOWN_SUB_FUNCTION", "PERMISSION_DENIED", "BACKEND_TIMEOUT",
         "BACKEND_5XX", "RATE_LIMITED", "INTERNAL",
+        # 5.9.7: stamped by the kernel at the dispatch boundary when an
+        # extension emits status="error" without a structured code
+        # (I-EXT-ERROR-CODE-NORMALIZED).
+        "EXT_UNSTRUCTURED_ERROR",
     }
     assert set(ERROR_TAXONOMY) == expected
 

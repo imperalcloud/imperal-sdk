@@ -738,6 +738,51 @@ def validate_extension(ext) -> ValidationReport:
         # Defensive: never let the new check block existing V1-V22+V31.
         pass
 
+    # === V32 — structured error codes (WARN, 2026-07-17) ================
+    #
+    # Every error that reaches the user must carry a stable structured code
+    # (platform taxonomy or app-declared) — it is what the error taxonomy,
+    # self-diagnosis and honest narration key on. A code-less
+    # ``ActionResult.error(...)`` still works (the kernel stamps
+    # EXT_UNSTRUCTURED_ERROR at the dispatch boundary), but it degrades the
+    # user's diagnosis to prose parsing. WARN-only for now: currently
+    # deployed extensions predate ``code=`` — promote to ERROR post-soak.
+    try:
+        import inspect as _inspect
+        _chat_exts = getattr(ext, "_chat_extensions", {}) or {}
+        for _tool_name, _chat_ext in _chat_exts.items():
+            _fns = getattr(_chat_ext, "_functions", {}) or {}
+            for _fn_name, _fn_def in _fns.items():
+                _handler = getattr(_fn_def, "handler", None) or getattr(_fn_def, "fn", None) or _fn_def
+                try:
+                    _src = _inspect.getsource(_handler)
+                except (OSError, TypeError):
+                    continue
+                for _m in re.finditer(r"ActionResult\s*\.\s*error\s*\(", _src):
+                    # Bounded look-ahead over the call's argument text: enough
+                    # for real-world call sites without a full AST pass.
+                    _window = _src[_m.end():_m.end() + 400]
+                    if "code=" not in _window.split("ActionResult")[0]:
+                        report.issues.append(ValidationIssue(
+                            rule="V32", level="WARN",
+                            message=(
+                                f"{_fn_name}: ActionResult.error(...) without a "
+                                f"structured code= — the kernel will stamp "
+                                f"EXT_UNSTRUCTURED_ERROR"
+                            ),
+                            fix=(
+                                "Pass code= with a platform taxonomy code "
+                                "(imperal_sdk.chat.error_codes) or an "
+                                "app-declared code (^[A-Z][A-Z0-9_]{2,63}$); "
+                                "keep the message as plain prose — never fold "
+                                "the code into the text."
+                            ),
+                        ))
+                        break  # one WARN per function is enough signal
+    except Exception:
+        # Defensive: never let the new check block existing rules.
+        pass
+
     return report
 
 
