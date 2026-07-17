@@ -817,6 +817,48 @@ def validate_extension(ext) -> ValidationReport:
         # Defensive: never let the new check block existing rules.
         pass
 
+    # === V34 — scope surface declared, never wildcard (2026-07-17) ======
+    #
+    # An extension that declares NO capabilities AND no per-tool scopes makes
+    # the kernel fall back to a wildcard ("*") scope grant — the loader logs
+    # "[SCOPES] Extension '...' declared no scopes — using wildcard fallback",
+    # and tool.required_scopes ⊆ declared enforcement is toothless. This is a
+    # security-relevant contract, exactly like error codes and notifications:
+    # a platform/system app is auto-installed for EVERY user with broad reach,
+    # so for system=True apps a missing scope surface is an ERROR (blocks the
+    # deploy — impossible to ship a system app on wildcard). Third-party
+    # marketplace apps get a WARN during soak. Mirrors the kernel's
+    # _extract_declared_scopes union (extension capabilities ∪ per-tool scopes).
+    try:
+        _declared = set()
+        for _cap in (getattr(ext, "capabilities", None) or []):
+            if isinstance(_cap, str) and _cap.strip():
+                _declared.add(_cap.strip())
+        for _tdef in (getattr(ext, "_tools", {}) or {}).values():
+            for _s in (getattr(_tdef, "scopes", None) or []):
+                if isinstance(_s, str) and _s.strip():
+                    _declared.add(_s.strip())
+        if not _declared:
+            _is_system = bool(getattr(ext, "system", False))
+            report.issues.append(ValidationIssue(
+                rule="V34", level=("ERROR" if _is_system else "WARN"),
+                message=(
+                    f"'{getattr(ext, 'app_id', '?')}' declares no capabilities "
+                    f"and no per-tool scopes — the kernel falls back to a "
+                    f"WILDCARD scope grant"
+                    + (" (system apps must not ship wildcard)" if _is_system else "")
+                ),
+                fix=(
+                    "Add capabilities=[...] to Extension(...) (e.g. "
+                    "'<domain>:read'/'<domain>:write') or scopes=[...] to each "
+                    "@ext.tool, so the kernel enforces "
+                    "tool.required_scopes ⊆ declared instead of wildcard."
+                ),
+            ))
+    except Exception:
+        # Defensive: never let the new check block existing rules.
+        pass
+
     return report
 
 

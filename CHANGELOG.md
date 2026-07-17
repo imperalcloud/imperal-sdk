@@ -2,6 +2,16 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.9 — Validator V34: scope surface must be declared, never wildcard
+
+- New validator rule **V34**: an extension that declares no `capabilities`
+  and no per-tool `scopes` makes the kernel fall back to a WILDCARD scope
+  grant (tool.required_scopes ⊆ declared enforcement becomes toothless).
+  **ERROR for `system=True` apps** — a platform app auto-installed for every
+  user must never ship on wildcard, so the deploy gate now blocks it; **WARN**
+  for third-party marketplace apps during soak. Add `capabilities=[...]` to
+  `Extension(...)` or `scopes=[...]` to `@ext.tool`.
+
 ## 5.9.8 — Validator V33: provider tool-name length
 
 - New validator rule **V33** (WARN): flags an LLM-facing tool name

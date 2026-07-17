@@ -363,3 +363,50 @@ class TestV31SystemFlag:
         ext = Extension("anything", version="1.0.0", display_name="x", description="x" * 60, icon="icon.svg", system=True)
         report = validate_extension(ext)
         assert not [i for i in report.errors if i.rule == "V31"]
+
+
+class TestV34ScopeSurface:
+    """V34 — scope surface declared, never wildcard (2026-07-17).
+
+    ERROR for system=True apps (auto-installed platform apps must never ship
+    a wildcard scope grant), WARN for third-party during soak. Mirrors the
+    kernel loader's _extract_declared_scopes union.
+    """
+
+    def _v34(self, report):
+        return [i for i in report.issues if i.rule == "V34"]
+
+    def test_capabilities_satisfy(self):
+        ext = Extension("crm", version="1.0.0", capabilities=["crm:read"])
+
+        @ext.tool("t")
+        async def t(ctx):
+            ...
+        assert self._v34(validate_extension(ext)) == []
+
+    def test_per_tool_scopes_satisfy(self):
+        ext = Extension("crm", version="1.0.0")
+
+        @ext.tool("t", scopes=["crm:read"])
+        async def t(ctx):
+            ...
+        assert self._v34(validate_extension(ext)) == []
+
+    def test_no_scopes_third_party_warns(self):
+        ext = Extension("crm", version="1.0.0")
+
+        @ext.tool("t")
+        async def t(ctx):
+            ...
+        v = self._v34(validate_extension(ext))
+        assert len(v) == 1 and v[0].level == "WARN"
+
+    def test_no_scopes_system_app_errors(self):
+        ext = Extension("plat", version="1.0.0", system=True)
+
+        @ext.tool("t")
+        async def t(ctx):
+            ...
+        v = self._v34(validate_extension(ext))
+        assert len(v) == 1 and v[0].level == "ERROR"
+        assert "wildcard" in v[0].message.lower()
