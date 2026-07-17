@@ -301,6 +301,33 @@ class SecretDecl(BaseModel):
         return self
 
 
+class FileSink(BaseModel):
+    """One entry in ``manifest['file_sinks']`` — File Mage L3 (the mage).
+
+    Declares that this app can RECEIVE an uploaded file: which tool accepts it,
+    what file kinds, and how the file maps into the tool's args. Webbee reads
+    the file + the live set of installed apps' declared sinks and dispatches
+    the right destination tool via the normal agentic loop — the routing
+    intelligence is the brain over this ONE declared contract, never a kernel
+    rules table (Rule 13). A new app becomes a valid destination the day it
+    declares a sink — zero kernel change.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # An existing chat tool of THIS app (validator V35 checks it resolves).
+    tool: str = Field(..., pattern=r"^[a-z][a-z0-9_]{0,62}$")
+    # mime globs and/or semantic kinds (doc/image/sheet/code) this sink handles.
+    accepts: List[str] = Field(..., min_length=1)
+    # how the file maps into the tool call.
+    arg: str = Field(..., min_length=1)
+    # text -> extracted text into `arg`; file_id -> the file-reader record id;
+    # bytes_ref -> a short-lived staging handle (valid only within the upload
+    # flow — raw bytes are not persisted).
+    arg_kind: Literal["text", "file_id", "bytes_ref"] = "text"
+    description: str = Field(default="", max_length=200)
+
+
 # === UI surface (Ф2 — ui.* inside the contract) =======================
 # Factored into a sibling module to respect the 300-line god-file rule
 # (this file is already ≥300 lines). Imported here so callers can use
@@ -378,6 +405,7 @@ class Manifest(BaseModel):
     # had no matching field (extra="forbid" would have rejected — but
     # publish-time validators didn't gate through here).
     secrets: Optional[List[SecretDecl]] = None
+    file_sinks: Optional[List[FileSink]] = None
 
     # Unified OAuth-connect (2026-06-30). Additive list of provider declarations
     # the platform connects on the extension's behalf via the generic gateway
@@ -621,6 +649,7 @@ __all__ = [
     "LifecycleDecl",
     "TrayDecl",
     "SecretDecl",
+    "FileSink",
     # Ф2 — UI surface models (manifest_schema_ui.py)
     "UINode",
     "Panel",

@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.9",
+  "sdk_version": "5.9.10",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -2585,6 +2585,61 @@
         }
       ],
       "returns": null
+    },
+    "ext.file_sink": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Declare that this app can RECEIVE an uploaded file (File Mage L3).\n\n        ``tool`` must be an existing chat tool of this app (validator V35\n        checks it resolves). ``accepts`` = mime globs / semantic kinds; ``arg``\n        + ``arg_kind`` = how the file maps into the tool call (text |\n        file_id | bytes_ref). Registers a FileSink so it emits into\n        ``manifest['file_sinks']`` \u2014 Webbee's brain then routes an uploaded\n        file to the RIGHT declared destination via the normal agentic loop.\n\n        Usage::\n\n            @ext.tool(\"create_note\")\n            async def create_note(ctx, params): ...\n\n            ext.file_sink(\"create_note\", accepts=[\"application/pdf\", \"text/*\"],\n                          arg=\"body\", arg_kind=\"text\",\n                          description=\"Create a note from a document\")\n\n        A plain registering call (not a decorator \u2014 the sink references an\n        existing tool by name, there is nothing to wrap).",
+      "enums": {},
+      "kind": "decorator",
+      "params": [
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "tool",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "list[str]",
+          "default": null,
+          "name": "accepts",
+          "required": true,
+          "type": {
+            "ref": "list[str]"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "arg",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "text",
+          "name": "arg_kind",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        }
+      ],
+      "returns": "None"
     },
     "ext.lifecycle": {
       "action_vocab_safe": false,

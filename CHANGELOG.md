@@ -2,6 +2,19 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.10 — File Mage: file_sinks manifest contract
+
+- New manifest section **file_sinks[]** + `FileSink` model: an app declares
+  that it can RECEIVE an uploaded file — which tool accepts it (`tool`), what
+  kinds (`accepts` mime globs / semantic kinds), and how the file maps into
+  the call (`arg` + `arg_kind` ∈ text|file_id|bytes_ref). Register with the
+  new `ext.file_sink(tool, accepts=, arg=, arg_kind=, description=)` method;
+  read via the `ext.file_sinks` property. Webbee routes an uploaded file to
+  the right declared destination via the normal agentic loop — the routing is
+  the brain over this ONE contract, never a kernel rules table.
+- New validator rule **V35** (ERROR): a `file_sink.tool` that is not an
+  actual tool of the app (deploy gate catches a mis-declared destination).
+
 ## 5.9.9 — Validator V34: scope surface must be declared, never wildcard
 
 - New validator rule **V34**: an extension that declares no `capabilities`

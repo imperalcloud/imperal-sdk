@@ -859,6 +859,33 @@ def validate_extension(ext) -> ValidationReport:
         # Defensive: never let the new check block existing rules.
         pass
 
+    # === V35 — file_sink references a real tool (ERROR, 2026-07-18) ======
+    #
+    # File Mage L3: a declared file_sink routes an uploaded file to
+    # ``sink.tool``. If that tool is not one of THIS app's own tools, the
+    # mage would try to dispatch a tool that does not exist — a hard deploy
+    # error (same rigor as the manifest-SSOT gate). The app's tool surface =
+    # non-synthetic @ext.tool names ∪ every @chat.function name.
+    try:
+        _surface = set(tools.keys()) | set(functions.keys())
+        for _sink in (getattr(ext, "_file_sinks", {}) or {}).values():
+            _stool = str(getattr(_sink, "tool", "") or "")
+            if _stool and _stool not in _surface:
+                report.issues.append(ValidationIssue(
+                    rule="V35", level="ERROR",
+                    message=(
+                        f"file_sink references unknown tool '{_stool}' — not a "
+                        f"tool of this app"
+                    ),
+                    fix=(
+                        "Declare the tool with @ext.tool / @chat.function, or "
+                        "fix the file_sink's tool name to an existing tool."
+                    ),
+                ))
+    except Exception:
+        # Defensive: never let the new check block existing rules.
+        pass
+
     return report
 
 

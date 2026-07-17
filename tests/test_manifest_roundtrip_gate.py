@@ -162,6 +162,15 @@ def _build_canary_extension() -> Extension:
         env_fallback="IMPERAL_APPSECRET_CI_CANARY_SHARED_SIGNING_KEY",
     )(lambda: None)
 
+    # File Mage L3 — file_sinks[] emission site (references plain_tool above).
+    ext.file_sink(
+        "plain_tool",
+        accepts=["application/pdf", "text/*", "image/*"],
+        arg="body",
+        arg_kind="text",
+        description="Canary file destination exercising every file_sink field.",
+    )
+
     @ext.panel("sidebar", slot="left", title="Canary", icon="Bug",
                refresh="30s", center_overlay=False,
                default_width=300, min_width=200, max_width=500,

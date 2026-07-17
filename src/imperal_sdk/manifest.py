@@ -193,6 +193,13 @@ def generate_manifest(ext: Extension) -> dict:
             s.to_manifest_dict() for s in ext._secrets.values()
         ]
 
+    # File Mage L3 — emit declared file destinations. Optional field;
+    # backwards-compatible (extensions without @ext.file_sink omit it).
+    if getattr(ext, "_file_sinks", None):
+        manifest["file_sinks"] = [
+            s.model_dump() for s in ext._file_sinks.values()
+        ]
+
     # Ф2 — emit the ui.* surface into the contract (additive). Always present
     # (possibly empty []) so the key shape is stable. ``tree`` is serialized
     # only for panels declaring a STATIC ui tree via @ext.panel(..., tree=...);
@@ -240,6 +247,7 @@ GENERATOR_OWNED_FIELDS = frozenset({
     "schedules", "required_scopes", "icon_size_bytes", "webhooks", "oauth",
     "events", "exposed", "lifecycle", "lifecycle_hooks", "tray",
     "migrations_dir", "config_defaults", "secrets", "panels",
+    "file_sinks",
 })
 
 

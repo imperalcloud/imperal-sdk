@@ -158,6 +158,8 @@ class Extension:
         self._cache_models: dict[str, type] = {}
         # EXT-SECRETS-V1 (v4.2.2) — declared secrets emitted into manifest.secrets[]
         self._secrets: dict[str, "SecretSpec"] = {}
+        # File Mage L3 — declared file destinations emitted into manifest.file_sinks[]
+        self._file_sinks: dict[str, "FileSink"] = {}
 
         # v5.0.1 UX fix: synthetic 'secrets' panel is now registered LAZILY
         # — only when the extension calls @ext.secret(...) for the first
@@ -263,6 +265,51 @@ class Extension:
     def secrets(self) -> dict[str, "SecretSpec"]:
         """Read-only view of declared secrets keyed by name."""
         return dict(self._secrets)
+
+    def file_sink(
+        self,
+        tool: str,
+        *,
+        accepts: list[str],
+        arg: str,
+        arg_kind: str = "text",
+        description: str = "",
+    ) -> None:
+        """Declare that this app can RECEIVE an uploaded file (File Mage L3).
+
+        ``tool`` must be an existing chat tool of this app (validator V35
+        checks it resolves). ``accepts`` = mime globs / semantic kinds; ``arg``
+        + ``arg_kind`` = how the file maps into the tool call (text |
+        file_id | bytes_ref). Registers a FileSink so it emits into
+        ``manifest['file_sinks']`` — Webbee's brain then routes an uploaded
+        file to the RIGHT declared destination via the normal agentic loop.
+
+        Usage::
+
+            @ext.tool("create_note")
+            async def create_note(ctx, params): ...
+
+            ext.file_sink("create_note", accepts=["application/pdf", "text/*"],
+                          arg="body", arg_kind="text",
+                          description="Create a note from a document")
+
+        A plain registering call (not a decorator — the sink references an
+        existing tool by name, there is nothing to wrap).
+        """
+        from imperal_sdk.manifest_schema import FileSink
+        sink = FileSink(tool=tool, accepts=accepts, arg=arg,
+                        arg_kind=arg_kind, description=description)
+        if tool in self._file_sinks:
+            raise ValueError(
+                f"@ext.file_sink tool={tool!r} declared twice on "
+                f"app_id={self.app_id!r}"
+            )
+        self._file_sinks[tool] = sink
+
+    @property
+    def file_sinks(self) -> list:
+        """Declared file destinations (File Mage L3), in declaration order."""
+        return list(self._file_sinks.values())
 
     def tool(self, name: str, scopes: list[str] | None = None, description: str = ""):
         """Register a tool that the AI assistant can call."""

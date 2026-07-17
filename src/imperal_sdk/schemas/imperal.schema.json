@@ -95,6 +95,53 @@
       "title": "ExposedDecl",
       "type": "object"
     },
+    "FileSink": {
+      "additionalProperties": false,
+      "description": "One entry in ``manifest['file_sinks']`` \u2014 File Mage L3 (the mage).\n\nDeclares that this app can RECEIVE an uploaded file: which tool accepts it,\nwhat file kinds, and how the file maps into the tool's args. Webbee reads\nthe file + the live set of installed apps' declared sinks and dispatches\nthe right destination tool via the normal agentic loop \u2014 the routing\nintelligence is the brain over this ONE declared contract, never a kernel\nrules table (Rule 13). A new app becomes a valid destination the day it\ndeclares a sink \u2014 zero kernel change.",
+      "properties": {
+        "tool": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Tool",
+          "type": "string"
+        },
+        "accepts": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Accepts",
+          "type": "array"
+        },
+        "arg": {
+          "minLength": 1,
+          "title": "Arg",
+          "type": "string"
+        },
+        "arg_kind": {
+          "default": "text",
+          "enum": [
+            "text",
+            "file_id",
+            "bytes_ref"
+          ],
+          "title": "Arg Kind",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "accepts",
+        "arg"
+      ],
+      "title": "FileSink",
+      "type": "object"
+    },
     "HealthCheckDecl": {
       "additionalProperties": false,
       "description": "The `health_check` sub-object in `manifest['lifecycle']` (M9).",
@@ -990,6 +1037,21 @@
       ],
       "default": null,
       "title": "Secrets"
+    },
+    "file_sinks": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/FileSink"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "File Sinks"
     },
     "oauth": {
       "anyOf": [
