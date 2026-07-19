@@ -6,6 +6,8 @@ import logging
 import re
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 from imperal_sdk.types.pagination import Page
 from imperal_sdk.types.models import Document  # canonical Document dataclass (1.5.25+)
 from imperal_sdk.types.store_contracts import ListUsersRequest, ListUsersResponse  # noqa: F401  # ListUsersRequest imported as drift-sentinel per I-SDK-GW-CONTRACT-1
@@ -51,7 +53,7 @@ class StoreClient:
         return path, path
 
     async def create(self, collection: str, data: dict) -> Document:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/internal/store", json={"collection": collection, "data": data, "user_id": self._user_id, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             resp.raise_for_status()
             r = resp.json()
@@ -61,7 +63,7 @@ class StoreClient:
         """Get a document. Supports both get(collection, doc_id) and get('collection/doc_id')."""
         if doc_id is None:
             collection, doc_id = self._split_path(collection)
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.get(f"{self._gateway_url}/v1/internal/store/{collection}/{doc_id}", params={"extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             if resp.status_code == 404: return None
             resp.raise_for_status()
@@ -83,7 +85,7 @@ class StoreClient:
         return result.data
 
     async def query(self, collection: str, where: dict | None = None, order_by: str | None = None, limit: int = 100) -> Page[Document]:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/internal/store/{collection}/query", json={"where": where or {}, "order_by": order_by, "limit": limit, "extension_id": self._extension_id, "user_id": self._user_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             if resp.status_code == 404:
                 return Page(data=[], has_more=False)
@@ -96,19 +98,19 @@ class StoreClient:
             return Page(data=items, cursor=raw.get("cursor"), has_more=raw.get("has_more", False), total=raw.get("total"))
 
     async def update(self, collection: str, doc_id: str, data: dict) -> Document:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.patch(f"{self._gateway_url}/v1/internal/store/{collection}/{doc_id}", json={"data": data, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             resp.raise_for_status()
             r = resp.json()
             return Document(id=r["id"], collection=collection, data=r.get("data", data), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "")
 
     async def delete(self, collection: str, doc_id: str) -> bool:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.delete(f"{self._gateway_url}/v1/internal/store/{collection}/{doc_id}", params={"extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             return resp.status_code == 200
 
     async def count(self, collection: str, where: dict | None = None) -> int:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/internal/store/{collection}/count", json={"where": where or {}, "extension_id": self._extension_id, "user_id": self._user_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
             if resp.status_code == 404:
                 return 0
@@ -153,7 +155,7 @@ class StoreClient:
             raise ValueError(f"page_size must be 1..10000, got {page_size}")
 
         cursor: str | None = None
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             while True:
                 resp = await client.get(
                     f"{self._gateway_url}/v1/internal/store/{collection}/list_users",
@@ -214,7 +216,7 @@ class StoreClient:
         if not (1 <= limit <= 10000):
             raise ValueError(f"limit must be 1..10000, got {limit}")
 
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.get(
                 f"{self._gateway_url}/v1/internal/store/{collection}/all",
                 params={

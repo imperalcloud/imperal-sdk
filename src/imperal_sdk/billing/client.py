@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 from imperal_sdk.types.models import (
     BalanceInfo, PaymentMethod, SetupIntentResult, ChangePlanResult,
     TopupResult, PaymentRecord, PlanInfo, AutoTopupSettings,
@@ -69,7 +71,7 @@ class BillingClient:
     async def check_limits(self, user: Any = None) -> LimitsResult:
         uid = self._uid(user)
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 if self._service_token and uid:
                     resp = await client.get(
                         f"{self._gateway_url}/v1/billing/internal/user-limits/{uid}",
@@ -93,7 +95,7 @@ class BillingClient:
     async def get_subscription(self, user: Any = None) -> SubscriptionInfo:
         uid = self._uid(user)
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 if self._service_token and uid:
                     resp = await client.get(
                         f"{self._gateway_url}/v1/billing/internal/subscription/{uid}",
@@ -132,7 +134,7 @@ class BillingClient:
             )
             return False
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 payload: dict = {"meter": meter, "quantity": quantity}
                 if uid:
                     payload["user_id"] = uid
@@ -149,7 +151,7 @@ class BillingClient:
         """Get current token balance and plan cap."""
         uid = self._uid(user)
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 if self._service_token and uid:
                     resp = await client.get(
                         f"{self._gateway_url}/v1/billing/internal/balance/{uid}",
@@ -174,7 +176,7 @@ class BillingClient:
     async def list_payment_methods(self, user: Any = None) -> list[PaymentMethod]:
         uid = self._uid(user)
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 url = (f"{self._gateway_url}/v1/billing/internal/payment-methods/{uid}"
                        if (self._service_token and uid)
                        else f"{self._gateway_url}/v1/billing/payment-methods")
@@ -188,7 +190,7 @@ class BillingClient:
     async def list_payments(self, user: Any = None, limit: int = 50, offset: int = 0) -> list[PaymentRecord]:
         uid = self._uid(user)
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 if self._service_token and uid:
                     url = f"{self._gateway_url}/v1/billing/internal/payments/{uid}"
                 else:
@@ -203,7 +205,7 @@ class BillingClient:
 
     async def create_setup_intent(self, user: Any = None) -> SetupIntentResult:
         """Add-card SetupIntent. Surfaces errors (the ext needs the client secret)."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/payment-methods/setup",
                                      headers=self._headers(), timeout=10)
             resp.raise_for_status()
@@ -212,14 +214,14 @@ class BillingClient:
                                      publishable_key=d.get("publishable_key", ""))
 
     async def set_default_payment_method(self, pm_id: str, user: Any = None) -> bool:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.put(f"{self._gateway_url}/v1/billing/payment-methods/{pm_id}/default",
                                     headers=self._headers(), timeout=10)
             resp.raise_for_status()
             return True
 
     async def remove_payment_method(self, pm_id: str, user: Any = None) -> bool:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.delete(f"{self._gateway_url}/v1/billing/payment-methods/{pm_id}",
                                        headers=self._headers(), timeout=10)
             resp.raise_for_status()
@@ -227,7 +229,7 @@ class BillingClient:
 
     async def change_plan(self, plan_id: str, period: str = "monthly", user: Any = None) -> ChangePlanResult:
         """Upgrade (prorated, immediate) / downgrade (scheduled). Surfaces errors."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/change-plan",
                                      json={"plan_id": plan_id, "period": period},
                                      headers=self._headers(), timeout=15)
@@ -250,7 +252,7 @@ class BillingClient:
         ``requires_action``. The Element path (``off_session=False``) returns
         the ``client_secret`` instead.
         """
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/topup",
                                      json={"tokens": tokens, "price_cents": price_cents,
                                            "save_payment_method": save_payment_method,
@@ -267,7 +269,7 @@ class BillingClient:
     async def create_billing_portal_session(self, user: Any = None) -> str:
         """Create a Stripe Customer Portal session and return its hosted URL.
         Surfaces errors (the ext needs the URL)."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/portal",
                                      headers=self._headers(), timeout=10)
             resp.raise_for_status()
@@ -276,7 +278,7 @@ class BillingClient:
     async def list_plans(self, user: Any = None) -> list[PlanInfo]:
         """Public plan catalog. Safe-degrades to []."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 resp = await client.get(f"{self._gateway_url}/v1/billing/plans",
                                         headers=self._headers(), timeout=10)
                 resp.raise_for_status()
@@ -289,7 +291,7 @@ class BillingClient:
         """Safe-degrades to disabled defaults."""
         uid = self._uid(user)
         try:
-            async with httpx.AsyncClient() as client:
+            async with shared_http() as client:
                 resp = await client.get(f"{self._gateway_url}/v1/billing/auto-topup",
                                         headers=self._headers(), timeout=10)
                 resp.raise_for_status()
@@ -302,7 +304,7 @@ class BillingClient:
                              recharge_tokens: int = 20000, payment_method_id: str = "",
                              user: Any = None) -> bool:
         """Surfaces errors."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.put(f"{self._gateway_url}/v1/billing/auto-topup",
                 json={"enabled": enabled, "threshold_pct": threshold_pct,
                       "recharge_tokens": recharge_tokens, "payment_method_id": payment_method_id},
@@ -312,7 +314,7 @@ class BillingClient:
 
     async def cancel_subscription(self, user: Any = None) -> dict:
         """Cancel at period end. Surfaces errors. Returns the gateway result dict."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/cancel",
                                      headers=self._headers(), timeout=15)
             resp.raise_for_status()
@@ -321,7 +323,7 @@ class BillingClient:
     async def resume_subscription(self, user: Any = None) -> dict:
         """Undo a pending cancel-at-period-end. Surfaces errors. Returns the
         gateway result dict ({status, plan, expires_at, cancel_at_period_end})."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/resume",
                                      headers=self._headers(), timeout=15)
             resp.raise_for_status()
@@ -332,7 +334,7 @@ class BillingClient:
         default card for one fresh period and restores access immediately.
         Surfaces errors (402 no-card / SCA, 409 not-expired). Returns the
         gateway result dict ({status, plan, expires_at, payment_intent_id})."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/billing/renew",
                                      headers=self._headers(), timeout=20)
             resp.raise_for_status()
@@ -340,7 +342,7 @@ class BillingClient:
 
     async def update_billing_profile(self, profile: dict, user: Any = None) -> bool:
         """Surfaces errors. profile keys: name/company/vat/country."""
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.put(f"{self._gateway_url}/v1/billing/profile",
                                     json=profile, headers=self._headers(), timeout=10)
             resp.raise_for_status()

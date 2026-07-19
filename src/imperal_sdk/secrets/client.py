@@ -22,6 +22,8 @@ from typing import Optional
 
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 from imperal_sdk.secrets.exceptions import (
     SecretNotDeclaredError,
     SecretWriteForbidden,
@@ -114,7 +116,7 @@ class SecretClient:
             return os.getenv(_dev_env_key(name))
 
         try:
-            async with httpx.AsyncClient(timeout=SDK_HTTP_TIMEOUT_S) as c:
+            async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
                 r = await c.get(
                     f"{self._base}/v1/secrets/{self._ext_id}/{name}",
                     headers=self._headers(),
@@ -155,7 +157,7 @@ class SecretClient:
             return
 
         try:
-            async with httpx.AsyncClient(timeout=SDK_HTTP_TIMEOUT_S) as c:
+            async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
                 r = await c.put(
                     f"{self._base}/v1/secrets/{self._ext_id}/{name}",
                     headers=self._headers(json=True),
@@ -184,7 +186,7 @@ class SecretClient:
             return False
 
         try:
-            async with httpx.AsyncClient(timeout=SDK_HTTP_TIMEOUT_S) as c:
+            async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
                 r = await c.delete(
                     f"{self._base}/v1/secrets/{self._ext_id}/{name}",
                     headers=self._headers(),
@@ -205,7 +207,7 @@ class SecretClient:
             return os.getenv(_dev_env_key(name)) is not None
 
         try:
-            async with httpx.AsyncClient(timeout=SDK_HTTP_TIMEOUT_S) as c:
+            async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
                 r = await c.get(
                     f"{self._base}/v1/secrets/{self._ext_id}/{name}/meta",
                     headers=self._headers(),
@@ -235,7 +237,7 @@ class SecretClient:
             ]
 
         try:
-            async with httpx.AsyncClient(timeout=SDK_HTTP_TIMEOUT_S) as c:
+            async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
                 r = await c.get(
                     f"{self._base}/v1/secrets/{self._ext_id}",
                     headers=self._headers(),

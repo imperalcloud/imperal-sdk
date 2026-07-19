@@ -5,6 +5,8 @@ import time
 import logging
 
 import httpx
+
+from imperal_sdk._shared_http import shared_http
 import jwt
 from jwt import PyJWKClient
 
@@ -70,7 +72,7 @@ class ImperalAuth:
                 raise AuthError(f"Token verification failed: {e}")
 
     async def get_user_info(self, token: str) -> dict:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.get(
                 f"{self._gateway_url}/v1/auth/me",
                 headers={"Authorization": f"Bearer {token}"},

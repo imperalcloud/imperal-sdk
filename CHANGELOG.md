@@ -2,6 +2,25 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.12 — 2026-07-19
+
+### Changed
+- **Shared HTTP connection pool** (`imperal_sdk._shared_http`): all SDK
+  gateway-facing clients (billing, store, storage, secrets, cache, notify,
+  skeleton, ai, auth, context chat-inject) now reuse ONE keepalive
+  `httpx.AsyncClient` per process instead of opening a fresh TCP+TLS
+  connection per call. Per-request timeout budgets are unchanged.
+  `ctx.http` (user egress) intentionally keeps per-call clients
+  (client-level `max_redirects` contract).
+- Tests that previously monkeypatched `httpx.AsyncClient` on a client module
+  should now monkeypatch that module's `shared_http` (same async-CM shape);
+  `imperal_sdk._shared_http.reset()` is available as a test hook.
+
+## 5.9.11 — 2026-07-17
+
+### Added
+- `ui.FileUpload` futuristic widget — title/hint/variant/show_previews props.
+
 ## 5.9.10 — File Mage: file_sinks manifest contract
 
 - New manifest section **file_sinks[]** + `FileSink` model: an app declares

@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 
 class NotifyClient:
     def __init__(self, gateway_url: str, auth_token: str = "", user_id: str = "",
@@ -43,7 +45,7 @@ class NotifyClient:
             # (Notification Preferences v1). Explicit caller kwargs still win.
             payload["extension_id"] = self._extension_id
         payload.update(kwargs)
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             await client.post(
                 f"{self._gateway_url}/v1/internal/notify",
                 json=payload,

@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, TypeVar
 
 import httpx
+
+from imperal_sdk._shared_http import shared_http
 from pydantic import BaseModel
 
 logger = logging.getLogger("imperal_sdk.cache")
@@ -137,7 +139,7 @@ class CacheClient:
     async def _request(self, method: str, url: str, **kw) -> httpx.Response:
         if self._http is not None:
             return await self._http.request(method, url, **kw)
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with shared_http(timeout=_HTTP_TIMEOUT) as client:
             return await client.request(method, url, **kw)
 
     # ---- public API ------------------------------------------------------

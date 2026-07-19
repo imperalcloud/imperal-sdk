@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 
 @dataclass
 class CompletionResult:
@@ -31,7 +33,7 @@ class AIClient:
         elif self._auth_token:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(
                 f"{self._gateway_url}/v1/internal/ai/complete",
                 json={

@@ -42,7 +42,7 @@ async def test_deliver_chat_message_posts_to_auth_gw(monkeypatch):
             captured["headers"] = headers
             return httpx.Response(200, json={"ok": True})
 
-    monkeypatch.setattr("imperal_sdk.context.httpx.AsyncClient", _MockAsyncClient)
+    monkeypatch.setattr("imperal_sdk.context.shared_http", _MockAsyncClient)
     ctx = _make_ctx()
 
     await ctx.deliver_chat_message("Hello!")
@@ -67,7 +67,7 @@ async def test_deliver_chat_message_truncates_oversized_text(monkeypatch):
             captured["text"] = json["text"]
             return httpx.Response(200, json={"ok": True})
 
-    monkeypatch.setattr("imperal_sdk.context.httpx.AsyncClient", _MockAsyncClient)
+    monkeypatch.setattr("imperal_sdk.context.shared_http", _MockAsyncClient)
     ctx = _make_ctx()
 
     big = "x" * 70000
@@ -88,7 +88,7 @@ async def test_deliver_chat_message_with_refresh_panels(monkeypatch):
             captured["json"] = json
             return httpx.Response(200, json={"ok": True})
 
-    monkeypatch.setattr("imperal_sdk.context.httpx.AsyncClient", _MockAsyncClient)
+    monkeypatch.setattr("imperal_sdk.context.shared_http", _MockAsyncClient)
     ctx = _make_ctx()
 
     await ctx.deliver_chat_message("Done!", msg_type="tool_result", refresh_panels=["editor"])

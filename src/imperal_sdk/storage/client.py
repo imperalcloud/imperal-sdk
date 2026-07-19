@@ -3,6 +3,8 @@
 from __future__ import annotations
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 from imperal_sdk.types.models import FileInfo
 from imperal_sdk.types.pagination import Page
 
@@ -18,7 +20,7 @@ class StorageClient:
         return {"Authorization": f"Bearer {self._auth_token}"}
 
     async def upload(self, path: str, data: bytes, content_type: str = "application/octet-stream") -> FileInfo:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.post(f"{self._gateway_url}/v1/internal/storage/upload", files={"file": (path, data, content_type)}, data={"path": path, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=60)
             resp.raise_for_status()
             raw = resp.json()
@@ -31,18 +33,18 @@ class StorageClient:
             )
 
     async def download(self, path: str) -> bytes:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.get(f"{self._gateway_url}/v1/internal/storage/download", params={"path": path, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=60)
             resp.raise_for_status()
             return resp.content
 
     async def delete(self, path: str) -> bool:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.delete(f"{self._gateway_url}/v1/internal/storage", params={"path": path, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=10)
             return resp.status_code == 200
 
     async def list(self, prefix: str = "") -> Page[FileInfo]:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.get(f"{self._gateway_url}/v1/internal/storage/list", params={"prefix": prefix, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=10)
             resp.raise_for_status()
             raw = resp.json()

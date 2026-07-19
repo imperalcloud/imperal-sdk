@@ -19,6 +19,8 @@ from __future__ import annotations
 from typing import Any
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 
 class SkeletonClient:
     """Read-only HTTP client for kernel-persisted skeleton sections."""
@@ -45,7 +47,7 @@ class SkeletonClient:
         return h
 
     async def get(self, section: str) -> Any:
-        async with httpx.AsyncClient() as client:
+        async with shared_http() as client:
             resp = await client.get(
                 f"{self._gateway_url}/v1/internal/skeleton/"
                 f"{self._extension_id}/{self._user_id}/{section}",

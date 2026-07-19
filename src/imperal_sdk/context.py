@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import httpx
 
+from imperal_sdk._shared_http import shared_http
+
 from imperal_sdk.types.identity import UserContext, TenantContext
 
 if TYPE_CHECKING:
@@ -381,7 +383,7 @@ class Context:
             "X-Service-Token": service_token,
             "X-Acting-User": user_id,
         }
-        async with httpx.AsyncClient(timeout=10.0) as c:
+        async with shared_http(timeout=10.0) as c:
             await c.post(url, json=body, headers=headers)
 
     async def log(self, message: str, level: str = "info") -> None:
