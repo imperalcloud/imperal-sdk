@@ -2,6 +2,35 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.13 — 2026-07-27
+
+### Fixed
+- **Transient auth-gateway blips no longer kill an extension call.** The
+  secrets client raised `SecretVaultUnavailable` on the *first*
+  `ConnectError`/timeout, so a sub-second network hiccup aborted the whole
+  handler. Idempotent secrets operations (`get`, `set`, `is_set`, `list`)
+  now retry up to 3 attempts total with jittered exponential backoff
+  (~0.1s, ~0.2s + full jitter; worst case well under a second).
+  Production evidence over 24h on the platform worker: 9 `ConnectError`
+  + 8 `ReadTimeout` while the gateway itself was healthy (healthz p50
+  ~2ms, zero 5xx) — bursts, not an outage, and exactly what a short retry
+  absorbs. Symptom was extensions (matomo, tasks, spotify) intermittently
+  failing to read their secrets.
+
+### Added
+- `imperal_sdk._http_retry.retry_transient()` — shared bounded-retry helper
+  for gateway-facing SDK clients; the companion to `_shared_http` (5.9.12).
+  Retries **only** connection-level/timeout errors (no response was
+  produced); HTTP status codes are never retried, so a 503 stays a 503 and
+  the caller keeps ownership of 4xx/5xx semantics.
+
+### Notes
+- `delete()` is deliberately **not** retried: it is not idempotent at the
+  API surface — a retried delete can mask the real `was_set` answer.
+- Behaviour is unchanged when the gateway is genuinely down: after 3
+  attempts the original `SecretVaultUnavailable` is raised, with the same
+  exception type and message shape as before.
+
 ## 5.9.12 — 2026-07-19
 
 ### Changed

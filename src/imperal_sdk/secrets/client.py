@@ -22,6 +22,7 @@ from typing import Optional
 
 import httpx
 
+from imperal_sdk._http_retry import retry_transient
 from imperal_sdk._shared_http import shared_http
 
 from imperal_sdk.secrets.exceptions import (
@@ -117,9 +118,12 @@ class SecretClient:
 
         try:
             async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
-                r = await c.get(
-                    f"{self._base}/v1/secrets/{self._ext_id}/{name}",
-                    headers=self._headers(),
+                r = await retry_transient(
+                    lambda: c.get(
+                        f"{self._base}/v1/secrets/{self._ext_id}/{name}",
+                        headers=self._headers(),
+                    ),
+                    op=f"get(name={name!r})",
                 )
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError) as e:
             raise SecretVaultUnavailable(
@@ -158,10 +162,13 @@ class SecretClient:
 
         try:
             async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
-                r = await c.put(
-                    f"{self._base}/v1/secrets/{self._ext_id}/{name}",
-                    headers=self._headers(json=True),
-                    json={"value": value},
+                r = await retry_transient(
+                    lambda: c.put(
+                        f"{self._base}/v1/secrets/{self._ext_id}/{name}",
+                        headers=self._headers(json=True),
+                        json={"value": value},
+                    ),
+                    op=f"set(name={name!r})",
                 )
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError) as e:
             raise SecretVaultUnavailable(
@@ -208,9 +215,12 @@ class SecretClient:
 
         try:
             async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
-                r = await c.get(
-                    f"{self._base}/v1/secrets/{self._ext_id}/{name}/meta",
-                    headers=self._headers(),
+                r = await retry_transient(
+                    lambda: c.get(
+                        f"{self._base}/v1/secrets/{self._ext_id}/{name}/meta",
+                        headers=self._headers(),
+                    ),
+                    op=f"is_set(name={name!r})",
                 )
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError) as e:
             raise SecretVaultUnavailable(
@@ -238,9 +248,12 @@ class SecretClient:
 
         try:
             async with shared_http(timeout=SDK_HTTP_TIMEOUT_S) as c:
-                r = await c.get(
-                    f"{self._base}/v1/secrets/{self._ext_id}",
-                    headers=self._headers(),
+                r = await retry_transient(
+                    lambda: c.get(
+                        f"{self._base}/v1/secrets/{self._ext_id}",
+                        headers=self._headers(),
+                    ),
+                    op="list()",
                 )
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError) as e:
             raise SecretVaultUnavailable(
