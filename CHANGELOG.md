@@ -2,6 +2,29 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.14 — 2026-08-09
+
+### Documentation
+- **`category` is documented where you meet it.** The comment above the
+  Marketplace block pointed at `docs/imperal-cloud/developer-portal.md`, a file
+  that exists in no repo and on no docs site — so the single pointer a developer
+  had for these fields was a dead end. It now points at docs.imperal.io, which
+  the README already names as the source of truth.
+- The schema now states *why* `category` is an open `Optional[str]` with no
+  enum: the catalog is served by the gateway
+  (`GET /v1/marketplace/categories/catalog`) and grows without an SDK release,
+  so a copy pinned into the schema would be a second source of truth that goes
+  stale the day a category is added. Also records what the gateway accepts on
+  write (ids, historical spellings, and the display label shown in the picker)
+  and what an omitted field defaults to.
+
+### Notes
+- **Nothing to migrate.** No field, validator, default or emitted manifest key
+  changed — `category` is the same `Optional[str] = None` it has always been.
+  Manifests built on 5.9.13 are byte-identical on 5.9.14; the version moves
+  because `sdk-reference.json` is pinned to `__version__` and is regenerated
+  with every release.
+
 ## 5.9.13 — 2026-07-27
 
 ### Fixed
