@@ -417,7 +417,21 @@ class Manifest(BaseModel):
     # enforces ALLOWED_PANEL_SLOTS and the Input.type enum on any present tree.
     panels: Optional[List["Panel"]] = None
 
-    # --- Marketplace merge (docs/imperal-cloud/developer-portal.md) ---
+    # --- Marketplace merge (https://docs.imperal.io) ---
+    #
+    # Presentation metadata the Marketplace merges into the app listing. All
+    # optional: an app that omits them is still installable, it just shows up
+    # bare.
+    #
+    # `category` is intentionally an open string and is NOT validated here.
+    # The catalog lives server-side (GET /v1/marketplace/categories/catalog)
+    # and grows without an SDK release, so pinning a copy of the list into
+    # this schema would create a SECOND source of truth that goes stale the
+    # day a category is added. The gateway canonicalises the value on write:
+    # ids, historical spellings (`tools`, `general`, `AI & Media`) and the
+    # human-readable label shown in the picker ("Messaging & Chat") all
+    # resolve to one id, and genuinely unmappable text is rejected with
+    # suggestions. Omit it and the app lands in the default category.
     name: Optional[str] = None
     description: Optional[str] = None
     author: Optional[str] = None
