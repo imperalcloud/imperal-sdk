@@ -2,6 +2,28 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.15 — 2026-08-10
+
+### Documentation
+- **`@ext.webhook` now documents its return value.** The docstring described
+  only what the handler RECEIVES (`ctx`, `headers`, `body`, `query_params`)
+  and said nothing about what it may RETURN, so the response side was
+  invisible in the IDE. The handler's dict may carry `status_code`, `headers`
+  and `body`: `headers` are real **response** headers on the wire, `body` is
+  sent as-is (`str`) or as JSON (`dict`/`list`), and omitting `body` sends the
+  remaining keys as the JSON body — so `{"status_code": 401, "error": "..."}`
+  answers 401 with that reason.
+- That gap had teeth: header-based handshakes (Asana `X-Hook-Secret`, Slack
+  Events API) activate a subscription only if the secret comes back in a
+  response HEADER, and nothing in the SDK hinted a handler could set one.
+  The handshake is now the worked example in the docstring.
+
+### Notes
+- **Nothing to migrate.** No SDK behaviour changed — this documents a platform
+  contract fixed on the auth-gateway side (`41866d7` + `f1fb8e0`, 2026-08-10),
+  where `status_code`/`headers` began reaching the wire at all. Extensions
+  already returning a plain dict keep answering 200 JSON exactly as before.
+
 ## 5.9.14 — 2026-08-09
 
 ### Documentation

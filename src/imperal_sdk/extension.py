@@ -533,6 +533,27 @@ class Extension:
             query_params — dict of URL query parameters
 
         Secret verification must be done inside the handler using secret_header.
+
+        Return a dict. By default it is serialized as a 200 JSON response.
+        Three reserved keys shape the real HTTP response instead:
+            status_code — HTTP status sent to the caller (default 200)
+            headers     — dict of RESPONSE headers put on the wire; needed by
+                          handshakes that verify through a header rather than
+                          the body (Asana X-Hook-Secret, Slack Events API)
+            body        — response body; str is sent as-is, dict/list as JSON.
+                          Omit it and the remaining keys become the JSON body,
+                          so {"status_code": 401, "error": "..."} answers 401
+                          with that reason. Pass "" for an empty body.
+
+        Header-based handshake, echoing the secret back in a response header:
+
+            @ext.webhook("events", method="POST")
+            async def handle(ctx, headers, body, query_params):
+                secret = headers.get("x-hook-secret")
+                if secret:
+                    return {"status_code": 200, "body": "",
+                            "headers": {"X-Hook-Secret": secret}}
+                return {"status": "ok"}
         """
         # Normalize the path so the two canonical forms always agree, whether
         # the author writes "callback", "/callback", or "/callback/":

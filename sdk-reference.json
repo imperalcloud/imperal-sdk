@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.14",
+  "sdk_version": "5.9.15",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -2979,7 +2979,7 @@
     "ext.webhook": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.\n\n        Also registers __webhook__{path} as a ToolDef so the platform runtime\n        can dispatch it without LLM routing. The handler receives:\n            ctx       \u2014 minimal context (user_id=\"__webhook__\")\n            headers   \u2014 dict of request headers (hop-by-hop stripped)\n            body      \u2014 raw request body as string\n            query_params \u2014 dict of URL query parameters\n\n        Secret verification must be done inside the handler using secret_header.",
+      "description": "Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.\n\n        Also registers __webhook__{path} as a ToolDef so the platform runtime\n        can dispatch it without LLM routing. The handler receives:\n            ctx       \u2014 minimal context (user_id=\"__webhook__\")\n            headers   \u2014 dict of request headers (hop-by-hop stripped)\n            body      \u2014 raw request body as string\n            query_params \u2014 dict of URL query parameters\n\n        Secret verification must be done inside the handler using secret_header.\n\n        Return a dict. By default it is serialized as a 200 JSON response.\n        Three reserved keys shape the real HTTP response instead:\n            status_code \u2014 HTTP status sent to the caller (default 200)\n            headers     \u2014 dict of RESPONSE headers put on the wire; needed by\n                          handshakes that verify through a header rather than\n                          the body (Asana X-Hook-Secret, Slack Events API)\n            body        \u2014 response body; str is sent as-is, dict/list as JSON.\n                          Omit it and the remaining keys become the JSON body,\n                          so {\"status_code\": 401, \"error\": \"...\"} answers 401\n                          with that reason. Pass \"\" for an empty body.\n\n        Header-based handshake, echoing the secret back in a response header:\n\n            @ext.webhook(\"events\", method=\"POST\")\n            async def handle(ctx, headers, body, query_params):\n                secret = headers.get(\"x-hook-secret\")\n                if secret:\n                    return {\"status_code\": 200, \"body\": \"\",\n                            \"headers\": {\"X-Hook-Secret\": secret}}\n                return {\"status\": \"ok\"}",
       "enums": {},
       "kind": "decorator",
       "params": [
