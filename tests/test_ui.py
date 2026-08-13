@@ -382,6 +382,27 @@ class TestAlert:
             assert modern["variant"] == severity
             assert "type" not in legacy  # the dead prop is gone from the wire
 
+    def test_unambiguous_synonyms_are_normalised(self):
+        """`warning`/`danger` are normalised, not rejected.
+
+        Found live: ext-admin shipped `Alert(type="warning")` in four places.
+        The renderer only ever knew "warn", so those warnings had been
+        rendering as blue "info" banners the whole time. Rejecting the synonym
+        would break working panels over a spelling everyone reasonably expects
+        to work; normalising it makes the banner finally turn yellow.
+        """
+        for given, expected in (("warning", "warn"), ("danger", "error"),
+                                ("err", "error"), ("ok", "success")):
+            assert ui.Alert("m", type=given).to_dict()["props"]["variant"] == expected
+            assert ui.Alert("m", variant=given).to_dict()["props"]["variant"] == expected
+
+    def test_a_real_typo_still_raises(self):
+        """Only unambiguous aliases are accepted. Guessing what a developer
+        meant is how a red alert quietly becomes a green one."""
+        for bad in ("critical", "warnign", "fatal"):
+            with pytest.raises(ValueError):
+                ui.Alert("m", variant=bad)
+
     def test_unknown_severity_is_caught(self):
         with pytest.raises(ValueError):
             ui.Alert(message="msg", variant="critical")

@@ -9,6 +9,24 @@ from .base import UINode, UIAction
 # ramp and icon off this exact vocabulary.
 ALERT_VARIANTS = ("info", "success", "warn", "error")
 
+# Spellings that mean exactly one of the four above and nothing else. They are
+# normalised rather than rejected because the alternative is worse than either:
+# `Alert(type="warning")` was NOT an error before this release — it serialized
+# happily and the renderer, which only ever knew "warn", silently fell back to
+# blue "info". So a whole fleet of extensions has been shipping warnings that
+# render as neutral notices, and a hard error would now break working panels
+# over a synonym everyone reasonably expects to work.
+#
+# Deliberately NOT a general fuzzy matcher: only unambiguous aliases live here.
+# A genuine typo ("critical", "warnign") still raises, because guessing what a
+# developer meant is how a red alert quietly becomes a green one.
+ALERT_SYNONYMS = {
+    "warning": "warn",
+    "danger": "error",
+    "err": "error",
+    "ok": "success",
+}
+
 
 def Alert(
     message: str,
@@ -33,6 +51,7 @@ def Alert(
     never for a state the user still needs to see after a refresh).
     """
     resolved = variant or type or "info"
+    resolved = ALERT_SYNONYMS.get(resolved, resolved)
     if resolved not in ALERT_VARIANTS:
         raise ValueError(f"ui.Alert variant must be one of {ALERT_VARIANTS}, got {resolved!r}")
     props: dict[str, Any] = {"message": message, "title": title, "variant": resolved}
