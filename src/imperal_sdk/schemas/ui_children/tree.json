@@ -2,16 +2,36 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://imperal.io/schemas/ui_children/tree.json",
   "title": "Tree nodes",
-  "description": "Array of nodes for ui.Tree. Each node: {id, label, children?, icon?}.",
+  "description": "Array of nodes for ui.Tree. Each node: {id, label, children?, icon?, badge?, expanded?, on_click?}.",
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["id", "label"],
+    "required": [
+      "id",
+      "label"
+    ],
     "properties": {
-      "id":       {"type": "string"},
-      "label":    {"type": "string"},
+      "id": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
       "children": {},
-      "icon":     {"type": "string"}
+      "icon": {
+        "type": "string"
+      },
+      "badge": {
+        "type": [
+          "string",
+          "number"
+        ],
+        "description": "Optional trailing count, e.g. products in a category."
+      },
+      "expanded": {
+        "type": "boolean",
+        "description": "Open this branch initially."
+      }
     },
     "additionalProperties": true
   }
