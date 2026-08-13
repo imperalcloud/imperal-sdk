@@ -38,6 +38,24 @@ class SubscriptionInfo:
     started_at: str | None = None
     expires_at: str | None = None
     cancel_at_period_end: bool = False
+    # HOW this subscription settles, decided by the gateway — never by a client
+    # (added 2026-08-13, contract: auth-gw app/billing/billing_mode.py).
+    #   'card'   — the saved card is charged on renewal (default)
+    #   'manual' — settled off-Stripe (invoice/bank transfer): never auto-charged
+    #   'free'   — comped access: never charged
+    # `card_required` is the ONE predicate any card gate may consult: true only
+    # when money will really be taken. Extensions that re-derived this from plan
+    # names is exactly how contract customers got stuck on an add-card screen.
+    # Defaults keep older gateways (which omit these fields) behaving as before.
+    billing_mode: str = "card"
+    card_required: bool = False
+    contract_amount_cents: int | None = None
+    billing_note: str | None = None
+
+    @property
+    def settles_off_stripe(self) -> bool:
+        """True when no card is involved at all (invoice/contract or comped)."""
+        return self.billing_mode in ("manual", "free")
 
 
 class BillingClient:
@@ -112,6 +130,12 @@ class BillingClient:
                     started_at=data.get("started_at"),
                     expires_at=data.get("expires_at"),
                     cancel_at_period_end=bool(data.get("cancel_at_period_end", False)),
+                    # Settlement facts, straight from the gateway. Absent on an
+                    # older gateway -> the defaults reproduce today's behaviour.
+                    billing_mode=(data.get("billing_mode") or "card"),
+                    card_required=bool(data.get("card_required", False)),
+                    contract_amount_cents=data.get("contract_amount_cents"),
+                    billing_note=data.get("billing_note"),
                 )
         except Exception as e:
             log.warning("Billing get_subscription failed: %s", e)
