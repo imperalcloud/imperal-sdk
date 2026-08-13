@@ -120,6 +120,12 @@ def Password(
     on_submit: UIAction | None = None,
     value: str = "",
     param_name: str = "value",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
+    readonly: bool = False,
 ) -> UINode:
     """Password input — browser-blind, no echo, autocomplete='new-password'.
 
@@ -134,6 +140,12 @@ def Password(
     security control. The plaintext still travels in the POST body to the
     server, which is the only correctness boundary. Audit chokepoint + Vault
     transit are what make this federal-grade.
+
+    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+) — and
+    needs it more than most: a credential field asks for something the user
+    cannot verify by reading it back, so "which secret does this want?" must be
+    answerable from a permanent label. A masked control shows dots the moment
+    typing starts, which is exactly when a placeholder disappears.
     """
     return Input(
         placeholder=placeholder,
@@ -141,6 +153,12 @@ def Password(
         value=value,
         param_name=param_name,
         type="password",
+        label=label,
+        description=description,
+        error=error,
+        required=required,
+        disabled=disabled,
+        readonly=readonly,
     )
 
 
@@ -188,11 +206,27 @@ def MultiSelect(
     values: list[str] | None = None,
     placeholder: str = "",
     param_name: str = "values",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
 ) -> UINode:
-    """Multi-select dropdown. Each option: {"value", "label"}."""
+    """Multi-select dropdown. Each option: {"value", "label"}.
+
+    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass
+    ``label`` to get the label/control pair in one ``.field-gap`` container,
+    bound with a proper ``for``/``id``. Preferred for new screens.
+
+    This control needs the label more than a plain input does: once the first
+    chip is selected the placeholder is replaced by the selection itself, so
+    without a label nothing on screen still says what is being chosen.
+    """
     props: dict[str, Any] = {"options": options, "values": values or [], "param_name": param_name}
     if placeholder: props["placeholder"] = placeholder
-    return UINode(type="MultiSelect", props=props)
+    return UINode(type="MultiSelect", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required, disabled=disabled))
 
 
 def Toggle(
@@ -337,13 +371,26 @@ def TextArea(
 
 def RichEditor(content: str = "", placeholder: str = "Start writing...",
                on_save: UIAction | None = None, on_change: UIAction | None = None,
-               param_name: str = "content", toolbar: bool = True) -> UINode:
-    """Rich text editor (TipTap). content: HTML string. on_save fires on Ctrl+S."""
+               param_name: str = "content", toolbar: bool = True,
+               label: str = "", description: str = "", error: str = "",
+               required: bool = False) -> UINode:
+    """Rich text editor (TipTap). content: HTML string. on_save fires on Ctrl+S.
+
+    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass
+    ``label`` to get the label/control pair in one ``.field-gap`` container,
+    bound with a proper ``for``/``id``. Preferred for new screens.
+
+    The editor's placeholder lives *inside* the editable area and is gone after
+    the first keystroke, so on a screen with several editors (body, summary,
+    notes) only a real label still tells them apart.
+    """
     props: dict[str, Any] = {"content": content, "placeholder": placeholder,
              "param_name": param_name, "toolbar": toolbar}
     if on_save: props["on_save"] = on_save
     if on_change: props["on_change"] = on_change
-    return UINode(type="RichEditor", props=props)
+    return UINode(type="RichEditor", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required))
 
 
 def TagInput(
@@ -356,8 +403,18 @@ def TagInput(
     delimiters: list[str] | None = None,
     validate: str = "",
     validate_message: str = "",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
 ) -> UINode:
     """Tag/chip input with autocomplete.
+
+    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass
+    ``label`` to get the label/control pair in one ``.field-gap`` container,
+    bound with a proper ``for``/``id``. Preferred for new screens — here the
+    placeholder is only rendered while the field is still empty, so after the
+    first tag nothing on screen names the field any more.
 
     grouped_by      : group suggestions by prefix (e.g. 'extensions:read').
     delimiters      : extra keystrokes that create a tag in addition to Enter.
@@ -385,4 +442,6 @@ def TagInput(
         props["validate"] = validate
     if validate_message:
         props["validate_message"] = validate_message
-    return UINode(type="TagInput", props=props)
+    return UINode(type="TagInput", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required))

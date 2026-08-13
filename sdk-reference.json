@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.16",
+  "sdk_version": "5.9.17",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -12176,7 +12176,7 @@
     "ui.MultiSelect": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Multi-select dropdown. Each option: {\"value\", \"label\"}.",
+      "description": "Multi-select dropdown. Each option: {\"value\", \"label\"}.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n    ``label`` to get the label/control pair in one ``.field-gap`` container,\n    bound with a proper ``for``/``id``. Preferred for new screens.\n\n    This control needs the label more than a plain input does: once the first\n    chip is selected the placeholder is replaced by the selection itself, so\n    without a label nothing on screen still says what is being chosen.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12214,6 +12214,51 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],
@@ -12297,7 +12342,7 @@
     "ui.Password": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Password input \u2014 browser-blind, no echo, autocomplete='new-password'.\n\n    EXT-SECRETS-V1 (federal v4.2.6+) \u2014 the canonical credential-entry primitive.\n    Renders as ``<input type=\"password\" autocomplete=\"new-password\">`` in the\n    Panel UI so values are visually masked while the user types. Submitted\n    value rides into the action as ``param_name`` (default ``\"value\"``); use\n    inside ``ui.Form(defaults={...})`` to attach hidden context fields like\n    ``app_id`` and ``name``.\n\n    Federal note: type=password is a defence against shoulder-surfing, NOT a\n    security control. The plaintext still travels in the POST body to the\n    server, which is the only correctness boundary. Audit chokepoint + Vault\n    transit are what make this federal-grade.",
+      "description": "Password input \u2014 browser-blind, no echo, autocomplete='new-password'.\n\n    EXT-SECRETS-V1 (federal v4.2.6+) \u2014 the canonical credential-entry primitive.\n    Renders as ``<input type=\"password\" autocomplete=\"new-password\">`` in the\n    Panel UI so values are visually masked while the user types. Submitted\n    value rides into the action as ``param_name`` (default ``\"value\"``); use\n    inside ``ui.Form(defaults={...})`` to attach hidden context fields like\n    ``app_id`` and ``name``.\n\n    Federal note: type=password is a defence against shoulder-surfing, NOT a\n    security control. The plaintext still travels in the POST body to the\n    server, which is the only correctness boundary. Audit chokepoint + Vault\n    transit are what make this federal-grade.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+) \u2014 and\n    needs it more than most: a credential field asks for something the user\n    cannot verify by reading it back, so \"which secret does this want?\" must be\n    answerable from a permanent label. A masked control shows dots the moment\n    typing starts, which is exactly when a placeholder disappears.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12335,6 +12380,60 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "readonly",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],
@@ -12416,7 +12515,7 @@
     "ui.RichEditor": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Rich text editor (TipTap). content: HTML string. on_save fires on Ctrl+S.",
+      "description": "Rich text editor (TipTap). content: HTML string. on_save fires on Ctrl+S.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n    ``label`` to get the label/control pair in one ``.field-gap`` container,\n    bound with a proper ``for``/``id``. Preferred for new screens.\n\n    The editor's placeholder lives *inside* the editable area and is gone after\n    the first keystroke, so on a screen with several editors (body, summary,\n    notes) only a real label still tells them apart.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12469,6 +12568,42 @@
           "annotation": "bool",
           "default": true,
           "name": "toolbar",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
           "required": false,
           "type": {
             "ref": "bool"
@@ -13012,7 +13147,7 @@
     "ui.TagInput": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Tag/chip input with autocomplete.\n\n    grouped_by      : group suggestions by prefix (e.g. 'extensions:read').\n    delimiters      : extra keystrokes that create a tag in addition to Enter.\n                      Accepts individual characters (e.g. [' ', ',', ';']). Default\n                      is Enter-only to preserve prior behaviour.\n    validate        : optional regex pattern (string). Tags failing the pattern are\n                      refused; the input is highlighted red and ``validate_message``\n                      is shown as a tooltip. Anchor yourself \u2014 use '^...$' for\n                      full-string match.\n    validate_message: human-readable hint shown on rejected tags. Fallback generic\n                      message is used when empty.",
+      "description": "Tag/chip input with autocomplete.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n    ``label`` to get the label/control pair in one ``.field-gap`` container,\n    bound with a proper ``for``/``id``. Preferred for new screens \u2014 here the\n    placeholder is only rendered while the field is still empty, so after the\n    first tag nothing on screen names the field any more.\n\n    grouped_by      : group suggestions by prefix (e.g. 'extensions:read').\n    delimiters      : extra keystrokes that create a tag in addition to Enter.\n                      Accepts individual characters (e.g. [' ', ',', ';']). Default\n                      is Enter-only to preserve prior behaviour.\n    validate        : optional regex pattern (string). Tags failing the pattern are\n                      refused; the input is highlighted red and ``validate_message``\n                      is shown as a tooltip. Anchor yourself \u2014 use '^...$' for\n                      full-string match.\n    validate_message: human-readable hint shown on rejected tags. Fallback generic\n                      message is used when empty.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13095,6 +13230,42 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],

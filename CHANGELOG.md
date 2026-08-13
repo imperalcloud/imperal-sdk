@@ -2,6 +2,38 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.17 — 2026-08-13
+
+### Added
+- **Labeled input variant, completed.** The contract shipped in 5.9.16 covered
+  `ui.Input`, `ui.TextArea`, `ui.Select` and `ui.DatePicker`, which left the
+  remaining typed-into fields unable to satisfy it at all: `ui.MultiSelect`,
+  `ui.TagInput`, `ui.RichEditor` and `ui.Password` had no `label` parameter, so
+  the field's name could live only in its placeholder — and a placeholder is
+  gone the moment the user types. All four now take `label`, `description`,
+  `error` and `required` (plus `disabled` where the control supports it), and
+  the renderer wraps them in the same `Field` primitive: one `.field-gap`
+  container, label and control bound programmatically — a real `for`/`id` where
+  the control is labelable, `aria-labelledby` for the `contenteditable` editor.
+- **`ui.Password` gained the contract too — and needs it most.** A credential
+  field asks for a value the user cannot verify by reading it back, and a masked
+  control shows dots from the first keystroke, so "which secret does this want?"
+  must be answerable from a permanent label.
+
+### Fixed
+- **`ui.RichEditor` is now labelled correctly rather than plausibly.** TipTap
+  renders a `contenteditable` div, which `<label for>` cannot bind to — a
+  `for`/`id` pair there would look right in the markup and associate nothing.
+  The editor is associated with `aria-labelledby` instead, and its
+  `description`/`error` reach it through `aria-describedby`.
+- **`ui.TagInput` no longer announces the wrong name.** Its control carried a
+  hardcoded `aria-label="Tags"`, which would have overridden any real label the
+  extension set; the hardcode is now only the fallback for the label-less shape.
+
+**Nothing to migrate.** Every new argument is keyword-only with a falsy default
+and is omitted from the payload unless set, so nodes built by existing
+extensions serialize byte-identically.
+
 ## 5.9.16 — 2026-08-13
 
 ### Added
