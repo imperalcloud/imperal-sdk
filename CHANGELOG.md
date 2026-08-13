@@ -2,6 +2,36 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.18 — 2026-08-13
+
+### Fixed
+- **`BillingProtocol` now declares what it actually returns.** Four methods —
+  `create_setup_intent`, `change_plan`, `topup` and `get_auto_topup` — were
+  written with no return annotation, so a type checker inferred `None` for them.
+  The real `BillingClient` returns `SetupIntentResult`, `ChangePlanResult`,
+  `TopupResult` and `AutoTopupSettings` respectively, which meant the protocol
+  contradicted its own only implementation: any honest billing client was
+  reported as *incompatible* with the protocol it satisfies. The annotations now
+  match the shipped client. This is a typing fix only — no runtime behaviour
+  changes, and the imports are under `TYPE_CHECKING`.
+- **`MockBilling` implements the whole protocol.** The official test double
+  covered 4 of the protocol's 19 methods, so `Context(billing=MockBilling())`
+  failed a type check outright — extensions that touch billing could not write a
+  typed unit test using the SDK's own testing kit, and the documented test-setup
+  example was correct code defeated by an incomplete mock. All 19 methods are
+  present, with matching signatures and the four typed results above.
+  `isinstance(MockBilling(), BillingProtocol)` is now true.
+
+### Changed
+- **`MockBilling` records state-changing calls.** Money operations (`topup`,
+  `change_plan`, `cancel_subscription`, `set_auto_topup`, card add/remove)
+  append to `mock.calls` and mutate the mock's own balance / plan / card list,
+  instead of silently returning success. A billing test can now assert what the
+  extension *attempted*, not merely that it did not crash. The mock is seeded
+  with one default card and a two-plan catalog, so `list_*` return something
+  realistic — a mock that answers `[]` to everything makes tests pass for the
+  wrong reason.
+
 ## 5.9.17 — 2026-08-13
 
 ### Added

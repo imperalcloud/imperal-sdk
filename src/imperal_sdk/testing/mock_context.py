@@ -20,8 +20,9 @@ from imperal_sdk.types.identity import UserContext
 from imperal_sdk.context import Context, TimeContext
 from imperal_sdk.errors import ExtensionError
 from imperal_sdk.types.models import (
-    BalanceInfo, CompletionResult, Document, FileInfo,
-    HTTPResponse, LimitsResult, SubscriptionInfo,
+    AutoTopupSettings, BalanceInfo, ChangePlanResult, CompletionResult,
+    Document, FileInfo, HTTPResponse, LimitsResult, SetupIntentResult,
+    SubscriptionInfo, TopupResult,
 )
 from imperal_sdk.types.pagination import Page
 
@@ -116,6 +117,30 @@ class MockBilling:
     def __init__(self, balance: int = 50000, plan: str = "pro"):
         self.balance = balance
         self.plan = plan
+        # State the rest of BillingProtocol reads/writes. Seeded with one
+        # default card and one plan so list_* return something realistic —
+        # a mock that returns [] for everything makes tests pass for the
+        # wrong reason.
+        self.payment_methods: list[dict] = [
+            {"id": "pm_mock_1", "brand": "visa", "last4": "4242",
+             "exp_month": 12, "exp_year": 2030, "is_default": True}
+        ]
+        self.payments: list[dict] = []
+        self.plans: list[dict] = [
+            {"id": "pro", "name": "Pro", "price_cents": 2900, "tokens": 250000},
+            {"id": "business", "name": "Business", "price_cents": 9900, "tokens": 1000000},
+        ]
+        self.auto_topup: dict = {
+            "enabled": False,
+            "threshold_pct": 10,
+            "recharge_tokens": 20000,
+            "payment_method_id": "",
+        }
+        self.billing_profile: dict = {}
+        self.subscription_status = "active"
+        # Every state-changing call is recorded here so a test can assert
+        # what the extension ATTEMPTED, not merely that it did not crash.
+        self.calls: list[tuple] = []
 
     async def check_limits(self) -> LimitsResult:
         return LimitsResult(allowed=True, balance=self.balance, plan=self.plan)
@@ -133,6 +158,118 @@ class MockBilling:
 
     async def get_balance(self) -> BalanceInfo:
         return BalanceInfo(balance=self.balance, plan=self.plan, cap=250000)
+
+    # ── The rest of BillingProtocol ──────────────────────────────────────
+    # 5.9.18: this mock implemented 4 of the protocol's 20 methods, so
+    # `Context(billing=MockBilling())` failed a type check — including the
+    # test-setup example in the i18n guide, which was correct code defeated
+    # by an incomplete mock. Money operations record their calls (rather
+    # than silently succeeding) so a test can assert WHAT was attempted.
+
+    async def list_payment_methods(self, user: Any = None) -> list:
+        return list(self.payment_methods)
+
+    async def list_payments(
+        self, user: Any = None, limit: int = 50, offset: int = 0
+    ) -> list:
+        return list(self.payments)[offset : offset + limit]
+
+    async def create_setup_intent(self, user: Any = None) -> SetupIntentResult:
+        return SetupIntentResult(
+            client_secret="seti_mock_secret",
+            publishable_key="pk_test_mock",
+        )
+
+    async def set_default_payment_method(self, pm_id: str, user: Any = None) -> bool:
+        for pm in self.payment_methods:
+            pm["is_default"] = pm.get("id") == pm_id
+        self.calls.append(("set_default_payment_method", pm_id))
+        return True
+
+    async def remove_payment_method(self, pm_id: str, user: Any = None) -> bool:
+        before = len(self.payment_methods)
+        self.payment_methods = [
+            pm for pm in self.payment_methods if pm.get("id") != pm_id
+        ]
+        self.calls.append(("remove_payment_method", pm_id))
+        return len(self.payment_methods) < before
+
+    async def change_plan(
+        self, plan_id: str, period: str = "monthly", user: Any = None
+    ) -> ChangePlanResult:
+        self.plan = plan_id
+        self.calls.append(("change_plan", plan_id, period))
+        return ChangePlanResult(
+            action="change_plan",
+            plan=plan_id,
+            succeeded=True,
+        )
+
+    async def topup(
+        self,
+        tokens: int,
+        price_cents: int,
+        save_payment_method: bool = True,
+        off_session: bool = True,
+        user: Any = None,
+    ) -> TopupResult:
+        self.balance += tokens
+        self.calls.append(("topup", tokens, price_cents))
+        self.payments.append(
+            {"type": "topup", "tokens": tokens, "amount_cents": price_cents,
+             "status": "succeeded"}
+        )
+        return TopupResult(
+            payment_intent_id="pi_mock_topup",
+            publishable_key="pk_test_mock",
+            succeeded=True,
+        )
+
+    async def create_billing_portal_session(self, user: Any = None) -> str:
+        return "https://billing.example.test/session/mock"
+
+    async def list_plans(self, user: Any = None) -> list:
+        return list(self.plans)
+
+    async def get_auto_topup(self, user: Any = None) -> AutoTopupSettings:
+        return AutoTopupSettings(**self.auto_topup)
+
+    async def set_auto_topup(
+        self,
+        enabled: bool,
+        threshold_pct: int = 10,
+        recharge_tokens: int = 20000,
+        payment_method_id: str = "",
+        user: Any = None,
+    ) -> bool:
+        self.auto_topup = {
+            "enabled": enabled,
+            "threshold_pct": threshold_pct,
+            "recharge_tokens": recharge_tokens,
+            "payment_method_id": payment_method_id,
+        }
+        self.calls.append(("set_auto_topup", enabled))
+        return True
+
+    async def cancel_subscription(self, user: Any = None) -> dict:
+        self.subscription_status = "cancelling"
+        self.calls.append(("cancel_subscription",))
+        return {"status": "success", "cancel_at_period_end": True}
+
+    async def resume_subscription(self, user: Any = None) -> dict:
+        self.subscription_status = "active"
+        self.calls.append(("resume_subscription",))
+        return {"status": "success", "cancel_at_period_end": False}
+
+    async def renew_subscription(self, user: Any = None) -> dict:
+        self.subscription_status = "active"
+        self.calls.append(("renew_subscription",))
+        return {"status": "success", "plan_id": self.plan}
+
+    async def update_billing_profile(self, profile: dict, user: Any = None) -> bool:
+        self.billing_profile.update(profile)
+        self.calls.append(("update_billing_profile", dict(profile)))
+        return True
 
 
 class MockSkeleton:

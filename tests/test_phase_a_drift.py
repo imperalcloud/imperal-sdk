@@ -56,3 +56,81 @@ def test_max_call_depth_matches_kernel():
     # Coordinated with the live kernel default (2026-05-31 admin-tunable deploy).
     KERNEL_ALLOWED_NESTED_CALLS = 6
     assert client.MAX_CALL_DEPTH == KERNEL_ALLOWED_NESTED_CALLS + 1  # == 7
+
+
+def test_every_mock_implements_its_whole_protocol():
+    """Each Mock* must cover ALL of its protocol, names AND signatures.
+
+    Written after MockBilling was found implementing 4 of BillingProtocol's 19
+    methods, which made `Context(billing=MockBilling())` fail a type check —
+    extensions touching billing could not write a typed unit test with the SDK's
+    own testing kit. The drift went unnoticed because the only guard here
+    (test_billing_track_usage_matches_client) inspected a single method.
+
+    This checks every pair, so the next omission fails on the spot instead of
+    surfacing months later as someone's broken example.
+    """
+    import imperal_sdk.context as ctxmod
+    import imperal_sdk.testing.mock_context as mockmod
+
+    PAIRS = [
+        ("StoreProtocol", "MockStore"),
+        ("AIProtocol", "MockAI"),
+        ("BillingProtocol", "MockBilling"),
+        ("NotifyProtocol", "MockNotify"),
+        ("StorageProtocol", "MockStorage"),
+        ("HTTPProtocol", "MockHTTP"),
+        ("ConfigProtocol", "MockConfig"),
+        ("SkeletonProtocol", "MockSkeleton"),
+    ]
+
+    def public_methods(cls):
+        return {
+            n for n, _ in inspect.getmembers(cls, inspect.isfunction)
+            if not n.startswith("_")
+        }
+
+    problems: list[str] = []
+    for proto_name, mock_name in PAIRS:
+        proto = getattr(ctxmod, proto_name, None)
+        mock = getattr(mockmod, mock_name, None)
+        if proto is None or mock is None:      # pair renamed/removed
+            problems.append(f"{proto_name}/{mock_name}: not found")
+            continue
+
+        missing = sorted(public_methods(proto) - public_methods(mock))
+        if missing:
+            problems.append(f"{mock_name} is missing {missing}")
+
+        # A method present but with the wrong parameters is just as broken as
+        # a missing one — callers type-check against the protocol signature.
+        for name in sorted(public_methods(proto) & public_methods(mock)):
+            p = list(inspect.signature(getattr(proto, name)).parameters)
+            m = list(inspect.signature(getattr(mock, name)).parameters)
+            if p != m:
+                problems.append(f"{mock_name}.{name} signature {m} != protocol {p}")
+
+    assert not problems, "mock/protocol drift:\n  " + "\n  ".join(problems)
+
+
+def test_mock_billing_satisfies_protocol():
+    """The runtime check the type checker mirrors."""
+    assert isinstance(MockBilling(), BillingProtocol)
+
+
+def test_billing_protocol_declares_its_return_types():
+    """No BillingProtocol method may go unannotated.
+
+    Four methods (create_setup_intent, change_plan, topup, get_auto_topup) had
+    no return annotation, so a checker inferred None — and every honest client
+    returning a real result object was reported incompatible with the protocol
+    it actually satisfies. An unannotated `...` stub reads as deliberate, which
+    is exactly why nobody caught it by eye.
+    """
+    unannotated = [
+        name
+        for name, fn in inspect.getmembers(BillingProtocol, inspect.isfunction)
+        if not name.startswith("_")
+        and inspect.signature(fn).return_annotation is inspect.Signature.empty
+    ]
+    assert not unannotated, f"BillingProtocol methods without a return type: {unannotated}"
