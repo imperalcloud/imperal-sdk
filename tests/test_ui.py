@@ -182,10 +182,35 @@ class TestInput:
         assert d["props"]["param_name"] == "username"
         assert d["props"]["placeholder"] == "Name"
 
-    def test_no_label_prop(self):
-        """SDK Input does NOT have label parameter."""
-        with pytest.raises(TypeError):
-            ui.Input(label="Name")
+    def test_labeled_variant(self):
+        """SDK Input supports the LABELED variant (system requirement).
+
+        Was previously asserted as *absent*; the renderer had read `label`,
+        `description`, `error`, `required` for a long time, so extensions
+        simply could not reach a labeled field. Now they can — and the
+        label-less shape must keep serializing exactly as before.
+        """
+        props = ui.Input(
+            label="Contract amount",
+            placeholder="e.g. 500.00",
+            description="Empty = use the plan price.",
+            required=True,
+        ).to_dict()["props"]
+        assert props["label"] == "Contract amount"
+        assert props["description"] == "Empty = use the plan price."
+        assert props["required"] is True
+        # A placeholder never replaces a label — both travel together.
+        assert props["placeholder"] == "e.g. 500.00"
+
+    def test_unlabeled_variant_is_byte_identical(self):
+        """The label-less input is untouched: no new keys on the wire."""
+        assert ui.Input(placeholder="Name").to_dict()["props"] == {
+            "placeholder": "Name", "value": "", "param_name": "value",
+        }
+
+    def test_variant_is_validated(self):
+        with pytest.raises(ValueError):
+            ui.Input(variant="fancy")
 
 
 class TestToggle:
@@ -206,10 +231,21 @@ class TestSelect:
         assert len(d["props"]["options"]) == 2
         assert d["props"]["value"] == "a"
 
-    def test_no_label_prop(self):
-        """SDK Select does NOT have label parameter."""
-        with pytest.raises(TypeError):
-            ui.Select(options=[], label="Pick")
+    def test_labeled_variant(self):
+        """SDK Select supports the LABELED variant (system requirement)."""
+        props = ui.Select(
+            options=[{"value": "card", "label": "Card"}],
+            label="How they pay",
+            description="Enterprise may settle by invoice.",
+            required=True,
+        ).to_dict()["props"]
+        assert props["label"] == "How they pay"
+        assert props["required"] is True
+
+    def test_unlabeled_variant_is_byte_identical(self):
+        assert ui.Select(options=[]).to_dict()["props"] == {
+            "options": [], "value": "", "param_name": "value",
+        }
 
 
 class TestForm:
@@ -249,10 +285,23 @@ class TestStat:
         assert d["props"]["color"] == "green"
         assert d["props"]["label"] == "Users"
 
-    def test_no_trend_direction_prop(self):
-        """SDK Stat does NOT have trend_direction parameter."""
-        with pytest.raises(TypeError):
-            ui.Stat(label="X", value=0, trend_direction="up")
+    def test_trend_direction_and_description(self):
+        """Stat can say WHICH WAY a trend points — up is not always good.
+
+        Rising spend is bad, rising revenue is good, so direction is explicit
+        rather than inferred from the trend string.
+        """
+        props = ui.Stat(
+            label="Spent", value="34,287,494", trend="+12%",
+            trend_direction="up", description="net of refunds", color="red",
+        ).to_dict()["props"]
+        assert props["trend_direction"] == "up"
+        assert props["description"] == "net of refunds"
+        assert props["color"] == "red"
+
+    def test_direction_is_validated(self):
+        with pytest.raises(ValueError):
+            ui.Stat(label="X", value=0, trend_direction="sideways")
 
 
 class TestStats:
@@ -319,10 +368,23 @@ class TestBadge:
 
 
 class TestAlert:
-    def test_types(self):
-        for t in ("info", "success", "warn", "error"):
-            d = ui.Alert(message="msg", type=t).to_dict()
-            assert d["props"]["type"] == t
+    def test_severity_reaches_the_renderer(self):
+        """Severity must land on `variant` — the prop the renderer reads.
+
+        `Alert(type="error")` used to serialize a prop nothing consumed, so a
+        red warning silently rendered as a blue "info" notice. The legacy
+        spelling still works and is now translated instead of dropped.
+        """
+        for severity in ("info", "success", "warn", "error"):
+            legacy = ui.Alert(message="msg", type=severity).to_dict()["props"]
+            modern = ui.Alert(message="msg", variant=severity).to_dict()["props"]
+            assert legacy["variant"] == severity
+            assert modern["variant"] == severity
+            assert "type" not in legacy  # the dead prop is gone from the wire
+
+    def test_unknown_severity_is_caught(self):
+        with pytest.raises(ValueError):
+            ui.Alert(message="msg", variant="critical")
 
 
 class TestChart:

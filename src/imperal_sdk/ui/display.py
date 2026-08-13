@@ -5,14 +5,36 @@ from typing import Any
 from .base import UINode, UIAction
 
 
-def Text(content: str, variant: str = "body") -> UINode:
-    """Text block. variant: heading/body/caption/code."""
-    return UINode(type="Text", props={"content": content, "variant": variant})
+def Text(content: str, variant: str = "body", truncate: bool = False,
+         className: str = "") -> UINode:
+    """Text block. variant: heading/body/caption/code.
+
+    truncate: clip to a single line with an ellipsis instead of wrapping. For
+    unbounded values inside a fixed-width cell (a long email, a raw ledger
+    reason) — the full text stays in the DOM, so it is still selectable and
+    readable by assistive tech; only the pixels are clipped.
+    className: escape hatch for one-off spacing. Prefer a layout primitive.
+    """
+    props: dict[str, Any] = {"content": content, "variant": variant}
+    if truncate:
+        props["truncate"] = True
+    if className:
+        props["className"] = className
+    return UINode(type="Text", props=props)
 
 
-def Icon(name: str, size: int = 16, color: str = "") -> UINode:
-    """Lucide icon by name."""
-    return UINode(type="Icon", props={"name": name, "size": size, "color": color})
+def Icon(name: str, size: int = 16, color: str = "", className: str = "") -> UINode:
+    """Lucide icon by name.
+
+    name: exact Lucide export, PascalCase (``"Coins"``, ``"TriangleAlert"``).
+    An unknown name renders nothing at all, so verify the spelling rather than
+    trusting a guess.
+    className: extra classes for alignment tweaks.
+    """
+    props: dict[str, Any] = {"name": name, "size": size, "color": color}
+    if className:
+        props["className"] = className
+    return UINode(type="Icon", props=props)
 
 
 def Header(text: str, level: int = 2, subtitle: str = "") -> UINode:
@@ -49,7 +71,20 @@ def Markdown(content: str) -> UINode:
 
 
 def Empty(message: str = "No data", icon: str = "", action: UIAction | None = None) -> UINode:
-    """Empty state placeholder."""
+    """Empty state placeholder — the standard for "there is nothing here yet".
+
+    Always prefer this over a bare ``ui.Text("No cases yet")``: an empty screen
+    is the moment the user most needs a way forward, and plain text gives none.
+
+    message: name what is missing in the user's own terms.
+    icon: Lucide name, sized and muted by the renderer.
+    action: the way OUT of the empty state — ``Send("Start an evidence case")``
+        to put the request in chat, or ``Call(...)`` to run a handler directly.
+        The button label comes from the action's own ``label`` param when set.
+
+    An empty state with no ``action`` is a dead end; add one whenever a
+    sensible next step exists.
+    """
     props: dict[str, Any] = {"message": message}
     if icon: props["icon"] = icon
     if action: props["action"] = action

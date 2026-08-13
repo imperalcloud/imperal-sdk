@@ -27,6 +27,12 @@ def Open(url: str) -> UIAction:
 def TrayResponse(badge=None, panel=None):
     """Structure a system tray handler response.
 
+    NOTE — this is an ENVELOPE, not a rendered component. It is consumed by the
+    kernel (the manifest carries a ``tray`` section and ``__tray__*`` synthetic
+    handlers), which unpacks ``badge`` and ``panel`` and renders each with its
+    own real component. So there is deliberately no ``TrayResponse`` entry in
+    the panel component registry, and its absence there is not a gap.
+
     Args:
         badge: UINode for the tray icon badge (e.g. Badge("5", color="red")).
                Shown as a small number/dot overlay on the tray icon.

@@ -14,6 +14,53 @@ INPUT_TYPES = ("text", "password", "email", "number", "url")
 # (kernel emits the node, renderer owns the look). Add new variants here only.
 FILEUPLOAD_VARIANTS = ("default", "futuristic", "compact")
 
+# Presentational variants shared by the text-entry fields (Input/TextArea).
+# "default" = the recessed control chrome; "ghost" = transparent, for dense
+# toolbars and inline edit cells where a full control frame is visual noise.
+FIELD_VARIANTS = ("default", "ghost")
+
+
+def _field_props(
+    props: dict[str, Any],
+    *,
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
+    readonly: bool | None = None,
+) -> dict[str, Any]:
+    """Attach the shared LABELED-FIELD contract to any input node.
+
+    SYSTEM REQUIREMENT — labeled input variant (design, 2026-08-13). Every
+    Imperal input supports two shapes:
+
+    * **without label** — the original one, still valid where the purpose is
+      already unambiguous from the immediate context;
+    * **with label** — the DEFAULT for new screens, where label and control
+      live in one container.
+
+    Passing ``label`` is all an extension has to do. The renderer wraps the
+    control in its ``Field`` primitive, which puts label + control inside a
+    container carrying the ``.field-gap`` class and binds them together with a
+    real ``for``/``id`` pair (generated via ``useId``), so the association is
+    programmatic, not visual — that is what makes it accessible.
+
+    A placeholder is NOT a label. ``placeholder`` may show an example of the
+    expected format, but it disappears the moment the user types, so it can
+    never be the field's only name.
+
+    Every key stays off the wire at its default, so existing label-less inputs
+    serialize byte-identically and older renderers are unaffected.
+    """
+    if label: props["label"] = label
+    if description: props["description"] = description
+    if error: props["error"] = error
+    if required: props["required"] = True
+    if disabled: props["disabled"] = True
+    if readonly: props["readonly"] = True
+    return props
+
 
 def Input(
     placeholder: str = "",
@@ -21,6 +68,13 @@ def Input(
     value: str = "",
     param_name: str = "value",
     type: str = "text",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
+    readonly: bool = False,
+    variant: str = "default",
 ) -> UINode:
     """Text input field. on_submit fires on Enter, value merged as param_name.
 
@@ -29,14 +83,36 @@ def Input(
     ``"email"``, ``"number"``, ``"url"``. Prefer ``ui.Password(...)`` for
     credential entry — it's a thin convenience wrapper that pins type for
     federal EXT-SECRETS-V1 UIs.
+
+    LABELED VARIANT (v5.9.15+, preferred for new screens)::
+
+        ui.Input(label="Contract amount", placeholder="e.g. 500.00",
+                 description="Empty = use the plan price.",
+                 param_name="contract_amount")
+
+    Pass ``label`` and the renderer emits the label/control pair inside one
+    ``.field-gap`` container, wired together with a proper ``for``/``id``.
+    ``description`` renders as help text below the control (and is announced
+    via ``aria-describedby``); ``error`` renders an inline error and flips
+    ``aria-invalid``; ``required`` marks it both visually and semantically.
+    Use the label-less form only deliberately, where a nearby heading already
+    names the field — a placeholder alone does not.
+
+    ``variant``: ``"default"`` (recessed control chrome) or ``"ghost"``
+    (transparent, for dense toolbars and inline editing).
     """
     if type not in INPUT_TYPES:
         raise ValueError(f"ui.Input type must be one of {INPUT_TYPES}, got {type!r}")
+    if variant not in FIELD_VARIANTS:
+        raise ValueError(f"ui.Input variant must be one of {FIELD_VARIANTS}, got {variant!r}")
     props: dict[str, Any] = {"placeholder": placeholder, "value": value, "param_name": param_name}
     if type and type != "text":
         props["type"] = type
     if on_submit: props["on_submit"] = on_submit
-    return UINode(type="Input", props=props)
+    if variant != "default": props["variant"] = variant
+    return UINode(type="Input", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required, disabled=disabled, readonly=readonly))
 
 
 def Password(
@@ -87,12 +163,24 @@ def Select(
     placeholder: str = "",
     on_change: UIAction | None = None,
     param_name: str = "value",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
 ) -> UINode:
-    """Single-select dropdown. Each option: {"value", "label"}."""
+    """Single-select dropdown. Each option: {"value", "label"}.
+
+    Supports the same LABELED-FIELD contract as ``ui.Input``: pass ``label``
+    to get the label/control pair in one ``.field-gap`` container, bound with
+    a proper ``for``/``id``. Preferred for new screens.
+    """
     props: dict[str, Any] = {"options": options, "value": value, "param_name": param_name}
     if placeholder: props["placeholder"] = placeholder
     if on_change: props["on_change"] = on_change
-    return UINode(type="Select", props=props)
+    return UINode(type="Select", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required, disabled=disabled))
 
 
 def MultiSelect(
@@ -127,10 +215,16 @@ def Slider(
     step: int = 1,
     label: str = "",
     param_name: str = "value",
+    disabled: bool = False,
 ) -> UINode:
-    """Numeric range slider."""
+    """Numeric range slider.
+
+    The renderer already pairs ``label`` with the control inside a
+    ``.field-gap`` container and binds them via ``for``/``id``.
+    """
     props: dict[str, Any] = {"min": min, "max": max, "value": value, "step": step, "param_name": param_name}
     if label: props["label"] = label
+    if disabled: props["disabled"] = True
     return UINode(type="Slider", props=props)
 
 
@@ -139,11 +233,33 @@ def DatePicker(
     placeholder: str = "Select date",
     on_change: UIAction | None = None,
     param_name: str = "date",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
+    min: str = "",
+    max: str = "",
 ) -> UINode:
-    """Date picker calendar input."""
-    props: dict[str, Any] = {"value": value, "placeholder": placeholder, "param_name": param_name}
+    """Date picker calendar input.
+
+    Supports the LABELED-FIELD contract (``label``/``description``/``error``/
+    ``required``) exactly like ``ui.Input``, plus ``min``/``max`` to bound the
+    selectable range (ISO ``YYYY-MM-DD``) — the renderer enforces both natively.
+
+    Note: a native date control paints its own ``dd/mm/yyyy`` hint, so a
+    placeholder is physically not displayable here. The parameter is kept so
+    existing calls keep working, but it is NOT put on the wire — an ignored
+    prop travelling in every payload is a lie about what the UI does. Name the
+    field with ``label`` instead.
+    """
+    props: dict[str, Any] = {"value": value, "param_name": param_name}
     if on_change: props["on_change"] = on_change
-    return UINode(type="DatePicker", props=props)
+    if min: props["min"] = min
+    if max: props["max"] = max
+    return UINode(type="DatePicker", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required, disabled=disabled))
 
 
 def FileUpload(
@@ -199,11 +315,24 @@ def TextArea(
     rows: int = 4,
     on_submit: UIAction | None = None,
     param_name: str = "text",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
+    readonly: bool = False,
 ) -> UINode:
-    """Multi-line text area."""
+    """Multi-line text area.
+
+    Supports the same LABELED-FIELD contract as ``ui.Input`` — pass ``label``
+    and the renderer pairs label + control inside one ``.field-gap`` container
+    with a real ``for``/``id`` binding. See ``_field_props`` for the full rule.
+    """
     props: dict[str, Any] = {"placeholder": placeholder, "value": value, "rows": rows, "param_name": param_name}
     if on_submit: props["on_submit"] = on_submit
-    return UINode(type="TextArea", props=props)
+    return UINode(type="TextArea", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required, disabled=disabled, readonly=readonly))
 
 
 def RichEditor(content: str = "", placeholder: str = "Start writing...",

@@ -34,9 +34,19 @@ def Stack(
     return UINode(type="Stack", props=props)
 
 
-def Grid(children: list[UINode], columns: int = 2, gap: int = 3) -> UINode:
-    """CSS Grid layout."""
-    return UINode(type="Grid", props={"children": children, "columns": columns, "gap": gap})
+def Grid(children: list[UINode], columns: int = 2, gap: int = 3,
+         className: str = "") -> UINode:
+    """CSS Grid layout.
+
+    columns: target column count. The renderer collapses toward one column on
+    narrow viewports, so pick the widest sensible layout rather than a
+    mobile-safe compromise.
+    className: escape hatch for a one-off grid rule.
+    """
+    props: dict[str, Any] = {"children": children, "columns": columns, "gap": gap}
+    if className:
+        props["className"] = className
+    return UINode(type="Grid", props=props)
 
 
 def Tabs(tabs: list[dict], default_tab: int = 0) -> UINode:

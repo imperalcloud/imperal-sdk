@@ -5,20 +5,71 @@ from typing import Any
 from .base import UINode, UIAction
 
 
-def Alert(message: str, title: str = "", type: str = "info") -> UINode:
-    """Alert banner — info/success/warn/error."""
-    return UINode(type="Alert", props={"message": message, "title": title, "type": type})
+# The single source of truth for Alert severities. The renderer keys its colour
+# ramp and icon off this exact vocabulary.
+ALERT_VARIANTS = ("info", "success", "warn", "error")
 
 
-def Progress(value: int, label: str = "", variant: str = "bar", color: str = "") -> UINode:
-    """Progress bar or circular indicator. value: 0-100.
+def Alert(
+    message: str,
+    title: str = "",
+    variant: str = "",
+    dismissible: bool = False,
+    *,
+    type: str = "",
+) -> UINode:
+    """Alert banner — info/success/warn/error.
+
+    The severity is ``variant``. ``type`` is kept as a permanent alias because
+    every extension written before v5.9.15 passes it; ``variant`` wins if both
+    are given.
+
+    Why this matters: the renderer only ever read ``variant``, so a node built
+    as ``Alert(type="error")`` used to serialize a prop nothing consumed and
+    fell back to blue "info" — a red warning silently rendered as a neutral
+    notice. Both spellings now land on the prop the renderer actually reads.
+
+    dismissible: give the banner a close button (transient notices only —
+    never for a state the user still needs to see after a refresh).
+    """
+    resolved = variant or type or "info"
+    if resolved not in ALERT_VARIANTS:
+        raise ValueError(f"ui.Alert variant must be one of {ALERT_VARIANTS}, got {resolved!r}")
+    props: dict[str, Any] = {"message": message, "title": title, "variant": resolved}
+    if dismissible:
+        props["dismissible"] = True
+    return UINode(type="Alert", props=props)
+
+
+def Progress(
+    value: int,
+    label: str = "",
+    variant: str = "bar",
+    color: str = "",
+    max: int = 0,
+    show_value: bool = False,
+    size: str = "",
+) -> UINode:
+    """Progress bar or circular indicator.
+
+    value: current amount. Percentage by default (0-100); pass ``max`` to count
+    in natural units instead (e.g. ``value=7, max=12`` for "7 of 12 files") so
+    callers stop hand-computing percentages and rounding away the real numbers.
     color: one of 'blue' (default), 'green', 'red', 'yellow', 'purple'. Empty string
     uses the default blue. Use semantic colors for status bars (e.g. red for
     over-budget, green for healthy).
+    show_value: print the number next to the track.
+    size: 'sm' | 'md' | 'lg' — track thickness.
     """
-    props = {"value": value, "label": label, "variant": variant}
+    props: dict[str, Any] = {"value": value, "label": label, "variant": variant}
     if color:
         props["color"] = color
+    if max:
+        props["max"] = max
+    if show_value:
+        props["show_value"] = True
+    if size:
+        props["size"] = size
     return UINode(type="Progress", props=props)
 
 
@@ -29,6 +80,10 @@ def Chart(
     height: int = 200,
     colors: dict[str, str] | None = None,
     y2_keys: list[str] | None = None,
+    title: str = "",
+    description: str = "",
+    show_legend: bool = False,
+    show_data_table: bool = False,
 ) -> UINode:
     """Chart — line/bar/pie using Recharts.
 
@@ -47,6 +102,14 @@ def Chart(
         ]
     if y2_keys:
         props["y2_keys"] = list(y2_keys)
+    if title:
+        props["title"] = title
+    if description:
+        props["description"] = description
+    if show_legend:
+        props["show_legend"] = True
+    if show_data_table:
+        props["show_data_table"] = True
     return UINode(type="Chart", props=props)
 
 

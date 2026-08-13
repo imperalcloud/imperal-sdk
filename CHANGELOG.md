@@ -2,6 +2,61 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.16 — 2026-08-13
+
+### Added
+- **Labeled input variant (system requirement).** `ui.Input`, `ui.TextArea`,
+  `ui.Select` and `ui.DatePicker` now take `label`, `description`, `error`,
+  `required`, `disabled` (+ `readonly` on the text fields, `variant` on
+  `Input`/`TextArea`). The renderer pairs label and control inside one
+  container carrying `.field-gap` and binds them with a real `for`/`id`, so
+  the association is programmatic, not visual. The labeled shape is the
+  default for new screens; the label-less shape stays valid where the field's
+  purpose is already unambiguous. A placeholder never replaces a label — it
+  may show an example of the expected format, but it disappears the moment
+  the user types, so it can never be the field's only name.
+- **Props the renderer already read but no extension could reach.** 68 of
+  them across 22 components, measured against the live component source
+  rather than guessed: `Button(loading, loading_label, icon_left, icon_right,
+  type)`, `Card(border, padding)`, `List(title, empty_text,
+  search_placeholder, max_height)`, `DataTable(empty_text, sticky_header,
+  max_height)`, `Progress(max, show_value, size)`, `Chart(title, description,
+  show_legend, show_data_table)`, `Badge(size, dot)`, `Text(truncate)`,
+  `Menu(align)`, `Tooltip(delay_ms)`, `Stat(description, trend_direction)`,
+  `Tree(label, + per-node icon/badge/expanded)` and more.
+- **`ui.Dialog(destructive=True)`.** A destructive dialog is an *alert*
+  dialog: it cannot be dismissed by clicking the backdrop or pressing Esc,
+  drops the ✕, and paints Confirm in the danger colour. A stray click must
+  never be an ambiguous answer to "delete this forever?".
+
+### Fixed
+- **`ui.Alert` severity was inert.** The component emitted `type`, the
+  renderer only ever read `variant` — so `Alert(type="error")` serialized a
+  prop nothing consumed and every alert fell back to blue "info": a red
+  warning silently rendered as a neutral notice. Both spellings now land on
+  the prop the renderer reads, and an unknown severity raises instead of
+  degrading quietly. `type=` is kept as a permanent alias — no extension has
+  to change a line.
+- **`ui.Stat(color=...)` was dropped on the floor.** The colour never reached
+  the DOM, so a deliberately red "spent" figure rendered in the default ink.
+  The renderer now applies it through theme tokens (never raw Tailwind
+  scales), so agency themes and dark mode keep working.
+- **`ui.DatePicker` stopped shipping a dead `placeholder`.** A native date
+  control paints its own `dd/mm/yyyy` hint, so the prop was never displayable;
+  it no longer travels in the payload. The parameter is kept, so existing
+  calls keep working.
+- **`ui.Tree` per-node `icon` is honoured**, and the tree is exposed with real
+  `tree`/`treeitem` semantics (depth + expanded state), instead of a flat row
+  of anonymous buttons.
+
+### Notes
+- **Nothing to migrate.** Every new argument is keyword-only-by-default with a
+  falsy default and is omitted from the payload unless set, so nodes built by
+  existing extensions serialize byte-identically. Four tests that asserted the
+  *absence* of these parameters ("SDK Input does NOT have label") were
+  guarding a gap, not a contract; they now assert the contract itself, plus
+  that the label-less shape is unchanged.
+
 ## 5.9.15 — 2026-08-10
 
 ### Documentation

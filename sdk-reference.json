@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.15",
+  "sdk_version": "5.9.16",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -10131,7 +10131,7 @@
     "ui.Alert": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Alert banner \u2014 info/success/warn/error.",
+      "description": "Alert banner \u2014 info/success/warn/error.\n\n    The severity is ``variant``. ``type`` is kept as a permanent alias because\n    every extension written before v5.9.15 passes it; ``variant`` wins if both\n    are given.\n\n    Why this matters: the renderer only ever read ``variant``, so a node built\n    as ``Alert(type=\"error\")`` used to serialize a prop nothing consumed and\n    fell back to blue \"info\" \u2014 a red warning silently rendered as a neutral\n    notice. Both spellings now land on the prop the renderer actually reads.\n\n    dismissible: give the banner a close button (transient notices only \u2014\n    never for a state the user still needs to see after a refresh).",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10155,7 +10155,25 @@
         },
         {
           "annotation": "str",
-          "default": "info",
+          "default": "",
+          "name": "variant",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "dismissible",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
           "name": "type",
           "required": false,
           "type": {
@@ -10260,7 +10278,7 @@
     "ui.Badge": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Colored badge/pill.",
+      "description": "Colored badge/pill.\n\n    size: 'sm' (default) | 'md' | 'lg'.\n    dot: prefix a filled status dot in the same colour \u2014 for live/offline style\n    state, where the colour IS the information and must not rely on text alone.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10290,6 +10308,24 @@
           "type": {
             "ref": "str"
           }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "size",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "dot",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
         }
       ],
       "returns": "UINode"
@@ -10297,7 +10333,7 @@
     "ui.Button": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Clickable button. size: sm/md/lg. icon: Lucide icon name.",
+      "description": "Clickable button. size: sm/md/lg. icon: Lucide icon name.\n\n    icon_left / icon_right: place the glyph on a specific side. ``icon`` stays\n    as the shorthand for the leading position.\n    loading: show a spinner and block re-entry while the action runs \u2014 use it\n    for anything that writes, so a slow save cannot be double-submitted.\n    loading_label: what to say while it runs (\"Saving\u2026\"); the label alone often\n    leaves the user unsure whether the click registered.\n    type: native button type \u2014 ``submit`` inside a Form, ``button`` otherwise.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10363,6 +10399,51 @@
           "type": {
             "ref": "str"
           }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "icon_left",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "icon_right",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "loading",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "loading_label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "type",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
         }
       ],
       "returns": "UINode"
@@ -10389,7 +10470,7 @@
     "ui.Card": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Container card with optional title, subtitle, content and footer slots.",
+      "description": "Container card with optional title, subtitle, content and footer slots.\n\n    border: tri-state. ``None`` keeps the renderer default; ``False`` drops the\n    frame for a card nested inside another card, where a second border reads as\n    clutter rather than structure.\n    padding: ``none`` | ``sm`` | ``md`` | ``lg``. Use ``none`` when the content\n    is a full-bleed table or image that should touch the card edges.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10436,6 +10517,24 @@
           "required": false,
           "type": {
             "ref": "UIAction | None"
+          }
+        },
+        {
+          "annotation": "bool | None",
+          "default": null,
+          "name": "border",
+          "required": false,
+          "type": {
+            "ref": "bool | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "padding",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],
@@ -10500,6 +10599,42 @@
           "required": false,
           "type": {
             "ref": "list[str] | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "title",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "show_legend",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "show_data_table",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],
@@ -10637,7 +10772,7 @@
     "ui.DataTable": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Sortable data table with optional inline cell editing.",
+      "description": "Sortable data table with optional inline cell editing.\n\n    Pair ``DataColumn(editable=True, edit_type=...)`` with ``on_cell_edit`` to\n    get BULK edits without opening each row: the action fires per committed\n    cell with the row id and the new value. Without ``on_cell_edit`` an\n    ``editable`` column stays read-only \u2014 the renderer refuses to offer an\n    edit affordance it cannot deliver.\n\n    empty_text: what to say when ``rows`` is empty. Say what is actually empty\n    (\"No refunds in this period\"), never a bare \"No data\".\n    max_height: pixel cap that makes the body scroll instead of the page.\n    sticky_header: keep the header row visible while the body scrolls \u2014 pair it\n    with ``max_height`` for long tables, otherwise column meaning scrolls away.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10676,6 +10811,33 @@
           "type": {
             "ref": "UIAction | None"
           }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "empty_text",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 0,
+          "name": "max_height",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "sticky_header",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
         }
       ],
       "returns": "UINode"
@@ -10683,7 +10845,7 @@
     "ui.DatePicker": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Date picker calendar input.",
+      "description": "Date picker calendar input.\n\n    Supports the LABELED-FIELD contract (``label``/``description``/``error``/\n    ``required``) exactly like ``ui.Input``, plus ``min``/``max`` to bound the\n    selectable range (ISO ``YYYY-MM-DD``) \u2014 the renderer enforces both natively.\n\n    Note: a native date control paints its own ``dd/mm/yyyy`` hint, so a\n    placeholder is physically not displayable here. The parameter is kept so\n    existing calls keep working, but it is NOT put on the wire \u2014 an ignored\n    prop travelling in every payload is a lie about what the UI does. Name the\n    field with ``label`` instead.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10722,6 +10884,69 @@
           "type": {
             "ref": "str"
           }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "min",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "max",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
         }
       ],
       "returns": "UINode"
@@ -10729,7 +10954,7 @@
     "ui.Dialog": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Modal dialog with confirm/cancel actions.",
+      "description": "Modal dialog with confirm/cancel actions.\n\n    destructive: turn this into a STRICT confirmation for an irreversible\n    action \u2014 delete, purge, revoke. It cannot be dismissed by clicking the\n    backdrop or pressing Escape (only an explicit button closes it), and the\n    confirm button takes the danger tint.\n\n    Why it exists: a stray click on the backdrop must never be able to *look*\n    like a decision on \"permanently delete 15,769 rows\". A soft modal is right\n    for a form the user can reopen; it is wrong for a one-way door. Design\n    systems that split Dialog from AlertDialog encode exactly this distinction\n    \u2014 here it is one primitive with an explicit flag, so the safe default and\n    the strict variant cannot drift apart.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10777,6 +11002,15 @@
           "type": {
             "ref": "UIAction | None"
           }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "destructive",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
         }
       ],
       "returns": "UINode"
@@ -10803,7 +11037,7 @@
     "ui.Empty": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Empty state placeholder.",
+      "description": "Empty state placeholder \u2014 the standard for \"there is nothing here yet\".\n\n    Always prefer this over a bare ``ui.Text(\"No cases yet\")``: an empty screen\n    is the moment the user most needs a way forward, and plain text gives none.\n\n    message: name what is missing in the user's own terms.\n    icon: Lucide name, sized and muted by the renderer.\n    action: the way OUT of the empty state \u2014 ``Send(\"Start an evidence case\")``\n        to put the request in chat, or ``Call(...)`` to run a handler directly.\n        The button label comes from the action's own ``label`` param when set.\n\n    An empty state with no ``action`` is a dead end; add one whenever a\n    sensible next step exists.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11138,7 +11372,7 @@
     "ui.Grid": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "CSS Grid layout.",
+      "description": "CSS Grid layout.\n\n    columns: target column count. The renderer collapses toward one column on\n    narrow viewports, so pick the widest sensible layout rather than a\n    mobile-safe compromise.\n    className: escape hatch for a one-off grid rule.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11167,6 +11401,15 @@
           "required": false,
           "type": {
             "ref": "int"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "className",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],
@@ -11258,7 +11501,7 @@
     "ui.Icon": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Lucide icon by name.",
+      "description": "Lucide icon by name.\n\n    name: exact Lucide export, PascalCase (``\"Coins\"``, ``\"TriangleAlert\"``).\n    An unknown name renders nothing at all, so verify the spelling rather than\n    trusting a guess.\n    className: extra classes for alignment tweaks.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11284,6 +11527,15 @@
           "annotation": "str",
           "default": "",
           "name": "color",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "className",
           "required": false,
           "type": {
             "ref": "str"
@@ -11368,7 +11620,7 @@
     "ui.Input": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Text input field. on_submit fires on Enter, value merged as param_name.\n\n    ``type`` (v4.2.6+) is a hint to the Panel renderer for native HTML input\n    behaviour: ``\"text\"`` (default), ``\"password\"`` (browser-blind, no echo),\n    ``\"email\"``, ``\"number\"``, ``\"url\"``. Prefer ``ui.Password(...)`` for\n    credential entry \u2014 it's a thin convenience wrapper that pins type for\n    federal EXT-SECRETS-V1 UIs.",
+      "description": "Text input field. on_submit fires on Enter, value merged as param_name.\n\n    ``type`` (v4.2.6+) is a hint to the Panel renderer for native HTML input\n    behaviour: ``\"text\"`` (default), ``\"password\"`` (browser-blind, no echo),\n    ``\"email\"``, ``\"number\"``, ``\"url\"``. Prefer ``ui.Password(...)`` for\n    credential entry \u2014 it's a thin convenience wrapper that pins type for\n    federal EXT-SECRETS-V1 UIs.\n\n    LABELED VARIANT (v5.9.15+, preferred for new screens)::\n\n        ui.Input(label=\"Contract amount\", placeholder=\"e.g. 500.00\",\n                 description=\"Empty = use the plan price.\",\n                 param_name=\"contract_amount\")\n\n    Pass ``label`` and the renderer emits the label/control pair inside one\n    ``.field-gap`` container, wired together with a proper ``for``/``id``.\n    ``description`` renders as help text below the control (and is announced\n    via ``aria-describedby``); ``error`` renders an inline error and flips\n    ``aria-invalid``; ``required`` marks it both visually and semantically.\n    Use the label-less form only deliberately, where a nearby heading already\n    names the field \u2014 a placeholder alone does not.\n\n    ``variant``: ``\"default\"`` (recessed control chrome) or ``\"ghost\"``\n    (transparent, for dense toolbars and inline editing).",
       "enums": {
         "type": [
           "text",
@@ -11420,6 +11672,69 @@
           "annotation": "str",
           "default": "text",
           "name": "type",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "readonly",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "default",
+          "name": "variant",
           "required": false,
           "type": {
             "ref": "str"
@@ -11505,7 +11820,7 @@
     "ui.List": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Scrollable list of ListItems. Searchable + auto-paginated.\n\n    page_size: items per page. 0 = no pagination (show all).\n    on_end_reached: action fired when user scrolls to bottom (infinite scroll).\n    selectable: enable multi-select with checkboxes on hover.\n    bulk_actions: buttons for bulk operations. Each: {\"label\", \"icon\", \"action\": Call(...)}.\n        Selected item IDs are injected as 'message_ids' param.\n    total_items: total number of items across all pages (for Paginator display).\n    extra_info: extra text in Paginator footer (e.g. \"3 unread\").",
+      "description": "Scrollable list of ListItems. Searchable + auto-paginated.\n\n    page_size: items per page. 0 = no pagination (show all).\n    on_end_reached: action fired when user scrolls to bottom (infinite scroll).\n    selectable: enable multi-select with checkboxes on hover.\n    bulk_actions: buttons for bulk operations. Each: {\"label\", \"icon\", \"action\": Call(...)}.\n        Selected item IDs are injected as 'message_ids' param.\n    total_items: total number of items across all pages (for Paginator display).\n    extra_info: extra text in Paginator footer (e.g. \"3 unread\").\n    title: header above the list.\n    empty_text: what to show when there are no items. For a genuinely empty\n        collection prefer ``ui.Empty(..., action=...)``, which can offer the way\n        out instead of just stating the absence.\n    search_placeholder: hint in the search box \u2014 name what is searched\n        (\"Search by email or id\") rather than a bare \"Search\".\n    max_height: pixel cap that makes the list scroll instead of the page.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11588,6 +11903,42 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "title",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "empty_text",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "search_placeholder",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 0,
+          "name": "max_height",
+          "required": false,
+          "type": {
+            "ref": "int"
           }
         }
       ],
@@ -11788,7 +12139,7 @@
     "ui.Menu": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Dropdown menu. Each item: {\"label\", \"icon\", \"on_click\", \"separator\"}.",
+      "description": "Dropdown menu. Each item: {\"label\", \"icon\", \"on_click\", \"separator\"}.\n\n    An item may also carry ``\"confirm\": \"Delete this?\"`` \u2014 the renderer gates\n    that entry behind an inline confirmation, so a destructive menu row does not\n    need its own Dialog.\n    align: ``start`` | ``end`` \u2014 which edge the panel aligns to. Use ``end`` for\n    a trigger sitting at the right of a row, so the menu opens inward.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11808,6 +12159,15 @@
           "required": false,
           "type": {
             "ref": "UINode | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "align",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],
@@ -11983,7 +12343,7 @@
     "ui.Progress": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Progress bar or circular indicator. value: 0-100.\n    color: one of 'blue' (default), 'green', 'red', 'yellow', 'purple'. Empty string\n    uses the default blue. Use semantic colors for status bars (e.g. red for\n    over-budget, green for healthy).",
+      "description": "Progress bar or circular indicator.\n\n    value: current amount. Percentage by default (0-100); pass ``max`` to count\n    in natural units instead (e.g. ``value=7, max=12`` for \"7 of 12 files\") so\n    callers stop hand-computing percentages and rounding away the real numbers.\n    color: one of 'blue' (default), 'green', 'red', 'yellow', 'purple'. Empty string\n    uses the default blue. Use semantic colors for status bars (e.g. red for\n    over-budget, green for healthy).\n    show_value: print the number next to the track.\n    size: 'sm' | 'md' | 'lg' \u2014 track thickness.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12018,6 +12378,33 @@
           "annotation": "str",
           "default": "",
           "name": "color",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 0,
+          "name": "max",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "show_value",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "size",
           "required": false,
           "type": {
             "ref": "str"
@@ -12158,7 +12545,7 @@
     "ui.Select": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Single-select dropdown. Each option: {\"value\", \"label\"}.",
+      "description": "Single-select dropdown. Each option: {\"value\", \"label\"}.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input``: pass ``label``\n    to get the label/control pair in one ``.field-gap`` container, bound with\n    a proper ``for``/``id``. Preferred for new screens.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12205,6 +12592,51 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],
@@ -12296,7 +12728,7 @@
     "ui.Slider": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Numeric range slider.",
+      "description": "Numeric range slider.\n\n    The renderer already pairs ``label`` with the control inside a\n    ``.field-gap`` container and binds them via ``for``/``id``.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12352,6 +12784,15 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],
@@ -12442,7 +12883,7 @@
     "ui.Stat": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Metric card \u2014 label + value + optional trend.",
+      "description": "Metric card \u2014 label + value + optional trend.\n\n    color: semantic tint for the value (blue default, green, red, yellow,\n    purple, gray). Use it to make a number mean something at a glance \u2014\n    money spent in red, healthy balance in green.\n\n    trend_direction: 'up' | 'down' | 'neutral'. Drives the arrow and its\n    colour independently of ``trend``'s text, because \"up\" is not always good:\n    rising spend is bad, rising revenue is good. Defaults to neutral.\n\n    description: one short line under the value for the caveat that would\n    otherwise be lost \u2014 e.g. \"excludes admin grants\".",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12486,6 +12927,24 @@
           "annotation": "str",
           "default": "blue",
           "name": "color",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "trend_direction",
           "required": false,
           "type": {
             "ref": "str"
@@ -12644,7 +13103,7 @@
     "ui.Text": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Text block. variant: heading/body/caption/code.",
+      "description": "Text block. variant: heading/body/caption/code.\n\n    truncate: clip to a single line with an ellipsis instead of wrapping. For\n    unbounded values inside a fixed-width cell (a long email, a raw ledger\n    reason) \u2014 the full text stays in the DOM, so it is still selectable and\n    readable by assistive tech; only the pixels are clipped.\n    className: escape hatch for one-off spacing. Prefer a layout primitive.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12665,6 +13124,24 @@
           "type": {
             "ref": "str"
           }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "truncate",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "className",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
         }
       ],
       "returns": "UINode"
@@ -12672,7 +13149,7 @@
     "ui.TextArea": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Multi-line text area.",
+      "description": "Multi-line text area.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` \u2014 pass ``label``\n    and the renderer pairs label + control inside one ``.field-gap`` container\n    with a real ``for``/``id`` binding. See ``_field_props`` for the full rule.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12720,6 +13197,60 @@
           "type": {
             "ref": "str"
           }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "readonly",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
         }
       ],
       "returns": "UINode"
@@ -12727,7 +13258,7 @@
     "ui.Timeline": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Vertical timeline. Each item: {\"title\", \"description\", \"time\", \"icon\", \"color\"}.",
+      "description": "Vertical timeline \u2014 the canonical AUDIT TRAIL / history primitive.\n\n    Each item: ``{\"title\", \"description\", \"time\", \"icon\", \"color\"}``.\n\n    * ``title`` \u2014 what happened (required in practice; the only line always shown)\n    * ``description`` \u2014 the detail: who did it, what changed\n    * ``time`` \u2014 when, as a preformatted string. The renderer prints it verbatim,\n      so format it for humans (\"13 Aug 2026, 20:39\") and keep the timezone honest.\n    * ``icon`` \u2014 Lucide icon name, drawn inside the dot\n    * ``color`` \u2014 ``blue`` | ``green`` | ``red`` | ``amber`` | ``purple`` | ``gray``,\n      the dot's tint. Note ``amber`` (not \"yellow\") is the warning tone here.\n\n    Prefer this over a List for anything chronological \u2014 review history, revision\n    history, chain of custody: the rail makes \"one thing after another\" visible,\n    which a list of rows only implies.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12792,7 +13323,7 @@
     "ui.Tooltip": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Hover tooltip wrapping an optional child node.",
+      "description": "Hover tooltip wrapping an optional child node.\n\n    delay_ms: hover dwell before it appears. Raise it for tooltips on dense\n    rows, so sweeping the cursor across a table does not flash a trail of them.\n\n    A tooltip is supplementary by nature \u2014 it is unreachable on touch and\n    transient for screen readers, so never put information here that the user\n    needs in order to act.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12813,6 +13344,15 @@
           "type": {
             "ref": "UINode | None"
           }
+        },
+        {
+          "annotation": "int",
+          "default": 0,
+          "name": "delay_ms",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
         }
       ],
       "returns": "UINode"
@@ -12820,7 +13360,7 @@
     "ui.TrayResponse": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Structure a system tray handler response.\n\n    Args:\n        badge: UINode for the tray icon badge (e.g. Badge(\"5\", color=\"red\")).\n               Shown as a small number/dot overlay on the tray icon.\n        panel: UINode for the dropdown panel (e.g. List of alerts).\n               Shown when user clicks the tray icon.\n\n    Example::\n\n        @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread\")\n        async def tray_mail(ctx, **kw):\n            count = await ctx.store.count(\"messages\", where={\"read\": False})\n            msgs = await ctx.store.query(\"messages\", where={\"read\": False}, limit=5)\n            return TrayResponse(\n                badge=Badge(str(count), color=\"red\" if count else \"gray\"),\n                panel=List(items=[\n                    ListItem(id=m[\"id\"], title=m[\"subject\"], subtitle=m[\"from\"])\n                    for m in msgs\n                ]) if msgs else None,\n            )",
+      "description": "Structure a system tray handler response.\n\n    NOTE \u2014 this is an ENVELOPE, not a rendered component. It is consumed by the\n    kernel (the manifest carries a ``tray`` section and ``__tray__*`` synthetic\n    handlers), which unpacks ``badge`` and ``panel`` and renders each with its\n    own real component. So there is deliberately no ``TrayResponse`` entry in\n    the panel component registry, and its absence there is not a gap.\n\n    Args:\n        badge: UINode for the tray icon badge (e.g. Badge(\"5\", color=\"red\")).\n               Shown as a small number/dot overlay on the tray icon.\n        panel: UINode for the dropdown panel (e.g. List of alerts).\n               Shown when user clicks the tray icon.\n\n    Example::\n\n        @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread\")\n        async def tray_mail(ctx, **kw):\n            count = await ctx.store.count(\"messages\", where={\"read\": False})\n            msgs = await ctx.store.query(\"messages\", where={\"read\": False}, limit=5)\n            return TrayResponse(\n                badge=Badge(str(count), color=\"red\" if count else \"gray\"),\n                panel=List(items=[\n                    ListItem(id=m[\"id\"], title=m[\"subject\"], subtitle=m[\"from\"])\n                    for m in msgs\n                ]) if msgs else None,\n            )",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12848,7 +13388,7 @@
     "ui.Tree": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Hierarchical tree view. Each node: {\"id\", \"label\", \"children\": [...], \"icon\"}.",
+      "description": "Hierarchical tree view \u2014 for real parent/child structure.\n\n    Each node::\n\n        {\n          \"id\":       \"cat-7\",           # stable key\n          \"label\":    \"Case studies\",    # visible text\n          \"children\": [ ...same shape... ],\n          \"icon\":     \"FolderOpen\",      # optional Lucide name; falls back to\n                                         # folder/file by whether it has children\n          \"badge\":    12,                # optional trailing count\n          \"expanded\": True,              # optional: open this branch initially\n          \"on_click\": Call(\"open\", id=\"cat-7\"),\n        }\n\n    ``children`` nests the same shape to any depth; a node with children gets a\n    disclosure chevron, one without renders as a leaf. ``on_click`` fires a\n    UIAction for that node.\n\n    ``label`` names the whole tree for assistive tech (\"Product categories\") \u2014\n    the tree is exposed with real tree/treeitem semantics, so a screen reader\n    announces depth and expanded state instead of a wall of anonymous buttons.\n\n    Use it wherever a hierarchy is currently flattened into an indented list \u2014\n    content categories, product categories, folder structures: the nesting is\n    real information, and a flat list throws it away.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12859,6 +13399,15 @@
           "required": true,
           "type": {
             "ref": "list[dict]"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],
