@@ -2,6 +2,33 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.9.19 — 2026-08-13
+
+### Added
+- **`ui.Checkbox` — a single boolean a form submits.** The kit had no checkbox
+  at all. An extension that needed "I agree to the terms" had to fake one out of
+  `ui.Toggle`, which is a different control with different semantics: a toggle
+  applies its change the moment it flips (a setting), a checkbox is a value
+  carried with the rest of the form. Unlike every other labeled field the label
+  renders *beside* the box rather than above it — a checkbox reads as one
+  sentence with its label — while keeping the same guarantees: one `.field-gap`
+  container, a real `for`/`id` binding (clicking the text ticks the box),
+  `description` announced via `aria-describedby`, `error` flipping
+  `aria-invalid`. The initial value is registered with the form, so an unticked
+  box submits `false` instead of vanishing from the payload as `undefined`.
+- **`ui.RadioGroup` — one choice out of N, with every option visible.** Also
+  absent until now, so a 3-way choice had to become a dropdown even where all
+  three options deserved to be on screen (billing mode, plan tier). Options take
+  the same `{"value", "label"}` shape as `ui.Select`, plus an optional
+  per-option `description` and `disabled`. `orientation` is `"vertical"`
+  (default) or `"horizontal"`, validated at call time. The renderer emits a real
+  `role="radiogroup"` labelled through `aria-labelledby`, and the options share
+  one native `name` — so arrow-key navigation and the roving tab stop come from
+  the browser rather than from re-implemented JavaScript.
+
+  Prefer `ui.RadioGroup` for 2-5 options that deserve to be seen; above about
+  six, a dropdown is kinder.
+
 ## 5.9.18 — 2026-08-13
 
 ### Fixed

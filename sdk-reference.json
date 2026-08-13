@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.18",
+  "sdk_version": "5.9.19",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -10640,6 +10640,88 @@
       ],
       "returns": "UINode"
     },
+    "ui.Checkbox": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "A single boolean checkbox \u2014 consent, opt-in, one independent flag.\n\n    Distinct from ``ui.Toggle``: a toggle applies its change immediately (a\n    setting that takes effect the moment it flips), while a checkbox is a form\n    value submitted with the rest of the form. Use ``ui.Toggle`` for \"dark mode\n    on/off\", ``ui.Checkbox`` for \"I agree to the terms\".\n\n    Unlike every other labeled field the label renders BESIDE the box rather\n    than above it \u2014 a checkbox reads as one sentence with its label, and a\n    label floating above an empty box is a known usability failure. It is still\n    a real ``for``/``id`` binding, so clicking the text ticks the box.\n\n    ::\n\n        ui.Checkbox(label=\"Send me the monthly report\",\n                    description=\"One email a month. Unsubscribe anytime.\",\n                    param_name=\"subscribe\")",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "value",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "UIAction | None",
+          "default": null,
+          "name": "on_change",
+          "required": false,
+          "type": {
+            "ref": "UIAction | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "checked",
+          "name": "param_name",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
     "ui.Code": {
       "action_vocab_safe": false,
       "declarative_capable": false,
@@ -12504,6 +12586,106 @@
           "annotation": "str",
           "default": "",
           "name": "size",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
+    "ui.RadioGroup": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Pick exactly ONE option from a small set, with every choice visible.\n\n    Each option is ``{\"value\", \"label\"}`` \u2014 the same shape as ``ui.Select``,\n    plus an optional per-option ``\"description\"`` and ``\"disabled\"``.\n\n    Prefer this over ``ui.Select`` when there are 2-5 options and the choice\n    matters enough that the user should see them all without opening a dropdown\n    (billing mode, plan tier, destructive-vs-safe strategy). Past roughly six\n    options a dropdown is kinder.\n\n    ``orientation``: ``\"vertical\"`` (default) or ``\"horizontal\"`` for short\n    labels that fit on one line.\n\n    The group renders as a real ``role=\"radiogroup\"`` labelled by its own\n    label, and arrow keys move between options \u2014 the native radio behaviour\n    keyboard and assistive-technology users expect.\n\n    ::\n\n        ui.RadioGroup(label=\"How should this customer pay?\",\n                      options=[\n                          {\"value\": \"card\", \"label\": \"By card\",\n                           \"description\": \"Charged automatically each period.\"},\n                          {\"value\": \"manual\", \"label\": \"Manually, by invoice\"},\n                          {\"value\": \"free\", \"label\": \"Free \u2014 no charge\"},\n                      ],\n                      value=\"card\", param_name=\"billing_mode\")",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "list[dict]",
+          "default": null,
+          "name": "options",
+          "required": true,
+          "type": {
+            "ref": "list[dict]"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "value",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "UIAction | None",
+          "default": null,
+          "name": "on_change",
+          "required": false,
+          "type": {
+            "ref": "UIAction | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "value",
+          "name": "param_name",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "error",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "required",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "disabled",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "vertical",
+          "name": "orientation",
           "required": false,
           "type": {
             "ref": "str"

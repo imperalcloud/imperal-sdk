@@ -445,3 +445,97 @@ def TagInput(
     return UINode(type="TagInput", props=_field_props(
         props, label=label, description=description, error=error,
         required=required))
+
+
+def Checkbox(
+    label: str = "",
+    value: bool = False,
+    on_change: UIAction | None = None,
+    param_name: str = "checked",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
+) -> UINode:
+    """A single boolean checkbox — consent, opt-in, one independent flag.
+
+    Distinct from ``ui.Toggle``: a toggle applies its change immediately (a
+    setting that takes effect the moment it flips), while a checkbox is a form
+    value submitted with the rest of the form. Use ``ui.Toggle`` for "dark mode
+    on/off", ``ui.Checkbox`` for "I agree to the terms".
+
+    Unlike every other labeled field the label renders BESIDE the box rather
+    than above it — a checkbox reads as one sentence with its label, and a
+    label floating above an empty box is a known usability failure. It is still
+    a real ``for``/``id`` binding, so clicking the text ticks the box.
+
+    ::
+
+        ui.Checkbox(label="Send me the monthly report",
+                    description="One email a month. Unsubscribe anytime.",
+                    param_name="subscribe")
+    """
+    props: dict[str, Any] = {"value": bool(value), "param_name": param_name}
+    if on_change:
+        props["on_change"] = on_change
+    return UINode(type="Checkbox", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required, disabled=disabled))
+
+
+def RadioGroup(
+    options: list[dict],
+    value: str = "",
+    on_change: UIAction | None = None,
+    param_name: str = "value",
+    label: str = "",
+    description: str = "",
+    error: str = "",
+    required: bool = False,
+    disabled: bool = False,
+    orientation: str = "vertical",
+) -> UINode:
+    """Pick exactly ONE option from a small set, with every choice visible.
+
+    Each option is ``{"value", "label"}`` — the same shape as ``ui.Select``,
+    plus an optional per-option ``"description"`` and ``"disabled"``.
+
+    Prefer this over ``ui.Select`` when there are 2-5 options and the choice
+    matters enough that the user should see them all without opening a dropdown
+    (billing mode, plan tier, destructive-vs-safe strategy). Past roughly six
+    options a dropdown is kinder.
+
+    ``orientation``: ``"vertical"`` (default) or ``"horizontal"`` for short
+    labels that fit on one line.
+
+    The group renders as a real ``role="radiogroup"`` labelled by its own
+    label, and arrow keys move between options — the native radio behaviour
+    keyboard and assistive-technology users expect.
+
+    ::
+
+        ui.RadioGroup(label="How should this customer pay?",
+                      options=[
+                          {"value": "card", "label": "By card",
+                           "description": "Charged automatically each period."},
+                          {"value": "manual", "label": "Manually, by invoice"},
+                          {"value": "free", "label": "Free — no charge"},
+                      ],
+                      value="card", param_name="billing_mode")
+    """
+    if orientation not in ("vertical", "horizontal"):
+        raise ValueError(
+            f"ui.RadioGroup(orientation={orientation!r}) is not valid — "
+            "use 'vertical' or 'horizontal'."
+        )
+    props: dict[str, Any] = {
+        "options": options or [],
+        "value": value,
+        "param_name": param_name,
+        "orientation": orientation,
+    }
+    if on_change:
+        props["on_change"] = on_change
+    return UINode(type="RadioGroup", props=_field_props(
+        props, label=label, description=description, error=error,
+        required=required, disabled=disabled))
