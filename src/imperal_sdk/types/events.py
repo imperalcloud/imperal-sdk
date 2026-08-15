@@ -32,10 +32,41 @@ class WebhookRequest:
 
 @dataclass
 class WebhookResponse:
-    """Response to return from a webhook handler."""
+    """Response to return from a webhook handler.
+
+    Returning one of these is equivalent to returning the documented control
+    dict — ``{"status_code": ..., "headers": ..., "body": ...}`` — and shapes
+    the REAL HTTP reply: the status line and the response headers, not just a
+    JSON body. That matters for providers whose handshake lives outside the
+    body, such as Asana echoing ``X-Hook-Secret`` in a header.
+
+        return WebhookResponse(status_code=200, body="",
+                               headers={"X-Hook-Secret": offered})
+
+    Until 2026-08-15 this class was a trap: it had no ``to_dict``, so the
+    runtime's result serializer fell through to its catch-all branch and
+    wrapped the whole object as ``{"status": "success", "data": {...}}``. The
+    gateway looks for the control keys at the TOP level, found none, and
+    answered a plain 200 with the control keys buried in the body — so the
+    echo header never reached the wire and the webhook could not be
+    established. asana-connector hit exactly this and worked around it by
+    returning a bare dict instead.
+    """
     status_code: int = 200
     body: dict | str = ""
     headers: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        """Flatten to the control-key dict the webhook route understands.
+
+        Deliberately FLAT — the control keys must stay at the top level. Nest
+        them under a "data" key and the gateway silently ignores all three.
+        """
+        return {
+            "status_code": self.status_code,
+            "headers": dict(self.headers),
+            "body": self.body,
+        }
 
     @staticmethod
     def ok(body: dict | str = "OK") -> WebhookResponse:

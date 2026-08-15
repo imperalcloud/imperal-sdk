@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.19",
+  "sdk_version": "5.9.20",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -1219,7 +1219,7 @@
     "WebhookResponse": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Response to return from a webhook handler.",
+      "description": "Response to return from a webhook handler.\n\n    Returning one of these is equivalent to returning the documented control\n    dict \u2014 ``{\"status_code\": ..., \"headers\": ..., \"body\": ...}`` \u2014 and shapes\n    the REAL HTTP reply: the status line and the response headers, not just a\n    JSON body. That matters for providers whose handshake lives outside the\n    body, such as Asana echoing ``X-Hook-Secret`` in a header.\n\n        return WebhookResponse(status_code=200, body=\"\",\n                               headers={\"X-Hook-Secret\": offered})\n\n    Until 2026-08-15 this class was a trap: it had no ``to_dict``, so the\n    runtime's result serializer fell through to its catch-all branch and\n    wrapped the whole object as ``{\"status\": \"success\", \"data\": {...}}``. The\n    gateway looks for the control keys at the TOP level, found none, and\n    answered a plain 200 with the control keys buried in the body \u2014 so the\n    echo header never reached the wire and the webhook could not be\n    established. asana-connector hit exactly this and worked around it by\n    returning a bare dict instead.",
       "enums": {},
       "kind": "dataclass",
       "params": [
