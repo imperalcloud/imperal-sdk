@@ -87,6 +87,100 @@ def Menu(items: list[dict], trigger: UINode | None = None,
     return UINode(type="Menu", props=props)
 
 
+#: Named widths for ``ui.Modal(size=...)``. ``md`` is 32rem — the width the old
+#: hard-coded overlay always had, so untouched code looks pixel-identical.
+MODAL_SIZES = ("xs", "sm", "md", "lg", "xl", "2xl", "full")
+
+
+def Modal(
+    title: str = "",
+    content: UINode | None = None,
+    confirm_label: str = "Confirm",
+    cancel_label: str = "Cancel",
+    on_confirm: UIAction | None = None,
+    *,
+    subtitle: str = "",
+    size: str = "md",
+    max_width: str = "",
+    dismissible: bool = True,
+    destructive: bool = False,
+    on_close: UIAction | None = None,
+    open: bool = True,
+) -> UINode:
+    """A modal window: an overlay layered on top of the current panel.
+
+    This is the correctly-named primitive. It used to be called ``ui.Dialog``,
+    which was simply the wrong word — "dialog" is the native browser
+    ``<dialog>``/``window.confirm`` concept, while this is a modal window in
+    every UI vocabulary. ``ui.Dialog`` still works as a deprecated alias.
+
+    Sizing (fixes the "center overlays are stuck at one width" bug):
+      * ``size`` — xs (20rem), sm (24rem), md (32rem, default), lg (42rem),
+        xl (56rem), 2xl (72rem), full (fills the viewport).
+      * ``max_width`` — any CSS length ("40rem", "600px", "80%") when the named
+        steps do not fit. Wins over ``size``.
+
+    Responsive by construction, no per-extension work:
+      * phones get a full-width bottom sheet that respects the safe-area inset;
+      * from ``sm`` up it is a centred window capped at 90dvh;
+      * the body is the only scrolling region, so the title and the buttons
+        stay put no matter how long the content is.
+
+    Content:
+      * ``content`` — any UINode (use ``ui.Stack`` for several children).
+      * ``subtitle`` — optional secondary line under the title.
+
+    Buttons: pass ``confirm_label=""`` or ``cancel_label=""`` to drop that
+    button; blank both and the footer is not rendered at all.
+
+    Args:
+        title: Heading. Wraps to two lines instead of being cut off.
+        content: Body node.
+        confirm_label: Primary button text; "" hides it.
+        cancel_label: Secondary button text; "" hides it.
+        on_confirm: Action fired by the primary button.
+        subtitle: Optional line under the title.
+        size: One of ``MODAL_SIZES``.
+        max_width: Explicit CSS width; overrides ``size``.
+        dismissible: When False, Esc / backdrop / ✕ do not close it.
+        destructive: STRICT confirmation for an irreversible action — delete,
+            purge, revoke. Implies not dismissible (a stray backdrop click must
+            never look like a decision on "permanently delete 15,769 rows") and
+            tints the confirm button with the danger colour.
+        on_close: Action fired when it closes.
+        open: Render it closed by passing False.
+    """
+    # A typo must fail HERE, loudly, instead of silently rendering at the
+    # default width and leaving the author wondering why `size` did nothing.
+    # A raw CSS length is accepted too — that is what `max_width` is for, but
+    # people reach for `size` first, so honour it rather than scold them.
+    if size and size not in MODAL_SIZES and not size[0].isdigit():
+        raise ValueError(
+            f"ui.Modal: unknown size {size!r}. "
+            f"Use one of {', '.join(MODAL_SIZES)}, or pass max_width='40rem'."
+        )
+
+    props: dict[str, Any] = {
+        "confirm_label": confirm_label,
+        "cancel_label": cancel_label,
+    }
+    # An empty title means "no heading" — do not ship the empty string.
+    if title: props["title"] = title
+    if content: props["content"] = content
+    if on_confirm: props["on_confirm"] = on_confirm
+    if subtitle: props["subtitle"] = subtitle
+    # Only travel non-defaults: keeps the wire payload identical to the old
+    # component for code that does not use the new knobs.
+    if size and size != "md": props["size"] = size
+    if max_width: props["max_width"] = max_width
+    if not dismissible: props["dismissible"] = False
+    # A one-way door: no backdrop/Esc dismissal, danger-tinted confirm.
+    if destructive: props["destructive"] = True
+    if on_close: props["on_close"] = on_close
+    if not open: props["open"] = False
+    return UINode(type="Modal", props=props)
+
+
 def Dialog(
     title: str,
     content: UINode | None = None,
@@ -94,30 +188,28 @@ def Dialog(
     cancel_label: str = "Cancel",
     on_confirm: UIAction | None = None,
     destructive: bool = False,
+    **kwargs: Any,
 ) -> UINode:
-    """Modal dialog with confirm/cancel actions.
+    """Deprecated alias for :func:`Modal` — use ``ui.Modal`` in new code.
 
-    destructive: turn this into a STRICT confirmation for an irreversible
-    action — delete, purge, revoke. It cannot be dismissed by clicking the
-    backdrop or pressing Escape (only an explicit button closes it), and the
-    confirm button takes the danger tint.
+    Kept working for every extension already shipped against ``ui.Dialog``.
+    It deliberately still emits ``type="Dialog"`` rather than ``"Modal"``, so
+    panels running an older renderer keep rendering it exactly as before; both
+    wire types resolve to the same component on current panels.
 
-    Why it exists: a stray click on the backdrop must never be able to *look*
-    like a decision on "permanently delete 15,769 rows". A soft modal is right
-    for a form the user can reopen; it is wrong for a one-way door. Design
-    systems that split Dialog from AlertDialog encode exactly this distinction
-    — here it is one primitive with an explicit flag, so the safe default and
-    the strict variant cannot drift apart.
+    Accepts everything :func:`Modal` does, ``destructive`` included.
     """
-    props: dict[str, Any] = {
-        "title": title,
-        "confirm_label": confirm_label,
-        "cancel_label": cancel_label,
-    }
-    if content: props["content"] = content
-    if on_confirm: props["on_confirm"] = on_confirm
-    if destructive: props["destructive"] = True
-    return UINode(type="Dialog", props=props)
+    node = Modal(
+        title=title,
+        content=content,
+        confirm_label=confirm_label,
+        cancel_label=cancel_label,
+        on_confirm=on_confirm,
+        destructive=destructive,
+        **kwargs,
+    )
+    node.type = "Dialog"
+    return node
 
 
 def Tooltip(content: str, children: UINode | None = None,

@@ -11036,7 +11036,7 @@
     "ui.Dialog": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Modal dialog with confirm/cancel actions.\n\n    destructive: turn this into a STRICT confirmation for an irreversible\n    action \u2014 delete, purge, revoke. It cannot be dismissed by clicking the\n    backdrop or pressing Escape (only an explicit button closes it), and the\n    confirm button takes the danger tint.\n\n    Why it exists: a stray click on the backdrop must never be able to *look*\n    like a decision on \"permanently delete 15,769 rows\". A soft modal is right\n    for a form the user can reopen; it is wrong for a one-way door. Design\n    systems that split Dialog from AlertDialog encode exactly this distinction\n    \u2014 here it is one primitive with an explicit flag, so the safe default and\n    the strict variant cannot drift apart.",
+      "description": "Deprecated alias for :func:`Modal` \u2014 use ``ui.Modal`` in new code.\n\n    Kept working for every extension already shipped against ``ui.Dialog``.\n    It deliberately still emits ``type=\"Dialog\"`` rather than ``\"Modal\"``, so\n    panels running an older renderer keep rendering it exactly as before; both\n    wire types resolve to the same component on current panels.\n\n    Accepts everything :func:`Modal` does, ``destructive`` included.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12250,6 +12250,124 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
+    "ui.Modal": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "A modal window: an overlay layered on top of the current panel.\n\n    This is the correctly-named primitive. It used to be called ``ui.Dialog``,\n    which was simply the wrong word \u2014 \"dialog\" is the native browser\n    ``<dialog>``/``window.confirm`` concept, while this is a modal window in\n    every UI vocabulary. ``ui.Dialog`` still works as a deprecated alias.\n\n    Sizing (fixes the \"center overlays are stuck at one width\" bug):\n      * ``size`` \u2014 xs (20rem), sm (24rem), md (32rem, default), lg (42rem),\n        xl (56rem), 2xl (72rem), full (fills the viewport).\n      * ``max_width`` \u2014 any CSS length (\"40rem\", \"600px\", \"80%\") when the named\n        steps do not fit. Wins over ``size``.\n\n    Responsive by construction, no per-extension work:\n      * phones get a full-width bottom sheet that respects the safe-area inset;\n      * from ``sm`` up it is a centred window capped at 90dvh;\n      * the body is the only scrolling region, so the title and the buttons\n        stay put no matter how long the content is.\n\n    Content:\n      * ``content`` \u2014 any UINode (use ``ui.Stack`` for several children).\n      * ``subtitle`` \u2014 optional secondary line under the title.\n\n    Buttons: pass ``confirm_label=\"\"`` or ``cancel_label=\"\"`` to drop that\n    button; blank both and the footer is not rendered at all.\n\n    Args:\n        title: Heading. Wraps to two lines instead of being cut off.\n        content: Body node.\n        confirm_label: Primary button text; \"\" hides it.\n        cancel_label: Secondary button text; \"\" hides it.\n        on_confirm: Action fired by the primary button.\n        subtitle: Optional line under the title.\n        size: One of ``MODAL_SIZES``.\n        max_width: Explicit CSS width; overrides ``size``.\n        dismissible: When False, Esc / backdrop / \u2715 do not close it.\n        destructive: STRICT confirmation for an irreversible action \u2014 delete,\n            purge, revoke. Implies not dismissible (a stray backdrop click must\n            never look like a decision on \"permanently delete 15,769 rows\") and\n            tints the confirm button with the danger colour.\n        on_close: Action fired when it closes.\n        open: Render it closed by passing False.",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "title",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "UINode | None",
+          "default": null,
+          "name": "content",
+          "required": false,
+          "type": {
+            "ref": "UINode | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "Confirm",
+          "name": "confirm_label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "Cancel",
+          "name": "cancel_label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "UIAction | None",
+          "default": null,
+          "name": "on_confirm",
+          "required": false,
+          "type": {
+            "ref": "UIAction | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "subtitle",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "md",
+          "name": "size",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "max_width",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": true,
+          "name": "dismissible",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "destructive",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "UIAction | None",
+          "default": null,
+          "name": "on_close",
+          "required": false,
+          "type": {
+            "ref": "UIAction | None"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": true,
+          "name": "open",
+          "required": false,
+          "type": {
+            "ref": "bool"
           }
         }
       ],
