@@ -516,10 +516,197 @@ def deploy():
 
 
 @cli.command()
-def logs():
-    """Tail production logs."""
-    click.echo("Connecting to Imperal Cloud logs...")
-    click.echo("(Not yet implemented — will stream from SigNoz)")
+@click.option("--limit", default=10, show_default=True,
+              help="How many deploy records to show (1-20).")
+def logs(limit: int):
+    """Show this extension's recent deploy history and how to read its logs.
+
+    Until 2026-08-15 this command printed "Connecting to Imperal Cloud logs..."
+    followed by "(Not yet implemented — will stream from SigNoz)" — the whole
+    command was a stub, so the one obvious place a developer looks after a
+    failed deploy told them nothing at all.
+
+    Live log STREAMING still does not exist: there is no log-collection endpoint
+    to stream from (the platform workers export traces to SigNoz, not logs), and
+    ctx.log() writes to the worker's own process log. Rather than keep promising
+    a pipeline that is not there, this now prints the diagnostic record the
+    platform DOES keep per app — deploy attempts with status, commit and error
+    message — and says plainly where the rest lives.
+    """
+    sys.path.insert(0, ".")
+    try:
+        from main import ext
+    except ImportError:
+        click.echo("Error: No main.py found. Run this inside an extension "
+                   "directory.", err=True)
+        raise SystemExit(1)
+
+    limit = max(1, min(int(limit), 20))
+    creds = _load_credentials()
+    gateway = (creds.get("gateway_url") or "").rstrip("/")
+
+    if not gateway or not creds.get("api_key"):
+        click.echo("No gateway credentials configured — cannot read deploy "
+                   "history.")
+        click.echo("Set gateway_url + api_key in .imperal/credentials "
+                   "(or IMPERAL_GATEWAY_URL / IMPERAL_API_KEY).")
+        raise SystemExit(1)
+
+    click.echo(f"Deploy history for {ext.app_id} (most recent first):\n")
+    try:
+        resp = httpx.get(
+            f"{gateway}/v1/developer/apps/{ext.app_id}/deploys",
+            headers={"x-api-key": creds["api_key"]},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        records = resp.json() or []
+    except httpx.HTTPStatusError as e:
+        code = e.response.status_code
+        if code == 404:
+            click.echo(f"  App {ext.app_id!r} not found on the platform — "
+                       f"deploy it first (imperal deploy).")
+        elif code in (401, 403):
+            click.echo("  Credentials rejected — check api_key in "
+                       ".imperal/credentials.")
+        else:
+            click.echo(f"  Could not read deploy history (HTTP {code}).")
+        raise SystemExit(1)
+    except httpx.HTTPError as e:
+        click.echo(f"  Could not reach the gateway: {e}")
+        raise SystemExit(1)
+
+    if not records:
+        click.echo("  No deploys recorded yet.")
+    for r in records[:limit]:
+        status = (r.get("status") or "unknown").upper()
+        when = r.get("deployed_at") or "?"
+        sha = (r.get("commit_sha") or "")[:8] or "-"
+        click.echo(f"  {when}  {status:<8} {sha}")
+        err = r.get("error_message")
+        if err:
+            click.echo(f"      └─ {err}")
+
+    click.echo(
+        "\nRuntime logs are not streamable from here yet.\n"
+        "  • ctx.log() lands in the platform worker's process log — ask an\n"
+        "    operator for `journalctl -u imperal-platform-worker@1`, filtered\n"
+        f"    on the logger name ext.{ext.app_id}\n"
+        "  • per-tool call outcomes are recorded in the platform audit trail\n"
+        "  • scheduled runs: see `imperal schedules`"
+    )
+
+
+@cli.command()
+def schedules():
+    """List this extension's scheduled tasks and their next fire times.
+
+    A scheduled task previously had NO status surface at all: nothing in the CLI
+    reported which schedules exist, when they last ran, or when they run next —
+    so a cron that never fired looked identical to one that fired and did
+    nothing (platform sweep #29).
+
+    Last-run history is per-fire audit data the platform records centrally and
+    does not expose to app authors, so it is honestly not shown here. What this
+    DOES give you is the part that is knowable locally and was missing: the
+    registered schedules, their cron expressions, and the next times each one
+    will fire — enough to tell "my cron is not registered" apart from "my cron
+    is registered and its body is not doing what I expect".
+    """
+    sys.path.insert(0, ".")
+    try:
+        from main import ext
+    except ImportError:
+        click.echo("Error: No main.py found. Run this inside an extension "
+                   "directory.", err=True)
+        raise SystemExit(1)
+
+    scheds = getattr(ext, "schedules", {}) or {}
+    if not scheds:
+        click.echo(f"{ext.app_id}: no scheduled tasks registered.")
+        click.echo("Add one with @ext.schedule(\"name\", cron=\"*/5 * * * *\").")
+        return
+
+    click.echo(f"{ext.app_id}: {len(scheds)} scheduled task(s)\n")
+    for name, sd in scheds.items():
+        cron = getattr(sd, "cron", "?")
+        click.echo(f"  {name}")
+        click.echo(f"    cron: {cron}  (UTC, minute resolution)")
+        for line in _describe_next_fires(cron):
+            click.echo(f"    {line}")
+
+    click.echo(
+        "\nA scheduled task runs in SYSTEM context: ctx.user.imperal_id is\n"
+        "\"__system__\" and ctx.store sees the system's own rows, NOT your\n"
+        "users'. Fan out with ctx.store.list_users(<collection>) +\n"
+        "ctx.as_user(uid) — see help(ext.schedule)."
+    )
+
+
+def _describe_next_fires(cron: str, count: int = 3) -> list[str]:
+    """Return human lines for the next `count` UTC fire times of a 5-field cron.
+
+    Deliberately dependency-free: the SDK must not grow a cron library just to
+    print three timestamps. Scans forward minute by minute over a bounded
+    window and reports honestly if it finds nothing in range.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    fields = (cron or "").split()
+    if len(fields) != 5:
+        return [f"next: cannot parse cron {cron!r} (expected 5 fields)"]
+
+    def matches(field: str, value: int, lo: int, hi: int) -> bool:
+        for part in field.split(","):
+            if part == "*":
+                return True
+            step = 1
+            if "/" in part:
+                part, _, raw_step = part.partition("/")
+                if not raw_step.isdigit() or int(raw_step) == 0:
+                    return False
+                step = int(raw_step)
+            if part == "*":
+                start, end = lo, hi
+            elif "-" in part:
+                a, _, b = part.partition("-")
+                if not (a.isdigit() and b.isdigit()):
+                    return False
+                start, end = int(a), int(b)
+            elif part.isdigit():
+                start = end = int(part)
+                if step == 1:
+                    if value == start:
+                        return True
+                    continue
+            else:
+                return False
+            if start <= value <= end and (value - start) % step == 0:
+                return True
+        return False
+
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    found: list[str] = []
+    probe = now + timedelta(minutes=1)
+    # 8 days covers every weekly schedule; monthly ones are reported as such.
+    for _ in range(8 * 24 * 60):
+        if (matches(fields[0], probe.minute, 0, 59)
+                and matches(fields[1], probe.hour, 0, 23)
+                and matches(fields[2], probe.day, 1, 31)
+                and matches(fields[3], probe.month, 1, 12)
+                and matches(fields[4], probe.weekday() + 1 if probe.weekday() < 6 else 0, 0, 6)):
+            delta = probe - now
+            mins = int(delta.total_seconds() // 60)
+            when = f"in {mins}m" if mins < 60 else f"in {mins // 60}h{mins % 60:02d}m"
+            found.append(f"next: {probe.strftime('%Y-%m-%d %H:%M')} UTC ({when})")
+            if len(found) >= count:
+                break
+        probe += timedelta(minutes=1)
+
+    if not found:
+        return ["next: no fire time within the next 8 days "
+                "(monthly/yearly schedule, or an expression that never matches)"]
+    return found
 
 
 if __name__ == "__main__":

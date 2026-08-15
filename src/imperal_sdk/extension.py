@@ -331,7 +331,51 @@ class Extension:
         return decorator
 
     def schedule(self, name: str, cron: str):
-        """Register a scheduled task."""
+        """Register a scheduled task (cron), run by the platform scheduler.
+
+        THE ONE THING TO KNOW: a scheduled function runs in SYSTEM context, not
+        as any user. ``ctx.user.imperal_id`` is the literal string
+        ``"__system__"``, and ``ctx.store`` is scoped to that pseudo-user — so a
+        plain ``ctx.store.query(...)`` here reads the SYSTEM's own rows and
+        finds none of your users' records. That is by design (a cron fire
+        belongs to no one), but it reads like "the scheduler cannot see my
+        data" if you do not know it.
+
+        To act on user data, fan out explicitly — enumerate the users who have
+        rows in your collection, then re-scope the context to each one::
+
+            @ext.schedule("check_monitors", cron="*/5 * * * *")
+            async def check_monitors(ctx) -> None:
+                async for uid in ctx.store.list_users("wt_monitors"):
+                    user_ctx = ctx.as_user(uid)
+                    monitors = await user_ctx.store.query(
+                        "wt_monitors", where={"enabled": True})
+                    for m in monitors.data:
+                        await check_one(user_ctx, m)
+
+        ``ctx.store.list_users()`` and ``ctx.as_user()`` are BOTH system-context
+        only and raise ``RuntimeError`` anywhere else — they exist for exactly
+        this handler type (and ``@ext.signal``). ``as_user()`` rewires the
+        per-user clients (store, skeleton, notify, billing) and preserves
+        extension, tenant and agency; only the user identity changes, and the
+        scoped context is tagged ``attributes["scoped_from"] = "__system__"``.
+
+        Operational contract:
+          * ``cron`` is standard 5-field UTC cron. Minute resolution.
+          * Each fire is deduplicated per (app, name, minute) across workers, so
+            a multi-worker fleet runs it ONCE, not once per worker.
+          * A fire is bounded by the scheduler timeout; overruns are recorded as
+            failures in the audit trail rather than left hanging.
+          * Every fire is audited (success, duration, error) whether or not it
+            raised — so a silently failing cron is visible after the fact.
+          * Write idempotently: a retry or a redeploy may re-run the same slot.
+
+        Args:
+            name: Stable identifier, unique within the extension. It is part of
+                the dedup key and the audit row — renaming it starts a new
+                schedule rather than moving the old one.
+            cron: 5-field UTC cron expression, e.g. ``"*/5 * * * *"``.
+        """
         def decorator(func: Callable) -> Callable:
             self._schedules[name] = ScheduleDef(name=name, func=func, cron=cron)
             return func
