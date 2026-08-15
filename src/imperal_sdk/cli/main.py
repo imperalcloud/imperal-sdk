@@ -225,10 +225,15 @@ async def fn_default(ctx, **kwargs):
     with open(f"{name}/tests/test_main.py", "w") as f:
         f.write(test_content)
 
+    # NOTE: imperal.json must NOT be ignored. The deploy server clones the git
+    # repository and reads the manifest from the checkout, so a scaffold that
+    # gitignores it produces a repo that builds and validates cleanly on the
+    # developer's machine and then fails deploy with "imperal.json not found" —
+    # which every new developer hit on their very first deploy.
     with open(f"{name}/.gitignore", "w") as f:
         f.write(
             "venv/\n.venv/\n__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n"
-            ".env\n.imperal/\nimperal.json\n.DS_Store\n"
+            ".env\n.imperal/\n.DS_Store\n"
         )
 
     click.echo(f"Extension '{name}' scaffolded (template: {template})")
@@ -403,7 +408,11 @@ def validate(path: str):
 def test():
     """Run extension tests."""
     import subprocess
-    result = subprocess.run(["python", "-m", "pytest", "tests/", "-v"])
+    # sys.executable, not "python": modern macOS and most Linux distros ship
+    # only python3, so the hard-coded name fails with "python: command not
+    # found". This also guarantees the tests run in the SAME interpreter (and
+    # virtualenv) that is running imperal itself.
+    result = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-v"])
     raise SystemExit(result.returncode)
 
 
