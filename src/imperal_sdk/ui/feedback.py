@@ -132,6 +132,76 @@ def Chart(
     return UINode(type="Chart", props=props)
 
 
+#: Toast severities. Deliberately the SAME vocabulary as ``ui.Alert`` — an
+#: author should not have to remember two spellings for "this went wrong"
+#: depending on which primitive they reached for. The renderer maps them onto
+#: its own toast-* colour ramp.
+TOAST_VARIANTS = ALERT_VARIANTS
+
+#: Same unambiguous aliases Alert accepts, plus the two the renderer's own
+#: internal vocabulary uses, so both spellings work either way round.
+TOAST_SYNONYMS = ALERT_SYNONYMS
+
+
+def Toast(
+    message: str,
+    variant: str = "info",
+    duration: int = 5000,
+    *,
+    title: str = "",
+    action: UIAction | None = None,
+    action_label: str = "",
+) -> UINode:
+    """Transient notification that appears over the panel and fades away.
+
+    Use it for the outcome of something the user just did — "Saved", "Deploy
+    started", "Could not reach the API". It is NOT for state the user still
+    needs after a refresh: a toast disappears, so anything that must survive
+    belongs in ``ui.Alert`` (banner) or the panel body itself.
+
+    Severity uses the SAME vocabulary as ``ui.Alert``: info / success / warn /
+    error, with the same unambiguous aliases ("warning", "danger", "ok", "err").
+
+    ``duration``: milliseconds before it fades. Pass ``0`` to make it stay
+    until the user dismisses it — appropriate for an error the user must
+    actually read, never for routine success.
+
+    ``action`` + ``action_label``: one optional button inside the toast, for
+    the natural follow-up ("Undo", "View"). Both must be given together.
+
+    Example::
+
+        return ui.Toast("Draft saved", variant="success")
+
+        return ui.Toast(
+            "Could not reach the Analytics API",
+            variant="error", duration=0,
+            action=ui.Call("retry_sync"), action_label="Retry",
+        )
+    """
+    resolved = TOAST_SYNONYMS.get(variant, variant)
+    if resolved not in TOAST_VARIANTS:
+        raise ValueError(
+            f"ui.Toast variant must be one of {TOAST_VARIANTS}, got {variant!r}"
+        )
+    if duration < 0:
+        raise ValueError("ui.Toast duration must be >= 0 (0 = stays until dismissed)")
+    if bool(action) != bool(action_label):
+        raise ValueError(
+            "ui.Toast: pass action and action_label together — an action button "
+            "with no label is invisible, a label with no action does nothing"
+        )
+
+    props: dict[str, Any] = {"message": message, "variant": resolved}
+    # Only travel non-defaults, so the common one-liner stays a tiny payload.
+    if duration != 5000: props["duration"] = duration
+    if title: props["title"] = title
+    if action:
+        props["action"] = action
+        props["action_label"] = action_label
+    return UINode(type="Toast", props=props)
+
+
 def Loading(message: str = "Loading...", variant: str = "spinner") -> UINode:
     """Loading state indicator. variant: spinner/skeleton/dots."""
     return UINode(type="Loading", props={"message": message, "variant": variant})

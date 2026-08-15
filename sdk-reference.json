@@ -13745,6 +13745,70 @@
       ],
       "returns": "UINode"
     },
+    "ui.Toast": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Transient notification that appears over the panel and fades away.\n\n    Use it for the outcome of something the user just did \u2014 \"Saved\", \"Deploy\n    started\", \"Could not reach the API\". It is NOT for state the user still\n    needs after a refresh: a toast disappears, so anything that must survive\n    belongs in ``ui.Alert`` (banner) or the panel body itself.\n\n    Severity uses the SAME vocabulary as ``ui.Alert``: info / success / warn /\n    error, with the same unambiguous aliases (\"warning\", \"danger\", \"ok\", \"err\").\n\n    ``duration``: milliseconds before it fades. Pass ``0`` to make it stay\n    until the user dismisses it \u2014 appropriate for an error the user must\n    actually read, never for routine success.\n\n    ``action`` + ``action_label``: one optional button inside the toast, for\n    the natural follow-up (\"Undo\", \"View\"). Both must be given together.\n\n    Example::\n\n        return ui.Toast(\"Draft saved\", variant=\"success\")\n\n        return ui.Toast(\n            \"Could not reach the Analytics API\",\n            variant=\"error\", duration=0,\n            action=ui.Call(\"retry_sync\"), action_label=\"Retry\",\n        )",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "message",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "info",
+          "name": "variant",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 5000,
+          "name": "duration",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "title",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "UIAction | None",
+          "default": null,
+          "name": "action",
+          "required": false,
+          "type": {
+            "ref": "UIAction | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "action_label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
     "ui.Toggle": {
       "action_vocab_safe": false,
       "declarative_capable": false,

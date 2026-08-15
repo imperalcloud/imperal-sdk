@@ -22,7 +22,7 @@ from .data import (
 )
 from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider, Html, Video, Audio
 from .interactive import Button, Card, Menu, Modal, MODAL_SIZES, Dialog, Tooltip, Link, SlideOver
-from .feedback import Alert, Progress, Chart, Loading, Error
+from .feedback import Alert, Toast, Progress, Chart, Loading, Error
 from .input_components import (
     Input, Password, Form, Select, MultiSelect, Toggle,
     Slider, DatePicker, FileUpload, TextArea, RichEditor, TagInput,
@@ -45,7 +45,7 @@ __all__ = [
     # extensions already shipped against it (2026-08-15).
     "Button", "Card", "Menu", "Modal", "MODAL_SIZES", "Dialog", "Tooltip", "Link", "SlideOver",
     # Feedback
-    "Alert", "Progress", "Chart", "Loading", "Error",
+    "Alert", "Toast", "Progress", "Chart", "Loading", "Error",
     # Input
     "Input", "Password", "Form", "Select", "MultiSelect", "Toggle",
     "Slider", "DatePicker", "FileUpload", "TextArea", "RichEditor", "TagInput",
