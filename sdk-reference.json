@@ -335,6 +335,15 @@
           "type": {
             "ref": "str"
           }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "etag",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
         }
       ],
       "returns": null
@@ -2505,7 +2514,7 @@
     "ctx.store.update": {
       "action_vocab_safe": true,
       "declarative_capable": true,
-      "description": "",
+      "description": "Merge ``data`` into an existing document.\n\n        ``if_match`` turns this into a COMPARE-AND-SET (5.9.20+). Pass the\n        ``etag`` you read, and the write only lands if nobody else touched the\n        document meanwhile; otherwise :class:`StoreConflict` is raised and\n        nothing is overwritten. Without it the write is unconditional \u2014 the\n        historical behaviour, last writer wins.\n\n        Use it whenever you read, compute, and write back::\n\n            doc = await ctx.store.get(\"counters\", \"hits\")\n            await ctx.store.update(\n                \"counters\", \"hits\",\n                {\"n\": doc[\"n\"] + 1},\n                if_match=doc.etag,\n            )\n\n        Without ``if_match`` two concurrent handlers both read n=5, both write\n        n=6, and one increment silently disappears.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2534,6 +2543,15 @@
           "required": true,
           "type": {
             "ref": "dict"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "if_match",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],

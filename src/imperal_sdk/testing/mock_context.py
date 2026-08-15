@@ -13,18 +13,38 @@ Usage:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from typing import Any
 
 from imperal_sdk.types.identity import UserContext
 from imperal_sdk.context import Context, TimeContext
 from imperal_sdk.errors import ExtensionError
+from imperal_sdk.store.exceptions import StoreConflict
 from imperal_sdk.types.models import (
     AutoTopupSettings, BalanceInfo, ChangePlanResult, CompletionResult,
     Document, FileInfo, HTTPResponse, LimitsResult, SetupIntentResult,
     SubscriptionInfo, TopupResult,
 )
 from imperal_sdk.types.pagination import Page
+
+
+def _mock_etag(data: dict) -> str:
+    """Version marker for a document, mirroring the gateway's ETag semantics.
+
+    Production computes SHA2(CAST(data AS CHAR), 256) inside MySQL, over the
+    JSON as MySQL normalised it. The mock cannot reproduce that byte-for-byte
+    and deliberately does not try: what a test may rely on is the BEHAVIOUR —
+    64 hex chars, changes when the data changes, stable when it does not. An
+    extension must never compare an ETag against a literal; it only ever hands
+    one back as if_match.
+
+    Keeping the mock honest here matters: MockStore silently disagreeing with
+    production is exactly how bug #25 stayed invisible for months.
+    """
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 class MockStore:
@@ -38,14 +58,16 @@ class MockStore:
             self._data[collection] = {}
         doc_id = str(uuid.uuid4())[:8]
         self._data[collection][doc_id] = dict(data)
-        return Document(id=doc_id, collection=collection, data=dict(data))
+        return Document(id=doc_id, collection=collection, data=dict(data),
+                        etag=_mock_etag(data))
 
     async def get(self, collection: str, doc_id: str) -> Document | None:
         coll = self._data.get(collection, {})
         data = coll.get(doc_id)
         if data is None:
             return None
-        return Document(id=doc_id, collection=collection, data=dict(data))
+        return Document(id=doc_id, collection=collection, data=dict(data),
+                        etag=_mock_etag(data))
 
     async def query(
         self,
@@ -64,9 +86,18 @@ class MockStore:
             docs = [d for d in docs if all(d.data.get(k) == v for k, v in where.items())]
         return Page(data=docs[:limit], has_more=len(docs) > limit)
 
-    async def update(self, collection: str, doc_id: str, data: dict) -> Document:
+    async def update(self, collection: str, doc_id: str, data: dict, if_match: str = "") -> Document:
         if collection not in self._data:
             self._data[collection] = {}
+        # Compare-and-set, same contract as the gateway: the check happens
+        # against what is stored RIGHT NOW, and a mismatch writes nothing.
+        # Without this the mock would happily accept a stale if_match and an
+        # extension's retry loop would look correct in tests while racing in
+        # production — the precise failure mode that hid bug #25.
+        if if_match and doc_id in self._data[collection]:
+            current = _mock_etag(self._data[collection][doc_id])
+            if current != if_match:
+                raise StoreConflict(doc_id=doc_id, expected_etag=if_match, current_etag=current)
         if doc_id in self._data[collection]:
             self._data[collection][doc_id].update(data)
         else:
@@ -75,6 +106,7 @@ class MockStore:
             id=doc_id,
             collection=collection,
             data=dict(self._data[collection][doc_id]),
+            etag=_mock_etag(self._data[collection][doc_id]),
         )
 
     async def delete(self, collection: str, doc_id: str) -> bool:

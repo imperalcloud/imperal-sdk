@@ -11,7 +11,7 @@ from imperal_sdk._shared_http import shared_http
 from imperal_sdk.types.pagination import Page
 from imperal_sdk.types.models import Document  # canonical Document dataclass (1.5.25+)
 from imperal_sdk.types.store_contracts import ListUsersRequest, ListUsersResponse  # noqa: F401  # ListUsersRequest imported as drift-sentinel per I-SDK-GW-CONTRACT-1
-from imperal_sdk.store.exceptions import StoreUnavailable, StoreContractError
+from imperal_sdk.store.exceptions import StoreUnavailable, StoreContractError, StoreConflict
 
 __all__ = ["StoreClient", "Document"]  # re-export Document for legacy imports
 
@@ -68,7 +68,7 @@ class StoreClient:
             if resp.status_code == 404: return None
             resp.raise_for_status()
             r = resp.json()
-            return Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "")
+            return Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "", etag=r.get("etag") or "")
 
     async def set(self, key: str, data: Any) -> Document:
         """Upsert shortcut: set('collection/doc_id', data). Creates or updates."""
@@ -97,12 +97,50 @@ class StoreClient:
             items = [Document(id=r["id"], collection=collection, data=r.get("data", {}), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "") for r in raw.get("data", [])]
             return Page(data=items, cursor=raw.get("cursor"), has_more=raw.get("has_more", False), total=raw.get("total"))
 
-    async def update(self, collection: str, doc_id: str, data: dict) -> Document:
+    async def update(self, collection: str, doc_id: str, data: dict, if_match: str = "") -> Document:
+        """Merge ``data`` into an existing document.
+
+        ``if_match`` turns this into a COMPARE-AND-SET (5.9.20+). Pass the
+        ``etag`` you read, and the write only lands if nobody else touched the
+        document meanwhile; otherwise :class:`StoreConflict` is raised and
+        nothing is overwritten. Without it the write is unconditional — the
+        historical behaviour, last writer wins.
+
+        Use it whenever you read, compute, and write back::
+
+            doc = await ctx.store.get("counters", "hits")
+            await ctx.store.update(
+                "counters", "hits",
+                {"n": doc["n"] + 1},
+                if_match=doc.etag,
+            )
+
+        Without ``if_match`` two concurrent handlers both read n=5, both write
+        n=6, and one increment silently disappears.
+        """
+        payload = {"data": data, "extension_id": self._extension_id, "tenant_id": self._tenant_id}
+        if if_match:
+            payload["if_match"] = if_match
         async with shared_http() as client:
-            resp = await client.patch(f"{self._gateway_url}/v1/internal/store/{collection}/{doc_id}", json={"data": data, "extension_id": self._extension_id, "tenant_id": self._tenant_id}, headers=self._headers(), timeout=30)
+            resp = await client.patch(f"{self._gateway_url}/v1/internal/store/{collection}/{doc_id}", json=payload, headers=self._headers(), timeout=30)
+            if resp.status_code == 409:
+                # Refused on purpose: somebody wrote between our read and this
+                # call. Surfaced as a typed exception rather than an HTTP error
+                # so callers can retry the read-modify-write loop.
+                detail = {}
+                try:
+                    body = resp.json()
+                    detail = body.get("detail", body) if isinstance(body, dict) else {}
+                except Exception:
+                    pass
+                raise StoreConflict(
+                    doc_id=doc_id,
+                    expected_etag=if_match,
+                    current_etag=(detail or {}).get("current_etag", ""),
+                )
             resp.raise_for_status()
             r = resp.json()
-            return Document(id=r["id"], collection=collection, data=r.get("data", data), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "")
+            return Document(id=r["id"], collection=collection, data=r.get("data", data), created_at=r.get("created_at") or "", updated_at=r.get("updated_at") or "", etag=r.get("etag") or "")
 
     async def delete(self, collection: str, doc_id: str) -> bool:
         async with shared_http() as client:

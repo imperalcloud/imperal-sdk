@@ -2,6 +2,7 @@
 # Licensed under the Apache-2.0 License. See LICENSE file for details.
 """Tests for MockContext and all mock clients."""
 import pytest
+from imperal_sdk.store import StoreConflict
 from imperal_sdk.testing import (
     MockAI,
     MockBilling,
@@ -150,6 +151,76 @@ class TestMockStore:
         await ctx.store.create("deals", {"name": "Test"})
         assert "deals" in ctx.store._data
         assert len(ctx.store._data["deals"]) == 1
+
+    # ── compare-and-set (platform sweep #3) ───────────────────────────────
+    # MockStore must refuse a stale if_match exactly like the gateway does.
+    # A mock that silently accepts one would let an extension ship a retry
+    # loop that passes every test and still loses writes in production —
+    # the same trap that kept bug #25 invisible for months.
+
+    @pytest.mark.asyncio
+    async def test_documents_carry_an_etag(self):
+        ctx = MockContext()
+        doc = await ctx.store.create("carts", {"items": []})
+        assert len(doc.etag) == 64
+        assert (await ctx.store.get("carts", doc.id)).etag == doc.etag
+
+    @pytest.mark.asyncio
+    async def test_etag_changes_when_data_changes(self):
+        ctx = MockContext()
+        doc = await ctx.store.create("carts", {"n": 1})
+        updated = await ctx.store.update("carts", doc.id, {"n": 2})
+        assert updated.etag != doc.etag
+
+    @pytest.mark.asyncio
+    async def test_update_with_the_current_etag_succeeds(self):
+        ctx = MockContext()
+        doc = await ctx.store.create("carts", {"n": 1})
+        updated = await ctx.store.update("carts", doc.id, {"n": 2}, if_match=doc.etag)
+        assert updated.data["n"] == 2
+
+    @pytest.mark.asyncio
+    async def test_update_with_a_stale_etag_raises_and_writes_nothing(self):
+        ctx = MockContext()
+        doc = await ctx.store.create("carts", {"n": 1})
+        await ctx.store.update("carts", doc.id, {"n": 2})  # somebody else writes
+
+        with pytest.raises(StoreConflict) as err:
+            await ctx.store.update("carts", doc.id, {"n": 99}, if_match=doc.etag)
+
+        assert err.value.doc_id == doc.id
+        assert err.value.expected_etag == doc.etag
+        assert err.value.current_etag != doc.etag
+        # The refused write must not have landed.
+        assert (await ctx.store.get("carts", doc.id)).data["n"] == 2
+
+    @pytest.mark.asyncio
+    async def test_update_without_if_match_stays_unconditional(self):
+        # Every existing caller passes no if_match and must keep working.
+        ctx = MockContext()
+        doc = await ctx.store.create("carts", {"n": 1})
+        await ctx.store.update("carts", doc.id, {"n": 2})
+        result = await ctx.store.update("carts", doc.id, {"n": 3})
+        assert result.data["n"] == 3
+
+    @pytest.mark.asyncio
+    async def test_the_documented_retry_loop_converges(self):
+        # The recovery shape promised in StoreConflict's docstring.
+        ctx = MockContext()
+        doc = await ctx.store.create("counters", {"n": 0})
+        await ctx.store.update("counters", doc.id, {"n": 5})  # racing writer
+
+        for _ in range(3):
+            fresh = await ctx.store.get("counters", doc.id)
+            try:
+                await ctx.store.update(
+                    "counters", doc.id, {"n": fresh.data["n"] + 1}, if_match=fresh.etag
+                )
+                break
+            except StoreConflict:
+                continue
+
+        assert (await ctx.store.get("counters", doc.id)).data["n"] == 6
 
 
 class TestMockAI:

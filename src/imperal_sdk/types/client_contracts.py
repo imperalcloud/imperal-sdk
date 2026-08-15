@@ -57,6 +57,7 @@ class DocumentModel(BaseModel):
     created_at: str = ""
     updated_at: str = ""
     user_id: str = ""  # populated by ctx.store.query_all (1.5.23+); empty for single-user contexts
+    etag: str = ""  # compare-and-set version marker (5.9.20+); empty on older gateways
 
 
 class CompletionResultModel(BaseModel):

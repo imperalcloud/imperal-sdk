@@ -28,6 +28,10 @@ class Document:
     created_at: str = ""
     updated_at: str = ""
     user_id: str = ""
+    #: Version marker for compare-and-set (SDK 5.9.20+). Pass it back as
+    #: ``if_match`` on update/delete and the write only lands if nobody else
+    #: touched the document in between. Empty when the gateway predates ETags.
+    etag: str = ""
 
     def __getitem__(self, key):
         return self.data[key]
