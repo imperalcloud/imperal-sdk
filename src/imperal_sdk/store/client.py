@@ -42,6 +42,40 @@ class StoreClient:
         self._user_id = user_id
         self._tenant_id = tenant_id
 
+    def for_user(self, user_id: str) -> "StoreClient":
+        """Return a copy of this client bound to a different acting-user.
+
+        Mirrors ``SecretClient.for_user`` so every per-user client re-scopes the
+        same way.
+
+        WHY THIS EXISTS: ``ctx.as_user(uid)`` is the normal way to act on
+        another user's data, but it requires SYSTEM context
+        (``imperal_id == "__system__"``) and raises ``RuntimeError`` for any
+        other identity. A WEBHOOK ctx is ``"__webhook__"`` — a different
+        pseudo-identity — so a webhook that has just resolved which user an
+        event belongs to could not re-scope at all through the supported API.
+
+        Extensions worked around that by constructing a StoreClient by hand out
+        of this client's private attributes (``_gateway_url``, ``_auth_token``,
+        ``_extension_id``, ``_tenant_id``) — github-connector, telegram-publisher
+        and google-drive-connector all carry a copy of that helper. That is a
+        private surface: it cannot be documented honestly (the docs accuracy
+        gate rejects private attributes, correctly) and any change to the
+        constructor breaks every copy silently.
+
+            # inside a webhook, once you know whose event this is
+            user_store = ctx.store.for_user(imperal_id)
+            await user_store.create("my_records", {...})
+
+        Shallow copy, matching SecretClient: kernel subclasses that override
+        ``_headers`` and any bound state are preserved without coupling to the
+        constructor's signature.
+        """
+        import copy
+        clone = copy.copy(self)
+        clone._user_id = user_id
+        return clone
+
     def _headers(self) -> dict:
         return {"X-Service-Token": self._auth_token, "X-Extension-ID": self._extension_id, "X-Tenant-ID": self._tenant_id}
 

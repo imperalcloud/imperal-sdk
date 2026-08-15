@@ -31,6 +31,29 @@ class NotifyClient:
         self._user_id = user_id
         self._extension_id = extension_id
 
+    def for_user(self, user_id: str) -> "NotifyClient":
+        """Return a copy of this client bound to a different acting-user.
+
+        Mirrors ``SecretClient.for_user`` / ``StoreClient.for_user`` so every
+        per-user client re-scopes the same way.
+
+        WHY THIS EXISTS: ``ctx.as_user(uid)`` requires SYSTEM context
+        (``imperal_id == "__system__"``) and raises ``RuntimeError`` otherwise.
+        A WEBHOOK ctx is ``"__webhook__"``, so a webhook that has just resolved
+        which user an event belongs to had no supported way to notify them —
+        extensions instead rebuilt this client from its private attributes.
+
+            # inside a webhook, once you know whose event this is
+            await ctx.notify.for_user(imperal_id)("Your payment went through.")
+
+        Shallow copy: preserves kernel subclasses and bound state without
+        coupling to this constructor's signature.
+        """
+        import copy
+        clone = copy.copy(self)
+        clone._user_id = user_id
+        return clone
+
     async def __call__(self, message: str, **kwargs) -> None:
         """Send a notification (preferred call-style).
 
