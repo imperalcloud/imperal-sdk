@@ -5,6 +5,16 @@ from typing import Any
 from .base import UINode
 
 
+#: Accepted ``direction`` spellings for :func:`Stack`, mapped to what the
+#: renderer actually understands. The long forms are not sugar we invented —
+#: 20 live call sites across the shipped extensions already write them, and
+#: they used to travel unnormalised and silently lay out the wrong way.
+STACK_DIRECTIONS = {
+    "v": "v", "vertical": "v", "column": "v", "col": "v",
+    "h": "h", "horizontal": "h", "row": "h",
+}
+
+
 def Stack(
     children: list[UINode],
     direction: str = "v",
@@ -25,6 +35,17 @@ def Stack(
     sticky: pin to top of scroll container (useful for toolbars).
     className: custom CSS classes (overrides default system padding).
     """
+    # Normalise the spelling instead of shipping it raw: "horizontal" used to
+    # travel as-is and silently lay out vertically. A genuine typo now fails
+    # HERE, loudly, rather than rendering the wrong way round with no clue why.
+    key = direction.strip().lower() if isinstance(direction, str) else direction
+    if key not in STACK_DIRECTIONS:
+        raise ValueError(
+            f"ui.Stack: unknown direction {direction!r}. "
+            f"Use one of {', '.join(sorted(STACK_DIRECTIONS))}."
+        )
+    direction = STACK_DIRECTIONS[key]
+
     props: dict[str, Any] = {"children": children, "direction": direction, "gap": gap}
     if wrap is not None: props["wrap"] = wrap
     if align: props["align"] = align

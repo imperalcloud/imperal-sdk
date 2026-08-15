@@ -51,6 +51,35 @@ class TestStack:
         assert len(d["props"]["children"]) == 1
         assert d["props"]["children"][0]["type"] == "Text"
 
+    # ── direction spelling ────────────────────────────────────────────
+    # The long forms are not invented sugar: 20 call sites across the shipped
+    # extensions already write direction="horizontal"/"vertical". They used to
+    # travel unnormalised and silently lay out the wrong way round.
+
+    @pytest.mark.parametrize("spelling", ["horizontal", "HORIZONTAL", " row ", "row"])
+    def test_horizontal_synonyms_normalise(self, spelling):
+        assert ui.Stack([], direction=spelling).to_dict()["props"]["direction"] == "h"
+
+    @pytest.mark.parametrize("spelling", ["vertical", "column", "col", "V"])
+    def test_vertical_synonyms_normalise(self, spelling):
+        assert ui.Stack([], direction=spelling).to_dict()["props"]["direction"] == "v"
+
+    def test_canonical_spellings_untouched(self):
+        assert ui.Stack([], direction="h").to_dict()["props"]["direction"] == "h"
+        assert ui.Stack([], direction="v").to_dict()["props"]["direction"] == "v"
+
+    def test_unknown_direction_raises_instead_of_laying_out_wrong(self):
+        # A typo must fail here, loudly, rather than reach the renderer and
+        # quietly stack the wrong way with no clue why.
+        with pytest.raises(ValueError) as err:
+            ui.Stack([], direction="verticl")
+        assert "verticl" in str(err.value)
+
+    def test_row_and_column_helpers_still_agree(self):
+        # Row/Column are thin wrappers; normalisation must not shift them.
+        assert ui.Row([]).to_dict()["props"]["direction"] == "h"
+        assert ui.Column([]).to_dict()["props"]["direction"] == "v"
+
 
 class TestGrid:
     def test_defaults(self):

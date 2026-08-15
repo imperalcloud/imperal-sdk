@@ -418,8 +418,11 @@ class MockExtensions:
         handler = handlers.get(method)
         if handler is None:
             raise ExtensionError(app_id, f"Method '{method}' not found")
-        import asyncio
-        if asyncio.iscoroutinefunction(handler):
+        # inspect, not asyncio: asyncio.iscoroutinefunction is deprecated since
+        # 3.14 and removed in 3.16, and it also misses functools.partial-wrapped
+        # coroutines, which inspect unwraps correctly.
+        import inspect
+        if inspect.iscoroutinefunction(handler):
             return await handler(**kwargs)
         return handler(**kwargs)
 

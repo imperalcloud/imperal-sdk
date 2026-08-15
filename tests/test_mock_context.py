@@ -444,6 +444,38 @@ class TestMockExtensions:
             await ctx.extensions.call("crm", "unknown_method")
 
     @pytest.mark.asyncio
+    async def test_call_emits_no_deprecation_warning(self):
+        # asyncio.iscoroutinefunction is deprecated since 3.14 and removed in
+        # 3.16; dispatch goes through inspect.iscoroutinefunction instead, so
+        # running an extension's tests must stay quiet.
+        import warnings
+
+        ctx = MockContext()
+
+        async def handler(**kwargs):
+            return "ok"
+
+        ctx.extensions.register("crm", "ping", handler)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert await ctx.extensions.call("crm", "ping") == "ok"
+        assert [w for w in caught if issubclass(w.category, DeprecationWarning)] == []
+
+    @pytest.mark.asyncio
+    async def test_call_awaits_a_partial_wrapped_coroutine(self):
+        # inspect unwraps functools.partial; the old asyncio helper did not and
+        # handed back an un-awaited coroutine object instead of the result.
+        import functools
+
+        ctx = MockContext()
+
+        async def handler(prefix, deal_id):
+            return f"{prefix}:{deal_id}"
+
+        ctx.extensions.register("crm", "get", functools.partial(handler, "deal"))
+        assert await ctx.extensions.call("crm", "get", deal_id="d9") == "deal:d9"
+
+    @pytest.mark.asyncio
     async def test_emit_records(self):
         ctx = MockContext()
         await ctx.extensions.emit("deal.created", {"deal_id": "d1"})
