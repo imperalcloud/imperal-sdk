@@ -13620,7 +13620,7 @@
     "ui.TextArea": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Multi-line text area.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` \u2014 pass ``label``\n    and the renderer pairs label + control inside one ``.field-gap`` container\n    with a real ``for``/``id`` binding. See ``_field_props`` for the full rule.",
+      "description": "Multi-line text area.\n\n    HOW ``on_submit`` ACTUALLY FIRES \u2014 **Ctrl+Enter / Cmd+Enter**, not a plain\n    Enter. A bare Enter inserts a newline, which is the whole point of a\n    multi-line field; ``ui.Input`` submits on Enter precisely because it is\n    single-line. This was previously undocumented, so a TextArea with\n    ``on_submit`` looked like it silently did nothing.\n\n    READING THE VALUE FROM ELSEWHERE \u2014 wrap it in ``ui.Form``. Inside a Form\n    the current text is registered under ``param_name``, so the Form's submit\n    button sends it automatically::\n\n        ui.Form(action=\"save_note\", submit_label=\"Save\", children=[\n            ui.TextArea(label=\"Note\", param_name=\"body\"),\n        ])\n\n    Outside a Form there is no shared state: a plain ``ui.Button`` sitting next\n    to a TextArea CANNOT read what the user typed \u2014 buttons carry a fixed\n    action, they do not read sibling controls. Use ``ui.Form``, or\n    ``on_submit`` with Ctrl/Cmd+Enter. There is no third way, by design.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` \u2014 pass ``label``\n    and the renderer pairs label + control inside one ``.field-gap`` container\n    with a real ``for``/``id`` binding. See ``_field_props`` for the full rule.",
       "enums": {},
       "kind": "ui_component",
       "params": [

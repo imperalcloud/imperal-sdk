@@ -358,6 +358,25 @@ def TextArea(
 ) -> UINode:
     """Multi-line text area.
 
+    HOW ``on_submit`` ACTUALLY FIRES — **Ctrl+Enter / Cmd+Enter**, not a plain
+    Enter. A bare Enter inserts a newline, which is the whole point of a
+    multi-line field; ``ui.Input`` submits on Enter precisely because it is
+    single-line. This was previously undocumented, so a TextArea with
+    ``on_submit`` looked like it silently did nothing.
+
+    READING THE VALUE FROM ELSEWHERE — wrap it in ``ui.Form``. Inside a Form
+    the current text is registered under ``param_name``, so the Form's submit
+    button sends it automatically::
+
+        ui.Form(action="save_note", submit_label="Save", children=[
+            ui.TextArea(label="Note", param_name="body"),
+        ])
+
+    Outside a Form there is no shared state: a plain ``ui.Button`` sitting next
+    to a TextArea CANNOT read what the user typed — buttons carry a fixed
+    action, they do not read sibling controls. Use ``ui.Form``, or
+    ``on_submit`` with Ctrl/Cmd+Enter. There is no third way, by design.
+
     Supports the same LABELED-FIELD contract as ``ui.Input`` — pass ``label``
     and the renderer pairs label + control inside one ``.field-gap`` container
     with a real ``for``/``id`` binding. See ``_field_props`` for the full rule.
