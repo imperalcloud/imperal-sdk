@@ -21,7 +21,7 @@ from .data import (
     Badge, Avatar, Timeline, Tree, KeyValue,
 )
 from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider, Html, Video, Audio
-from .interactive import Button, Card, Menu, Modal, MODAL_SIZES, Dialog, Tooltip, Link, SlideOver
+from .interactive import Button, BackButton, Card, Menu, Modal, MODAL_SIZES, Dialog, Tooltip, Link, SlideOver
 from .feedback import Alert, Toast, Progress, Chart, Loading, Error
 from .input_components import (
     Input, Password, Form, Select, MultiSelect, Toggle,
@@ -43,7 +43,7 @@ __all__ = [
     # Interactive
     # "Modal" is the real name; "Dialog" is the deprecated alias kept for
     # extensions already shipped against it (2026-08-15).
-    "Button", "Card", "Menu", "Modal", "MODAL_SIZES", "Dialog", "Tooltip", "Link", "SlideOver",
+    "Button", "BackButton", "Card", "Menu", "Modal", "MODAL_SIZES", "Dialog", "Tooltip", "Link", "SlideOver",
     # Feedback
     "Alert", "Toast", "Progress", "Chart", "Loading", "Error",
     # Input

@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.9.22",
+  "sdk_version": "5.9.23",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -10323,6 +10323,43 @@
           "annotation": "str",
           "default": "md",
           "name": "size",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
+    "ui.BackButton": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "The standard 'go back' control for a detail view.\n\n    ``to`` names the DESTINATION, not the button::\n\n        ui.BackButton(\"Projects\", on_click=ui.Call(\"open_list\"))   # \"\u2190 Back to Projects\"\n        ui.BackButton(on_click=ui.Call(\"open_list\"))               # \"\u2190 Back\"\n\n    WHY THIS EXISTS (platform sweep #10): the platform had no standard for\n    this, so every app invented one. A live scan found NINE hand-rolled\n    variants across the installed apps -- \"\u2190 Back\", \"\u2190 Back to Extensions\",\n    \"\u2190 Back to articles\", \"\u2190 Back to overview\", \"\u2190 Back to newsletters\" -- plus\n    a private ``_back_button()`` helper in billing. Each picked its own arrow,\n    variant and size, so the same gesture looked different on every screen and\n    every new detail page re-litigated the decision.\n\n    Composition on purpose: this returns an ordinary ``Button`` node, NOT a new\n    node type. Every panel already renders Button, so this works on every\n    deployed frontend with no host-side change and nothing to keep in sync --\n    the standard lives in ONE place (here) instead of in a renderer the SDK\n    cannot see. Only the chrome is fixed: the arrow glyph, ``variant=\"ghost\"``\n    and ``size=\"sm\"`` -- the three things the nine copies happened to agree on\n    anyway.\n\n    ``on_click`` stays the caller's business: only the app knows where \"back\"\n    goes (a ``Call`` to reopen the list, a ``Navigate``, a state reset).\n    ``label`` overrides the whole string when a screen genuinely needs its own\n    wording; prefer ``to`` so the phrasing stays consistent.",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "to",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "UIAction | None",
+          "default": null,
+          "name": "on_click",
+          "required": false,
+          "type": {
+            "ref": "UIAction | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
           "required": false,
           "type": {
             "ref": "str"

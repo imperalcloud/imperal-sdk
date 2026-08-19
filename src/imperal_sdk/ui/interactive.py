@@ -43,6 +43,44 @@ def Button(
     return UINode(type="Button", props=props)
 
 
+def BackButton(
+    to: str = "",
+    on_click: UIAction | None = None,
+    *,
+    label: str = "",
+) -> UINode:
+    """The standard 'go back' control for a detail view.
+
+    ``to`` names the DESTINATION, not the button::
+
+        ui.BackButton("Projects", on_click=ui.Call("open_list"))   # "← Back to Projects"
+        ui.BackButton(on_click=ui.Call("open_list"))               # "← Back"
+
+    WHY THIS EXISTS (platform sweep #10): the platform had no standard for
+    this, so every app invented one. A live scan found NINE hand-rolled
+    variants across the installed apps -- "← Back", "← Back to Extensions",
+    "← Back to articles", "← Back to overview", "← Back to newsletters" -- plus
+    a private ``_back_button()`` helper in billing. Each picked its own arrow,
+    variant and size, so the same gesture looked different on every screen and
+    every new detail page re-litigated the decision.
+
+    Composition on purpose: this returns an ordinary ``Button`` node, NOT a new
+    node type. Every panel already renders Button, so this works on every
+    deployed frontend with no host-side change and nothing to keep in sync --
+    the standard lives in ONE place (here) instead of in a renderer the SDK
+    cannot see. Only the chrome is fixed: the arrow glyph, ``variant="ghost"``
+    and ``size="sm"`` -- the three things the nine copies happened to agree on
+    anyway.
+
+    ``on_click`` stays the caller's business: only the app knows where "back"
+    goes (a ``Call`` to reopen the list, a ``Navigate``, a state reset).
+    ``label`` overrides the whole string when a screen genuinely needs its own
+    wording; prefer ``to`` so the phrasing stays consistent.
+    """
+    text = label or (f"← Back to {to}" if to else "← Back")
+    return Button(label=text, variant="ghost", size="sm", on_click=on_click)
+
+
 def Card(
     title: str = "",
     subtitle: str = "",
