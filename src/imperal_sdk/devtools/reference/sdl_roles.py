@@ -57,7 +57,8 @@ def _role_symbol(sdl: Any, name: str, obj: Any) -> dict[str, Any]:
     except Exception:
         params = []
 
-    doc = (getattr(obj, "__doc__", None) or "").strip()
+    # cleandoc — interpreter-independent docstring text (see _introspect).
+    doc = inspect.cleandoc(getattr(obj, "__doc__", None) or "").strip()
     catalog_key = f"sdl.{name}"
     return {
         "kind": "sdl_role",

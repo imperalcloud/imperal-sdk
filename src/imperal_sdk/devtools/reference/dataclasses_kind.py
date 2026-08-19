@@ -10,6 +10,7 @@ into the pinned shape (fields → params; ``returns`` is null). A field with a
 from __future__ import annotations
 
 import dataclasses
+import inspect
 from typing import Any
 
 from imperal_sdk.devtools.reference._flags import flags_for
@@ -51,7 +52,8 @@ def collect() -> dict[str, dict[str, Any]]:
 
 
 def _dataclass_symbol(name: str, obj: Any) -> dict[str, Any]:
-    doc = (getattr(obj, "__doc__", None) or "").strip()
+    # cleandoc — interpreter-independent docstring text (see _introspect).
+    doc = inspect.cleandoc(getattr(obj, "__doc__", None) or "").strip()
     params: list[dict[str, Any]] = []
     for f in dataclasses.fields(obj):
         has_factory = f.default_factory is not dataclasses.MISSING
@@ -69,7 +71,8 @@ def _dataclass_symbol(name: str, obj: Any) -> dict[str, Any]:
 
 
 def _pydantic_symbol(name: str, obj: Any) -> dict[str, Any]:
-    doc = (getattr(obj, "__doc__", None) or "").strip()
+    # cleandoc — interpreter-independent docstring text (see _introspect).
+    doc = inspect.cleandoc(getattr(obj, "__doc__", None) or "").strip()
     params: list[dict[str, Any]] = []
     for fname, field in obj.model_fields.items():
         required = field.is_required()

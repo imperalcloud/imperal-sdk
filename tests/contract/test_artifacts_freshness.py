@@ -31,7 +31,9 @@ def test_committed_sdk_claims_match_generated() -> None:
     assert committed == generate_claims(), (
         "sdk_claims.json is stale — regenerate with: "
         "python -m imperal_sdk.devtools.generate_sdk_claims --output sdk_claims.json "
-        "(and copy to kernel tools/contract/sdk-claims.json on deploy)"
+        "(and copy to kernel tools/contract/sdk-claims.json on deploy). "
+        "Regenerate on the CI interpreter (3.11/3.12): introspection output "
+        "is not identical across CPython versions."
     )
 
 
@@ -58,7 +60,11 @@ def test_sdk_reference_fresh() -> None:
     committed = json.loads((REPO / "sdk-reference.json").read_text(encoding="utf-8"))
     assert committed == generate_reference(), (
         "sdk-reference.json is stale — regenerate with: "
-        "python -m imperal_sdk.devtools.generate_reference --output sdk-reference.json"
+        "python -m imperal_sdk.devtools.generate_reference --output sdk-reference.json "
+        "— and regenerate it on the CI interpreter (3.11/3.12). Docstrings are "
+        "normalised via inspect.cleandoc so they no longer vary, but 3.13+ "
+        "resolves string annotations that 3.11/3.12 leave as text, so an "
+        "artifact generated on a newer Python still diverges here."
     )
 
 

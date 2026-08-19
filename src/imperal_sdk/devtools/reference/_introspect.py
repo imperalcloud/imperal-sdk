@@ -160,7 +160,12 @@ def callable_symbol(
     enums: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Render a callable into the pinned symbol shape, degrading gracefully."""
-    doc = (getattr(func, "__doc__", None) or "").strip()
+    # `cleandoc`, not `.strip()`: CPython 3.13+ strips docstring indentation at
+    # compile time, 3.11/3.12 do not. With a bare strip the SAME source yields a
+    # DIFFERENT artifact per interpreter, so whoever regenerates on a newer
+    # Python turns the freshness gate red on CI (3.11/3.12) through no fault of
+    # their own. cleandoc normalises both worlds to the same text.
+    doc = inspect.cleandoc(getattr(func, "__doc__", None) or "").strip()
     try:
         params = params_of(func, skip_self=skip_self)
         returns = annotation_str(inspect.signature(func).return_annotation)

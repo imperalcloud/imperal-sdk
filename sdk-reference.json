@@ -874,20 +874,12 @@
           }
         },
         {
-          "annotation": "Union",
+          "annotation": "str | None",
           "default": null,
           "name": "cursor",
           "required": false,
           "type": {
-            "kind": "union",
-            "of": [
-              {
-                "ref": "str"
-              },
-              {
-                "kind": "none"
-              }
-            ]
+            "kind": "any"
           }
         },
         {
@@ -900,20 +892,12 @@
           }
         },
         {
-          "annotation": "Union",
+          "annotation": "int | None",
           "default": null,
           "name": "total",
           "required": false,
           "type": {
-            "kind": "union",
-            "of": [
-              {
-                "ref": "int"
-              },
-              {
-                "kind": "none"
-              }
-            ]
+            "kind": "any"
           }
         }
       ],
