@@ -1,31 +1,17 @@
-fix(ci): the reference artifact was interpreter-dependent, so CI went red
+docs(changelog): 5.10.0 — tray zones, @ext.menu_item, and the BackButton that never shipped
 
-The 5.10.0 push failed pytest on py3.11 and py3.12 while passing locally.
-Nothing was wrong with the tray/menu contract: I generated
-`sdk-reference.json` on CPython 3.14, CI regenerates it on 3.11/3.12 and
-compares, and the two do not agree — 85 differing leaves.
+The release workflow builds its GitHub Release notes by pulling the
+CHANGELOG section whose heading matches the tag, so a missing section
+means a release page reading "Release v5.10.0" and nothing else.
 
-Two independent causes, one of which is now gone for good:
+Two things worth noting in this entry beyond the new surfaces:
 
-* DOCSTRINGS (~80 of the 85). CPython 3.13+ strips docstring indentation
-  at compile time; 3.11/3.12 hand it over verbatim. The generator read
-  `__doc__` with a bare `.strip()`, which trims the ends and leaves the
-  interior indentation alone — so the same source produced different text
-  per interpreter. Now normalised with `inspect.cleandoc()` at all four
-  read sites (_introspect, dataclasses_kind ×2, sdl_roles). Version-proof:
-  whoever regenerates this on 3.15 gets the same bytes.
+* v5.9.23 (ui.BackButton) was committed but never tagged, so it never
+  reached PyPI — PyPI is still serving 5.9.22. It ships inside 5.10.0
+  rather than disappearing from the package's history.
+* the tray/menu sections document WHY account/footer are refused for
+  contributions, because that is the part a future contributor will
+  otherwise read as an arbitrary restriction and try to remove.
 
-* ANNOTATIONS (the remaining 6, all in `Page`). 3.13+ resolves the string
-  annotations that PEP 563 leaves as text, so `str | None` renders as a
-  bare `Union`. Not normalised — that is a real difference in what the
-  interpreter knows, and faking it would mean lying in the artifact.
-  Instead the artifact is regenerated on 3.11 (which CI uses) and both
-  freshness assertions now say WHICH interpreter to regenerate on, so the
-  next person loses a minute to this instead of an hour.
-
-Incidentally the committed artifact reads better now: `"str | None"` and
-`"int | None"` instead of `"Union"`, with the type graph filled in.
-
-Verified with the CI matrix reproduced exactly (`pip install -e
-".[dev,fastapi,db]"`, `pytest -q --tb=short` on 3.11): 1540 passed,
-5 skipped, 0 failed.
+Verified the workflow's awk extractor against this file: 68 lines, stops
+cleanly before the 5.9.19 heading.

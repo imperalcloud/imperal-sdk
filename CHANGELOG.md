@@ -2,6 +2,74 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.10.0 — 2026-08-20
+
+### Added
+- **The system tray is now a structure, and extensions can reach it.**
+  `@ext.tray` has existed for a long time as a decorator that led nowhere: the
+  kernel did not know the word `tray` (grep it in the kernel before this
+  release — zero hits), so a declared tray item was emitted into `imperal.json`
+  and silently dropped. The Panel's top bar was the one region an extension
+  could not touch. It now travels down the same publish path as panels — one
+  `config.ui` document, one hash-dedup, one PUT.
+
+  A tray is not a row of icons, it is three groups that happen to sit next to
+  each other, so every item declares which one it belongs to via the new
+  `zone` argument:
+
+  - `"status"` — passive, at-a-glance state (connection, counts, balance).
+    The default.
+  - `"actions"` — things the user flips or triggers.
+  - `"system"` — the platform's own furniture at the far right (clock,
+    settings). Contribute here only if the item genuinely belongs beside the
+    clock.
+
+  Zones render left to right in that fixed order; `order` sorts within a zone
+  and defaults to `100`, leaving `0-99` to the platform so an extension never
+  has to know anyone else's numbers. Sorting happens kernel-side, so two hosts
+  rendering the same tray cannot disagree about what comes first.
+
+- **`@ext.menu_item` — the top-right user menu becomes composable.** It was a
+  hardcoded list of four links with no way in. Two shapes: pass `path=` for a
+  plain navigation link (the handler never runs), or omit it and the click
+  dispatches `__menu__{item_id}`, handled like any other panel action.
+
+  Sections are `"main"` (default) and `"admin"` — the latter inherits the
+  host's admin gate for free. `"account"` and `"footer"` are rendered by the
+  platform but **rejected for contributions**, in the decorator *and* in the
+  manifest schema, because they hold identity, theme and sign-out: an item
+  landing there would shove "Sign out" sideways under a cursor already moving
+  toward it. Refused in two places because a manifest can be hand-edited.
+
+- **`ui.BackButton` — one standard "← Back" instead of nine hand-rolled ones.**
+  (Written for 5.9.23, which was never published to PyPI; it ships here.)
+
+### Changed
+- An extension contributing **only** a tray item or **only** a menu entry — no
+  panel at all — now publishes its UI surface. Previously the publisher
+  returned early whenever there were no left/right panel slots, and the
+  declaration was dropped without a trace.
+
+### Fixed
+- **`sdk-reference.json` was interpreter-dependent.** CPython 3.13+ strips
+  docstring indentation at compile time while 3.11/3.12 hand it over verbatim,
+  and the generator read `__doc__` with a bare `.strip()` — which trims the
+  ends and leaves the interior alone. The same source therefore produced a
+  different artifact per interpreter, turning the freshness gate red on CI for
+  whoever happened to regenerate on a newer Python. Now normalised with
+  `inspect.cleandoc()` at all four read sites. Both freshness assertions also
+  name the interpreter to regenerate on, since 3.13+ additionally resolves the
+  PEP 563 string annotations that 3.11/3.12 leave as text.
+
+### Compatibility
+- Fully backwards compatible. An extension that declares no menu items emits
+  no `menu` key at all, so every manifest written before this rebuilds
+  byte-identical — pinned by `test_manifest_omits_menu_when_undeclared`. Tray
+  `zone`/`order` are optional in the schema, so pre-5.10.0 manifests validate
+  unchanged, and the host defaults a missing zone to `"status"`.
+- Requires kernel support for the published `tray`/`menu` surfaces; older
+  kernels ignore the extra keys.
+
 ## 5.9.19 — 2026-08-13
 
 ### Added
