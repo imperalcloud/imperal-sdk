@@ -25,6 +25,12 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from imperal_sdk.types.contributions import (
+    ALLOWED_MENU_SECTIONS,
+    ALLOWED_TRAY_ZONES,
+    RESERVED_MENU_SECTIONS,
+)
+
 
 # === Regex contracts ==================================================
 
@@ -251,13 +257,67 @@ class LifecycleDecl(BaseModel):
 
 
 class TrayDecl(BaseModel):
-    """One entry in `manifest['tray']` (M10)."""
+    """One entry in `manifest['tray']` (M10).
+
+    ``zone``/``order`` (Ф3) are what let the host lay the tray out as three
+    labelled groups instead of one undifferentiated row. Both are optional so
+    manifests emitted before Ф3 still validate; the host defaults a missing
+    ``zone`` to ``"status"``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     tray_id: str = Field(..., pattern=r"^[a-z][a-z0-9_-]+$")
     icon: Optional[str] = None
     tooltip: Optional[str] = None
+    zone: Optional[str] = None
+    order: Optional[int] = None
+
+    @field_validator("zone")
+    @classmethod
+    def _known_zone(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ALLOWED_TRAY_ZONES:
+            raise ValueError(
+                f"unknown tray zone {v!r}; must be one of "
+                f"{sorted(ALLOWED_TRAY_ZONES)}"
+            )
+        return v
+
+
+class MenuItemDecl(BaseModel):
+    """One entry in `manifest['menu']` — Ф3 user-menu contribution.
+
+    Mirrors :meth:`imperal_sdk.extension.MenuItemDef.to_manifest` exactly, so
+    the emitted shape round-trips through :func:`validate_manifest_dict`
+    (the symmetry rule that TrayDecl/SecretDecl already follow).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str = Field(..., pattern=r"^[a-z][a-z0-9_-]+$")
+    label: str
+    icon: Optional[str] = None
+    section: Optional[str] = None
+    path: Optional[str] = None
+    order: Optional[int] = None
+    danger: Optional[bool] = None
+
+    @field_validator("section")
+    @classmethod
+    def _contributable_section(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_MENU_SECTIONS:
+            raise ValueError(
+                f"unknown menu section {v!r}; must be one of "
+                f"{sorted(ALLOWED_MENU_SECTIONS)}"
+            )
+        if v in RESERVED_MENU_SECTIONS:
+            raise ValueError(
+                f"menu section {v!r} is reserved for the platform's own "
+                "identity and sign-out entries; use 'main' or 'admin'"
+            )
+        return v
 
 
 class SecretDecl(BaseModel):
@@ -372,6 +432,7 @@ class Manifest(BaseModel):
     exposed: Optional[List[ExposedDecl]] = None
     lifecycle: Optional[LifecycleDecl] = None
     tray: Optional[List[TrayDecl]] = None
+    menu: Optional[List[MenuItemDecl]] = None
 
     # --- Federal v4.0.0 (manifest_schema_version=3) ---
     # Federal contract surface — kernel reads these to dispatch deterministically.

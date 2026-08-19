@@ -160,7 +160,7 @@ def validate_extension(ext) -> ValidationReport:
     # platform-provided, not user-authored, and shouldn't count toward V3
     # "at least one tool" or marketplace tool counts.
     _all_tools = getattr(ext, "_tools", {})
-    _SYNTHETIC_PREFIXES = ("__panel__", "__widget__", "__tray__", "__webhook__")
+    _SYNTHETIC_PREFIXES = ("__panel__", "__widget__", "__tray__", "__menu__", "__webhook__")
     tools = {
         name: t for name, t in _all_tools.items()
         if not any(name.startswith(p) for p in _SYNTHETIC_PREFIXES)

@@ -141,6 +141,19 @@ def _build_canary_extension() -> Extension:
     async def _tray(ctx, **kwargs):  # noqa: ARG001
         return None
 
+    # Ф3 — user-menu contributions. Both shapes: a plain navigation link
+    # (path set, handler never called) and a handler-backed entry, so the
+    # canary covers the whole `menu` emission and not just the easy half.
+    @ext.menu_item("workspace", label="Canary Workspace", icon="LayoutGrid",
+                   path="/ext/ci-canary", section="main", order=20)
+    async def _menu_workspace(ctx, **kwargs):  # noqa: ARG001
+        return None
+
+    @ext.menu_item("purge", label="Purge Canaries", icon="Trash2",
+                   section="admin", order=10, danger=True)
+    async def _menu_purge(ctx, **kwargs):  # noqa: ARG001
+        return None
+
     # Secrets — all three declaration shapes (EXT-SECRETS-V1):
     # defaults-only user scope, fully-parameterized user scope, and
     # app scope with env_fallback. `to_manifest_dict` ALWAYS emits
@@ -364,7 +377,19 @@ def test_maximal_canary_sections_carry_full_feature_surface(tmp_path, monkeypatc
     # OAuth / tray / webhooks / exposed — full declared key sets.
     assert m["oauth"] == [{"provider": "github", "collection": "github_accounts",
                            "scopes": ["repo"], "has_hook": False}]
-    assert m["tray"] == [{"tray_id": "unread", "icon": "Mail", "tooltip": "Unread canaries"}]
+    # Ф3 added zone/order: the tray is laid out as ordered zones, so both
+    # travel in the manifest, and the canary pins their defaults too.
+    assert m["tray"] == [{"tray_id": "unread", "icon": "Mail",
+                          "tooltip": "Unread canaries",
+                          "zone": "status", "order": 100}]
+    assert m["menu"] == [
+        {"item_id": "workspace", "label": "Canary Workspace",
+         "icon": "LayoutGrid", "section": "main",
+         "path": "/ext/ci-canary", "order": 20, "danger": False},
+        {"item_id": "purge", "label": "Purge Canaries",
+         "icon": "Trash2", "section": "admin",
+         "path": "", "order": 10, "danger": True},
+    ]
     assert m["webhooks"] == [{"path": "/inbound", "method": "POST",
                               "secret_header": "X-Canary-Sig"}]
     assert m["exposed"] == [{"name": "lookup", "action_type": "read"}]

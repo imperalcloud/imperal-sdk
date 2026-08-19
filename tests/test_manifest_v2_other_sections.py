@@ -46,7 +46,52 @@ def test_manifest_emits_tray():
         return None
 
     m = generate_manifest(ext)
-    assert m["tray"] == [{"tray_id": "unread", "icon": "Mail", "tooltip": "Unread"}]
+    # Ф3: every tray item carries its zone and its order inside that zone —
+    # the host lays the strip out from these, so they are part of the wire
+    # shape, not decoration. Pinning the defaults here means a change of
+    # default zone cannot slip through unnoticed.
+    assert m["tray"] == [{"tray_id": "unread", "icon": "Mail",
+                          "tooltip": "Unread",
+                          "zone": "status", "order": 100}]
+
+
+def test_manifest_emits_menu_items():
+    """Ф3 — @ext.menu_item lands in manifest['menu'], both shapes."""
+    ext = Extension("mail", version="1.0.0")
+
+    @ext.menu_item("inbox", label="Open Inbox", icon="Inbox", path="/ext/mail")
+    async def menu_inbox(ctx):
+        return None
+
+    @ext.menu_item("rules", label="Mail Rules", icon="Filter",
+                   section="admin", order=5, danger=False)
+    async def menu_rules(ctx):
+        return None
+
+    m = generate_manifest(ext)
+    assert m["menu"] == [
+        {"item_id": "inbox", "label": "Open Inbox", "icon": "Inbox",
+         "section": "main", "path": "/ext/mail", "order": 100,
+         "danger": False},
+        {"item_id": "rules", "label": "Mail Rules", "icon": "Filter",
+         "section": "admin", "path": "", "order": 5, "danger": False},
+    ]
+
+
+def test_manifest_omits_menu_when_undeclared():
+    """An extension with no menu items emits no `menu` key at all.
+
+    Every extension written before Ф3 must produce a byte-identical
+    manifest, otherwise `imperal build` shows spurious diffs across the
+    whole marketplace on the next SDK bump.
+    """
+    ext = Extension("plain", version="1.0.0")
+
+    @ext.tool("ping")
+    async def ping(ctx):
+        return {"ok": True}
+
+    assert "menu" not in generate_manifest(ext)
 
 
 def test_manifest_round_trip_validates_with_all_sections():

@@ -1,10 +1,10 @@
 {
-  "sdk_version": "5.9.23",
+  "sdk_version": "5.10.0",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Universal return type for @chat.function handlers.\n\n    Generic over T (Pydantic BaseModel). When T is not specified,\n    data is treated as plain dict for backward compatibility.\n\n    Fields:\n        status: \"success\" or \"error\"\n        data: Response payload (dict or Pydantic model)\n        summary: User-facing message shown in chat. ALWAYS displayed for DUI calls.\n        error: Error message (only for status=\"error\")\n        retryable: If True, user can retry the action\n        ui: Inline UINode tree for chat rendering (optional)\n        refresh_panels: List of panel IDs to refresh after action (e.g. [\"sidebar\"]).\n            If not set, ALL panels refresh. Set to specific IDs for targeted refresh.\n\n    NOTE: Always use factory methods .success() / .error(), or pass all kwargs\n    explicitly when constructing directly.",
+      "description": "Universal return type for @chat.function handlers.\n\nGeneric over T (Pydantic BaseModel). When T is not specified,\ndata is treated as plain dict for backward compatibility.\n\nFields:\n    status: \"success\" or \"error\"\n    data: Response payload (dict or Pydantic model)\n    summary: User-facing message shown in chat. ALWAYS displayed for DUI calls.\n    error: Error message (only for status=\"error\")\n    retryable: If True, user can retry the action\n    ui: Inline UINode tree for chat rendering (optional)\n    refresh_panels: List of panel IDs to refresh after action (e.g. [\"sidebar\"]).\n        If not set, ALL panels refresh. Set to specific IDs for targeted refresh.\n\nNOTE: Always use factory methods .success() / .error(), or pass all kwargs\nexplicitly when constructing directly.",
       "enums": {},
       "kind": "dataclass",
       "params": [
@@ -260,7 +260,7 @@
     "Document": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "A document in the extension store.\n\n    Canonical dataclass \u2014 the single source of truth for Document shape\n    across the SDK. `StoreClient.query/get/query_all/...` all return\n    instances of this class.\n\n    Wire contract equivalent: ``imperal_sdk.types.client_contracts.DocumentModel``\n    (Pydantic). Field shape + defaults must match \u2014 verified by contract test\n    ``tests/test_document_contract.py``.",
+      "description": "A document in the extension store.\n\nCanonical dataclass \u2014 the single source of truth for Document shape\nacross the SDK. `StoreClient.query/get/query_all/...` all return\ninstances of this class.\n\nWire contract equivalent: ``imperal_sdk.types.client_contracts.DocumentModel``\n(Pydantic). Field shape + defaults must match \u2014 verified by contract test\n``tests/test_document_contract.py``.",
       "enums": {},
       "kind": "dataclass",
       "params": [
@@ -874,12 +874,20 @@
           }
         },
         {
-          "annotation": "str | None",
+          "annotation": "Union",
           "default": null,
           "name": "cursor",
           "required": false,
           "type": {
-            "kind": "any"
+            "kind": "union",
+            "of": [
+              {
+                "ref": "str"
+              },
+              {
+                "kind": "none"
+              }
+            ]
           }
         },
         {
@@ -892,12 +900,20 @@
           }
         },
         {
-          "annotation": "int | None",
+          "annotation": "Union",
           "default": null,
           "name": "total",
           "required": false,
           "type": {
-            "kind": "any"
+            "kind": "union",
+            "of": [
+              {
+                "ref": "int"
+              },
+              {
+                "kind": "none"
+              }
+            ]
           }
         }
       ],
@@ -1081,7 +1097,7 @@
     "TrayDef": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "System tray item \u2014 icon + badge + optional dropdown panel in the OS top bar.",
+      "description": "System tray item \u2014 icon + badge + optional dropdown panel in the OS top bar.\n\n``zone`` is what makes the tray a structure instead of a row: see\n``ALLOWED_TRAY_ZONES``. ``order`` sorts within the zone (ascending); leave\nit at the default to land after the platform's own items, which reserve\n0-99.",
       "enums": {},
       "kind": "dataclass",
       "params": [
@@ -1119,6 +1135,24 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "status",
+          "name": "zone",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 100,
+          "name": "order",
+          "required": false,
+          "type": {
+            "ref": "int"
           }
         }
       ],
@@ -1219,7 +1253,7 @@
     "WebhookResponse": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Response to return from a webhook handler.\n\n    Returning one of these is equivalent to returning the documented control\n    dict \u2014 ``{\"status_code\": ..., \"headers\": ..., \"body\": ...}`` \u2014 and shapes\n    the REAL HTTP reply: the status line and the response headers, not just a\n    JSON body. That matters for providers whose handshake lives outside the\n    body, such as Asana echoing ``X-Hook-Secret`` in a header.\n\n        return WebhookResponse(status_code=200, body=\"\",\n                               headers={\"X-Hook-Secret\": offered})\n\n    Until 2026-08-15 this class was a trap: it had no ``to_dict``, so the\n    runtime's result serializer fell through to its catch-all branch and\n    wrapped the whole object as ``{\"status\": \"success\", \"data\": {...}}``. The\n    gateway looks for the control keys at the TOP level, found none, and\n    answered a plain 200 with the control keys buried in the body \u2014 so the\n    echo header never reached the wire and the webhook could not be\n    established. asana-connector hit exactly this and worked around it by\n    returning a bare dict instead.",
+      "description": "Response to return from a webhook handler.\n\nReturning one of these is equivalent to returning the documented control\ndict \u2014 ``{\"status_code\": ..., \"headers\": ..., \"body\": ...}`` \u2014 and shapes\nthe REAL HTTP reply: the status line and the response headers, not just a\nJSON body. That matters for providers whose handshake lives outside the\nbody, such as Asana echoing ``X-Hook-Secret`` in a header.\n\n    return WebhookResponse(status_code=200, body=\"\",\n                           headers={\"X-Hook-Secret\": offered})\n\nUntil 2026-08-15 this class was a trap: it had no ``to_dict``, so the\nruntime's result serializer fell through to its catch-all branch and\nwrapped the whole object as ``{\"status\": \"success\", \"data\": {...}}``. The\ngateway looks for the control keys at the TOP level, found none, and\nanswered a plain 200 with the control keys buried in the body \u2014 so the\necho header never reached the wire and the webhook could not be\nestablished. asana-connector hit exactly this and worked around it by\nreturning a bare dict instead.",
       "enums": {},
       "kind": "dataclass",
       "params": [
@@ -1256,7 +1290,7 @@
     "chat.function": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Register a chat function.\n\n        Args:\n            name: Function name (used in tool_use calls).\n            description: What this function does, \u226520 chars (V16). Shown to LLM.\n            params: Parameter definitions dict. SDK auto-derives from a Pydantic\n                BaseModel param annotation when omitted (V17 \u2014 no ``**kwargs``\n                or untyped handlers).\n            action_type: ``\"read\"``, ``\"write\"``, or ``\"destructive\"``. Drives\n                kernel action verification and the 2-step confirmation gate.\n            event: Event name for ActionResult publishing.\n            chain_callable: When ``True`` the platform issues a direct typed\n                call ``app/func(args)`` instead of delegating to the\n                ChatExtension LLM router. Defaults to ``True`` for ALL\n                action_types since v4.2.10.\n            effects: Declared (advisory) side-effect surface \u2014\n                ``[\"create:note\"]``, ``[\"delete:folder\"]``, etc. Emitted\n                into the manifest as declared-intent metadata; the kernel\n                does not currently consume this decorator field.\n            id_projection: Name of the params field that carries the\n                resolved target id when this tool runs as a downstream\n                chain step (e.g. ``\"folder_id\"`` for\n                ``delete_notes_from_folder``).\n            background: Advisory per-tool hint. The kernel does not consume\n                this decorator field directly; the runtime long-running path\n                is ``ctx.background_task(long_running=\u2026)``. Retained for\n                extension convention (third-party extensions declare it).\n            long_running: Advisory per-tool hint, like ``background`` \u2014 not\n                consumed by the kernel from this decorator field.\n            data_model: **v5.0.1 \u2014 Federal Typed Return Contract.** Explicit\n                Pydantic ``BaseModel`` subclass declaring the shape of\n                ``ActionResult.data`` for this tool. Federal contract:\n                I-SDK-DECORATOR-DATA-MODEL-KWARG. When declared, it\n                populates ``FunctionDef._return_model`` directly, takes\n                precedence over return-annotation auto-detect, and triggers:\n\n                  1. Manifest ``return_schema`` emission.\n                  2. Platform catalog ingestion of ``return_model``.\n                  3. Classifier envelope rendering of ``return_fields``.\n                  4. ``$REF`` resolver path validation against the schema.\n\n                **MUST** be present for ``action_type=\"read\"`` (V23 \u2014\n                initially WARN, ERROR after soak via\n                ``IMPERAL_VALIDATOR_V23_SEVERITY``). Recommended for\n                write/destructive (V24, WARN-only).\n\n                Use the same field names as the corresponding input\n                ``CreateXParams`` for round-trip symmetry \u2014 this closes the\n                ``content_text`` (input) / ``content`` (output) drift class.",
+      "description": "Register a chat function.\n\nArgs:\n    name: Function name (used in tool_use calls).\n    description: What this function does, \u226520 chars (V16). Shown to LLM.\n    params: Parameter definitions dict. SDK auto-derives from a Pydantic\n        BaseModel param annotation when omitted (V17 \u2014 no ``**kwargs``\n        or untyped handlers).\n    action_type: ``\"read\"``, ``\"write\"``, or ``\"destructive\"``. Drives\n        kernel action verification and the 2-step confirmation gate.\n    event: Event name for ActionResult publishing.\n    chain_callable: When ``True`` the platform issues a direct typed\n        call ``app/func(args)`` instead of delegating to the\n        ChatExtension LLM router. Defaults to ``True`` for ALL\n        action_types since v4.2.10.\n    effects: Declared (advisory) side-effect surface \u2014\n        ``[\"create:note\"]``, ``[\"delete:folder\"]``, etc. Emitted\n        into the manifest as declared-intent metadata; the kernel\n        does not currently consume this decorator field.\n    id_projection: Name of the params field that carries the\n        resolved target id when this tool runs as a downstream\n        chain step (e.g. ``\"folder_id\"`` for\n        ``delete_notes_from_folder``).\n    background: Advisory per-tool hint. The kernel does not consume\n        this decorator field directly; the runtime long-running path\n        is ``ctx.background_task(long_running=\u2026)``. Retained for\n        extension convention (third-party extensions declare it).\n    long_running: Advisory per-tool hint, like ``background`` \u2014 not\n        consumed by the kernel from this decorator field.\n    data_model: **v5.0.1 \u2014 Federal Typed Return Contract.** Explicit\n        Pydantic ``BaseModel`` subclass declaring the shape of\n        ``ActionResult.data`` for this tool. Federal contract:\n        I-SDK-DECORATOR-DATA-MODEL-KWARG. When declared, it\n        populates ``FunctionDef._return_model`` directly, takes\n        precedence over return-annotation auto-detect, and triggers:\n\n          1. Manifest ``return_schema`` emission.\n          2. Platform catalog ingestion of ``return_model``.\n          3. Classifier envelope rendering of ``return_fields``.\n          4. ``$REF`` resolver path validation against the schema.\n\n        **MUST** be present for ``action_type=\"read\"`` (V23 \u2014\n        initially WARN, ERROR after soak via\n        ``IMPERAL_VALIDATOR_V23_SEVERITY``). Recommended for\n        write/destructive (V24, WARN-only).\n\n        Use the same field names as the corresponding input\n        ``CreateXParams`` for round-trip symmetry \u2014 this closes the\n        ``content_text`` (input) / ``content`` (output) drift class.",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -1477,7 +1511,7 @@
     "ctx.billing.create_billing_portal_session": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Create a Stripe Customer Portal session and return its hosted URL.\n        Surfaces errors (the ext needs the URL).",
+      "description": "Create a Stripe Customer Portal session and return its hosted URL.\nSurfaces errors (the ext needs the URL).",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1675,7 +1709,7 @@
     "ctx.billing.renew_subscription": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Renew an EXPIRED subscription for the same plan \u2014 charges the saved\n        default card for one fresh period and restores access immediately.\n        Surfaces errors (402 no-card / SCA, 409 not-expired). Returns the\n        gateway result dict ({status, plan, expires_at, payment_intent_id}).",
+      "description": "Renew an EXPIRED subscription for the same plan \u2014 charges the saved\ndefault card for one fresh period and restores access immediately.\nSurfaces errors (402 no-card / SCA, 409 not-expired). Returns the\ngateway result dict ({status, plan, expires_at, payment_intent_id}).",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1694,7 +1728,7 @@
     "ctx.billing.resume_subscription": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Undo a pending cancel-at-period-end. Surfaces errors. Returns the\n        gateway result dict ({status, plan, expires_at, cancel_at_period_end}).",
+      "description": "Undo a pending cancel-at-period-end. Surfaces errors. Returns the\ngateway result dict ({status, plan, expires_at, cancel_at_period_end}).",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1796,7 +1830,7 @@
     "ctx.billing.topup": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Token top-up PaymentIntent. Surfaces errors.\n\n        With ``off_session=True`` (default) the gateway attempts an immediate\n        off-session charge against the saved card and returns ``succeeded`` /\n        ``requires_action``. The Element path (``off_session=False``) returns\n        the ``client_secret`` instead.",
+      "description": "Token top-up PaymentIntent. Surfaces errors.\n\nWith ``off_session=True`` (default) the gateway attempts an immediate\noff-session charge against the saved card and returns ``succeeded`` /\n``requires_action``. The Element path (``off_session=False``) returns\nthe ``client_secret`` instead.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1851,7 +1885,7 @@
     "ctx.billing.track_usage": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Track usage for a given meter. Returns True on success.\n\n        Requires service_token \u2014 usage tracking is a server-to-server operation.\n        The gateway endpoint is POST /v1/billing/internal/usage/track (service\n        token required). There is no public user-facing track endpoint; calling\n        without a service token logs a warning and returns False.",
+      "description": "Track usage for a given meter. Returns True on success.\n\nRequires service_token \u2014 usage tracking is a server-to-server operation.\nThe gateway endpoint is POST /v1/billing/internal/usage/track (service\ntoken required). There is no public user-facing track endpoint; calling\nwithout a service token logs a warning and returns False.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1925,7 +1959,7 @@
     "ctx.config.get": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Get resolved config value using dot notation.\n\n        Examples:\n            ctx.config.get(\"models.primary_model\")  # \"claude-opus\"\n            ctx.config.get(\"persona.language\")        # \"ru\"\n            ctx.config.get(\"custom.missing\", \"fallback\")  # \"fallback\"",
+      "description": "Get resolved config value using dot notation.\n\nExamples:\n    ctx.config.get(\"models.primary_model\")  # \"claude-opus\"\n    ctx.config.get(\"persona.language\")        # \"ru\"\n    ctx.config.get(\"custom.missing\", \"fallback\")  # \"fallback\"",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1953,7 +1987,7 @@
     "ctx.config.get_section": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Get a full config section as dict.\n\n        Example:\n            ctx.config.get_section(\"models\")\n            # {\"primary_model\": \"claude-opus\", \"temperature\": 0.7, ...}",
+      "description": "Get a full config section as dict.\n\nExample:\n    ctx.config.get_section(\"models\")\n    # {\"primary_model\": \"claude-opus\", \"temperature\": 0.7, ...}",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2112,7 +2146,7 @@
     "ctx.notify.for_user": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Return a copy of this client bound to a different acting-user.\n\n        Mirrors ``SecretClient.for_user`` / ``StoreClient.for_user`` so every\n        per-user client re-scopes the same way.\n\n        WHY THIS EXISTS: ``ctx.as_user(uid)`` requires SYSTEM context\n        (``imperal_id == \"__system__\"``) and raises ``RuntimeError`` otherwise.\n        A WEBHOOK ctx is ``\"__webhook__\"``, so a webhook that has just resolved\n        which user an event belongs to had no supported way to notify them \u2014\n        extensions instead rebuilt this client from its private attributes.\n\n            # inside a webhook, once you know whose event this is\n            await ctx.notify.for_user(imperal_id)(\"Your payment went through.\")\n\n        Shallow copy: preserves kernel subclasses and bound state without\n        coupling to this constructor's signature.",
+      "description": "Return a copy of this client bound to a different acting-user.\n\nMirrors ``SecretClient.for_user`` / ``StoreClient.for_user`` so every\nper-user client re-scopes the same way.\n\nWHY THIS EXISTS: ``ctx.as_user(uid)`` requires SYSTEM context\n(``imperal_id == \"__system__\"``) and raises ``RuntimeError`` otherwise.\nA WEBHOOK ctx is ``\"__webhook__\"``, so a webhook that has just resolved\nwhich user an event belongs to had no supported way to notify them \u2014\nextensions instead rebuilt this client from its private attributes.\n\n    # inside a webhook, once you know whose event this is\n    await ctx.notify.for_user(imperal_id)(\"Your payment went through.\")\n\nShallow copy: preserves kernel subclasses and bound state without\ncoupling to this constructor's signature.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2131,7 +2165,7 @@
     "ctx.notify.send": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Alias for ``__call__``. Accepts a named ``channel`` parameter.\n\n        Equivalent to ``await ctx.notify(message, channel=channel, **kwargs)``.\n        Provided because older documentation / tests use this signature.",
+      "description": "Alias for ``__call__``. Accepts a named ``channel`` parameter.\n\nEquivalent to ``await ctx.notify(message, channel=channel, **kwargs)``.\nProvided because older documentation / tests use this signature.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2356,7 +2390,7 @@
     "ctx.store.for_user": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Return a copy of this client bound to a different acting-user.\n\n        Mirrors ``SecretClient.for_user`` so every per-user client re-scopes the\n        same way.\n\n        WHY THIS EXISTS: ``ctx.as_user(uid)`` is the normal way to act on\n        another user's data, but it requires SYSTEM context\n        (``imperal_id == \"__system__\"``) and raises ``RuntimeError`` for any\n        other identity. A WEBHOOK ctx is ``\"__webhook__\"`` \u2014 a different\n        pseudo-identity \u2014 so a webhook that has just resolved which user an\n        event belongs to could not re-scope at all through the supported API.\n\n        Extensions worked around that by constructing a StoreClient by hand out\n        of this client's private attributes (``_gateway_url``, ``_auth_token``,\n        ``_extension_id``, ``_tenant_id``) \u2014 github-connector, telegram-publisher\n        and google-drive-connector all carry a copy of that helper. That is a\n        private surface: it cannot be documented honestly (the docs accuracy\n        gate rejects private attributes, correctly) and any change to the\n        constructor breaks every copy silently.\n\n            # inside a webhook, once you know whose event this is\n            user_store = ctx.store.for_user(imperal_id)\n            await user_store.create(\"my_records\", {...})\n\n        Shallow copy, matching SecretClient: kernel subclasses that override\n        ``_headers`` and any bound state are preserved without coupling to the\n        constructor's signature.",
+      "description": "Return a copy of this client bound to a different acting-user.\n\nMirrors ``SecretClient.for_user`` so every per-user client re-scopes the\nsame way.\n\nWHY THIS EXISTS: ``ctx.as_user(uid)`` is the normal way to act on\nanother user's data, but it requires SYSTEM context\n(``imperal_id == \"__system__\"``) and raises ``RuntimeError`` for any\nother identity. A WEBHOOK ctx is ``\"__webhook__\"`` \u2014 a different\npseudo-identity \u2014 so a webhook that has just resolved which user an\nevent belongs to could not re-scope at all through the supported API.\n\nExtensions worked around that by constructing a StoreClient by hand out\nof this client's private attributes (``_gateway_url``, ``_auth_token``,\n``_extension_id``, ``_tenant_id``) \u2014 github-connector, telegram-publisher\nand google-drive-connector all carry a copy of that helper. That is a\nprivate surface: it cannot be documented honestly (the docs accuracy\ngate rejects private attributes, correctly) and any change to the\nconstructor breaks every copy silently.\n\n    # inside a webhook, once you know whose event this is\n    user_store = ctx.store.for_user(imperal_id)\n    await user_store.create(\"my_records\", {...})\n\nShallow copy, matching SecretClient: kernel subclasses that override\n``_headers`` and any bound state are preserved without coupling to the\nconstructor's signature.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2422,7 +2456,7 @@
     "ctx.store.list_users": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Yield user_ids with records in this extension's collection.\n\n        System-context only. Use with ``ctx.as_user(uid)`` for per-user fan-out:\n\n            async for uid in ctx.store.list_users(\"wt_monitors\"):\n                user_ctx = ctx.as_user(uid)\n                monitors = await user_ctx.store.query(\n                    \"wt_monitors\", where={\"enabled\": True})\n                for m in monitors.data:\n                    await check_monitor(user_ctx, m)\n\n        Invariants: I-LIST-USERS-1 (system-context guard),\n                    I-LIST-USERS-4 (cursor pagination).\n\n        Raises:\n            RuntimeError: caller is not system-context.\n            StoreUnavailable: Auth Gateway unreachable.\n            ValueError: forbidden chars in collection or invalid page_size.",
+      "description": "Yield user_ids with records in this extension's collection.\n\nSystem-context only. Use with ``ctx.as_user(uid)`` for per-user fan-out:\n\n    async for uid in ctx.store.list_users(\"wt_monitors\"):\n        user_ctx = ctx.as_user(uid)\n        monitors = await user_ctx.store.query(\n            \"wt_monitors\", where={\"enabled\": True})\n        for m in monitors.data:\n            await check_monitor(user_ctx, m)\n\nInvariants: I-LIST-USERS-1 (system-context guard),\n            I-LIST-USERS-4 (cursor pagination).\n\nRaises:\n    RuntimeError: caller is not system-context.\n    StoreUnavailable: Auth Gateway unreachable.\n    ValueError: forbidden chars in collection or invalid page_size.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2496,7 +2530,7 @@
     "ctx.store.query_all": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Return ALL documents in collection across all users.\n\n        System-context only. Returns list[Document] in a single HTTP call \u2014\n        use for bulk fan-out when ``ctx.store.list_users()`` + ``ctx.as_user()``\n        would cause N+1 HTTP inefficiency (e.g. event_poller that reads every\n        account per tick).\n\n        ``Document.user_id`` is populated from the store row so callers can\n        dispatch per-user work without a second round-trip.\n\n        Invariants: I-LIST-USERS-1 (system-context guard \u2014 reused for query_all).\n\n        Raises:\n            RuntimeError: caller is not system-context.\n            StoreUnavailable: Auth Gateway unreachable.\n            ValueError: forbidden chars in collection or invalid limit.",
+      "description": "Return ALL documents in collection across all users.\n\nSystem-context only. Returns list[Document] in a single HTTP call \u2014\nuse for bulk fan-out when ``ctx.store.list_users()`` + ``ctx.as_user()``\nwould cause N+1 HTTP inefficiency (e.g. event_poller that reads every\naccount per tick).\n\n``Document.user_id`` is populated from the store row so callers can\ndispatch per-user work without a second round-trip.\n\nInvariants: I-LIST-USERS-1 (system-context guard \u2014 reused for query_all).\n\nRaises:\n    RuntimeError: caller is not system-context.\n    StoreUnavailable: Auth Gateway unreachable.\n    ValueError: forbidden chars in collection or invalid limit.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2552,7 +2586,7 @@
     "ctx.store.update": {
       "action_vocab_safe": true,
       "declarative_capable": true,
-      "description": "Merge ``data`` into an existing document.\n\n        ``if_match`` turns this into a COMPARE-AND-SET (5.9.20+). Pass the\n        ``etag`` you read, and the write only lands if nobody else touched the\n        document meanwhile; otherwise :class:`StoreConflict` is raised and\n        nothing is overwritten. Without it the write is unconditional \u2014 the\n        historical behaviour, last writer wins.\n\n        Use it whenever you read, compute, and write back::\n\n            doc = await ctx.store.get(\"counters\", \"hits\")\n            await ctx.store.update(\n                \"counters\", \"hits\",\n                {\"n\": doc[\"n\"] + 1},\n                if_match=doc.etag,\n            )\n\n        Without ``if_match`` two concurrent handlers both read n=5, both write\n        n=6, and one increment silently disappears.",
+      "description": "Merge ``data`` into an existing document.\n\n``if_match`` turns this into a COMPARE-AND-SET (5.9.20+). Pass the\n``etag`` you read, and the write only lands if nobody else touched the\ndocument meanwhile; otherwise :class:`StoreConflict` is raised and\nnothing is overwritten. Without it the write is unconditional \u2014 the\nhistorical behaviour, last writer wins.\n\nUse it whenever you read, compute, and write back::\n\n    doc = await ctx.store.get(\"counters\", \"hits\")\n    await ctx.store.update(\n        \"counters\", \"hits\",\n        {\"n\": doc[\"n\"] + 1},\n        if_match=doc.etag,\n    )\n\nWithout ``if_match`` two concurrent handlers both read n=5, both write\nn=6, and one increment silently disappears.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -2598,7 +2632,7 @@
     "ext.cache_model": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Register a Pydantic model as a ``ctx.cache`` value shape.\n\n        The model name is scoped to this :class:`Extension` instance \u2014 the\n        same name in different extensions refers to different classes.\n        ``ctx.cache.set(key, value, ttl_seconds=60)`` will reverse-lookup the\n        class of ``value`` in this registry and refuse to persist anything\n        whose type is not registered.\n\n        Constraints:\n\n        - ``cls`` must subclass ``pydantic.BaseModel`` \u2014 raises ``TypeError``.\n        - ``name`` must be unique within the extension \u2014 duplicates raise\n          ``ValueError``.\n\n        Example::\n\n            from pydantic import BaseModel\n\n            class InboxSummary(BaseModel):\n                unread: int\n                latest_subject: str\n\n            @ext.cache_model(\"inbox_summary\")\n            class _InboxSummary(InboxSummary):\n                pass",
+      "description": "Register a Pydantic model as a ``ctx.cache`` value shape.\n\nThe model name is scoped to this :class:`Extension` instance \u2014 the\nsame name in different extensions refers to different classes.\n``ctx.cache.set(key, value, ttl_seconds=60)`` will reverse-lookup the\nclass of ``value`` in this registry and refuse to persist anything\nwhose type is not registered.\n\nConstraints:\n\n- ``cls`` must subclass ``pydantic.BaseModel`` \u2014 raises ``TypeError``.\n- ``name`` must be unique within the extension \u2014 duplicates raise\n  ``ValueError``.\n\nExample::\n\n    from pydantic import BaseModel\n\n    class InboxSummary(BaseModel):\n        unread: int\n        latest_subject: str\n\n    @ext.cache_model(\"inbox_summary\")\n    class _InboxSummary(InboxSummary):\n        pass",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -2617,7 +2651,7 @@
     "ext.emits": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Declare an event this extension emits. Powers manifest emits[] section.\n\n        Enforces federal cross-namespace block: event_type MUST be prefixed with\n        this extension's app_id (e.g. ``\"billing.topup_completed\"`` for app_id\n        ``\"billing\"``). Cross-namespace declarations raise ValueError immediately.",
+      "description": "Declare an event this extension emits. Powers manifest emits[] section.\n\nEnforces federal cross-namespace block: event_type MUST be prefixed with\nthis extension's app_id (e.g. ``\"billing.topup_completed\"`` for app_id\n``\"billing\"``). Cross-namespace declarations raise ValueError immediately.",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -2645,7 +2679,7 @@
     "ext.file_sink": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Declare that this app can RECEIVE an uploaded file (File Mage L3).\n\n        ``tool`` must be an existing chat tool of this app (validator V35\n        checks it resolves). ``accepts`` = mime globs / semantic kinds; ``arg``\n        + ``arg_kind`` = how the file maps into the tool call (text |\n        file_id | bytes_ref). Registers a FileSink so it emits into\n        ``manifest['file_sinks']`` \u2014 Webbee's brain then routes an uploaded\n        file to the RIGHT declared destination via the normal agentic loop.\n\n        Usage::\n\n            @ext.tool(\"create_note\")\n            async def create_note(ctx, params): ...\n\n            ext.file_sink(\"create_note\", accepts=[\"application/pdf\", \"text/*\"],\n                          arg=\"body\", arg_kind=\"text\",\n                          description=\"Create a note from a document\")\n\n        A plain registering call (not a decorator \u2014 the sink references an\n        existing tool by name, there is nothing to wrap).",
+      "description": "Declare that this app can RECEIVE an uploaded file (File Mage L3).\n\n``tool`` must be an existing chat tool of this app (validator V35\nchecks it resolves). ``accepts`` = mime globs / semantic kinds; ``arg``\n+ ``arg_kind`` = how the file maps into the tool call (text |\nfile_id | bytes_ref). Registers a FileSink so it emits into\n``manifest['file_sinks']`` \u2014 Webbee's brain then routes an uploaded\nfile to the RIGHT declared destination via the normal agentic loop.\n\nUsage::\n\n    @ext.tool(\"create_note\")\n    async def create_note(ctx, params): ...\n\n    ext.file_sink(\"create_note\", accepts=[\"application/pdf\", \"text/*\"],\n                  arg=\"body\", arg_kind=\"text\",\n                  description=\"Create a note from a document\")\n\nA plain registering call (not a decorator \u2014 the sink references an\nexisting tool by name, there is nothing to wrap).",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -2710,10 +2744,83 @@
       "params": [],
       "returns": null
     },
+    "ext.menu_item": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Contribute an entry to the Panel's top-right user menu.\n\nThe menu behind the avatar was a hardcoded list of four links, so an\nextension had no way to put anything there. Now it is composed: the\nhost renders its own entries and every declared one through the same\npath.\n\nTwo shapes:\n\n* ``path=\"/somewhere\"`` \u2014 a plain navigation link. The host routes\n  straight there; the handler is not called.\n* no ``path`` \u2014 clicking calls ``__menu__{item_id}`` and the result is\n  handled like any other panel action (return a UINode to open it, or\n  an action dict to navigate/refresh).\n\n``section`` is one of ``\"main\"`` (default) or ``\"admin\"`` \u2014 the latter\nis hidden wholesale for non-admins, so the item inherits that gate.\n``account`` and ``footer`` belong to the platform (identity, theme,\nsign out) and are rejected here: an extension landing there would\nshove \"Sign out\" around under the user's cursor.\n\nExample::\n\n    @ext.menu_item(\"workspace\", label=\"My Workspace\",\n                   icon=\"LayoutGrid\", path=\"/ext/my-app\")\n    async def menu_workspace(ctx, **kwargs):\n        return None",
+      "enums": {},
+      "kind": "decorator",
+      "params": [
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "item_id",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "label",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "icon",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "main",
+          "name": "section",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "path",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 100,
+          "name": "order",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": false,
+          "name": "danger",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        }
+      ],
+      "returns": null
+    },
     "ext.oauth": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Declare an OAuth provider connected on this extension's behalf.\n\n        The unified gateway route ``/v1/ext/{app_id}/oauth/{provider}/callback``\n        runs the dance and writes a standard account record to ``collection``\n        (default ``f\"{provider}_accounts\"``). Client creds come from this app's\n        app-scope secrets ``{provider}_client_id`` / ``{provider}_client_secret``.\n        For a custom account schema, also declare ``@ext.on_oauth_success(provider)``.",
+      "description": "Declare an OAuth provider connected on this extension's behalf.\n\nThe unified gateway route ``/v1/ext/{app_id}/oauth/{provider}/callback``\nruns the dance and writes a standard account record to ``collection``\n(default ``f\"{provider}_accounts\"``). Client creds come from this app's\napp-scope secrets ``{provider}_client_id`` / ``{provider}_client_secret``.\nFor a custom account schema, also declare ``@ext.on_oauth_success(provider)``.",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -2769,7 +2876,7 @@
     "ext.panel": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Declare a UI panel. Handler returns UINode tree.\n        Panel fetched via /call endpoint with function __panel__{panel_id}.\n\n        `slot` must be one of ALLOWED_PANEL_SLOTS \u2014 `\"center\"` (default,\n        middle content area), `\"left\"` / `\"right\"` (sidebars), or one of\n        the less-common `\"overlay\"` / `\"bottom\"` / `\"chat-sidebar\"`.\n        Unknown values raise ValueError at decoration time. The `\"main\"`\n        value was removed in SDK 3.4.0 \u2014 use `\"center\"` instead.\n\n        `center_overlay=True` (federal v4.1.8+) replaces the legacy\n        hardcoded TS allowlist in the Imperal Panel host. When set,\n        the kernel publishes ``center_overlay: true`` into the panel's\n        unified_config entry; the frontend's ``isCenterOverlay`` reads\n        the flag declaratively instead of consulting a hardcoded list of\n        panel_id literals. Pair with ``slot=\"center\"`` for the modal\n        center-overlay surface (chat collapses to 380 px right rail).",
+      "description": "Declare a UI panel. Handler returns UINode tree.\nPanel fetched via /call endpoint with function __panel__{panel_id}.\n\n`slot` must be one of ALLOWED_PANEL_SLOTS \u2014 `\"center\"` (default,\nmiddle content area), `\"left\"` / `\"right\"` (sidebars), or one of\nthe less-common `\"overlay\"` / `\"bottom\"` / `\"chat-sidebar\"`.\nUnknown values raise ValueError at decoration time. The `\"main\"`\nvalue was removed in SDK 3.4.0 \u2014 use `\"center\"` instead.\n\n`center_overlay=True` (federal v4.1.8+) replaces the legacy\nhardcoded TS allowlist in the Imperal Panel host. When set,\nthe kernel publishes ``center_overlay: true`` into the panel's\nunified_config entry; the frontend's ``isCenterOverlay`` reads\nthe flag declaratively instead of consulting a hardcoded list of\npanel_id literals. Pair with ``slot=\"center\"`` for the modal\ncenter-overlay surface (chat collapses to 380 px right rail).",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -2833,7 +2940,7 @@
     "ext.secret": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Declare a secret the extension needs.\n\n        Federal EXT-SECRETS-V1 contract \u2014 manifest.secrets[] is the single\n        source of truth for what an extension may touch via ``ctx.secrets``.\n\n        Usage::\n\n            ext.secret(\n                name=\"spotify_api_key\",\n                description=\"Your Spotify API key (from developer.spotify.com)\",\n                required=True,\n                write_mode=\"user\",       # user pastes in Panel UI\n                max_bytes=200,\n            )(lambda: None)\n\n            # OAuth refresh tokens are written by the ext after authorize\n            ext.secret(\n                name=\"spotify_refresh_token\",\n                description=\"OAuth refresh token written by ext after authorize\",\n                write_mode=\"extension\",\n                rotation_hint_days=30,\n            )(lambda: None)\n\n        Returns an identity decorator \u2014 the wrapped target is unchanged.\n        The call itself registers the SecretSpec on the Extension.",
+      "description": "Declare a secret the extension needs.\n\nFederal EXT-SECRETS-V1 contract \u2014 manifest.secrets[] is the single\nsource of truth for what an extension may touch via ``ctx.secrets``.\n\nUsage::\n\n    ext.secret(\n        name=\"spotify_api_key\",\n        description=\"Your Spotify API key (from developer.spotify.com)\",\n        required=True,\n        write_mode=\"user\",       # user pastes in Panel UI\n        max_bytes=200,\n    )(lambda: None)\n\n    # OAuth refresh tokens are written by the ext after authorize\n    ext.secret(\n        name=\"spotify_refresh_token\",\n        description=\"OAuth refresh token written by ext after authorize\",\n        write_mode=\"extension\",\n        rotation_hint_days=30,\n    )(lambda: None)\n\nReturns an identity decorator \u2014 the wrapped target is unchanged.\nThe call itself registers the SecretSpec on the Extension.",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -2915,7 +3022,7 @@
     "ext.skeleton": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Register a skeleton refresh tool by section name (recommended DX).\n\n        Sugar over :meth:`tool` that applies the platform's naming convention:\n\n        - The decorated function is registered as ``skeleton_refresh_<section_name>``.\n        - When ``alert=True``, a paired ``skeleton_alert_<section_name>`` tool is\n          also expected (register it separately with ``@ext.tool`` OR the kernel\n          will simply skip change alerts if absent).\n        - ``ttl`` is a hint to platform operators \u2014 the authoritative TTL lives\n          in the Registry row (or the kernel's auto-derive default of 300s).\n\n        The platform discovers this section automatically via\n        the ``skeleton_refresh_<X>`` naming convention \u2014 no Registry migration\n        required. See `imperal_sdk/docs/skeleton.md` \u00a7\"Skeleton Refresh Tools\"\n        for the end-to-end contract and invariants.\n\n        Return contract: refresh function MUST return ``{\"response\": <dict>}``\n        where the dict surfaces scalar fields (counts, flags, short strings) at\n        the top level so the intent classifier can read them directly from the\n        user's envelope. Idempotent \u2014 safe to run on every tick.\n\n        Example::\n\n            @ext.skeleton(\"monitors\", alert=True, ttl=300)\n            async def refresh_monitors(ctx) -> dict:\n                items = await ctx.store.query(\"wt_monitors\", where={\"owner_id\": ctx.user.id})\n                critical = sum(1 for m in items.data if m.data.get(\"status\") == \"critical\")\n                return {\"response\": {\n                    \"total\":    len(items.data),\n                    \"critical\": critical,\n                    \"warning\":  sum(1 for m in items.data if m.data.get(\"status\") == \"warning\"),\n                    \"ok\":       sum(1 for m in items.data if m.data.get(\"status\") == \"ok\"),\n                }}",
+      "description": "Register a skeleton refresh tool by section name (recommended DX).\n\nSugar over :meth:`tool` that applies the platform's naming convention:\n\n- The decorated function is registered as ``skeleton_refresh_<section_name>``.\n- When ``alert=True``, a paired ``skeleton_alert_<section_name>`` tool is\n  also expected (register it separately with ``@ext.tool`` OR the kernel\n  will simply skip change alerts if absent).\n- ``ttl`` is a hint to platform operators \u2014 the authoritative TTL lives\n  in the Registry row (or the kernel's auto-derive default of 300s).\n\nThe platform discovers this section automatically via\nthe ``skeleton_refresh_<X>`` naming convention \u2014 no Registry migration\nrequired. See `imperal_sdk/docs/skeleton.md` \u00a7\"Skeleton Refresh Tools\"\nfor the end-to-end contract and invariants.\n\nReturn contract: refresh function MUST return ``{\"response\": <dict>}``\nwhere the dict surfaces scalar fields (counts, flags, short strings) at\nthe top level so the intent classifier can read them directly from the\nuser's envelope. Idempotent \u2014 safe to run on every tick.\n\nExample::\n\n    @ext.skeleton(\"monitors\", alert=True, ttl=300)\n    async def refresh_monitors(ctx) -> dict:\n        items = await ctx.store.query(\"wt_monitors\", where={\"owner_id\": ctx.user.id})\n        critical = sum(1 for m in items.data if m.data.get(\"status\") == \"critical\")\n        return {\"response\": {\n            \"total\":    len(items.data),\n            \"critical\": critical,\n            \"warning\":  sum(1 for m in items.data if m.data.get(\"status\") == \"warning\"),\n            \"ok\":       sum(1 for m in items.data if m.data.get(\"status\") == \"ok\"),\n        }}",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -2998,7 +3105,7 @@
     "ext.tray": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Declare a system tray item in the OS top bar.\n\n        The handler returns a UINode tree with badge and optional dropdown panel.\n        Called via /call endpoint as __tray__{tray_id}.\n\n        Example::\n\n            @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread messages\")\n            async def tray_unread(ctx, **kwargs):\n                count = await ctx.store.count(\"messages\", where={\"read\": False})\n                return ui.Stack([\n                    ui.Badge(str(count), color=\"red\" if count > 0 else \"gray\"),\n                ])",
+      "description": "Declare a system tray item in the Panel's top bar.\n\nThe handler returns a UINode tree: a badge, and optionally a whole\ndropdown panel that opens when the icon is clicked. Fetched via the\n/call endpoint as ``__tray__{tray_id}``.\n\n``zone`` decides WHERE in the strip it lands, and it is the reason the\ntray reads as a structure rather than a pile of icons:\n\n* ``\"status\"``  \u2014 passive state (default). Connection, counts, balance.\n* ``\"actions\"`` \u2014 things the user flips or triggers.\n* ``\"system\"``  \u2014 platform furniture at the far right (clock,\n  settings). Contribute here only if the item truly belongs there.\n\n``order`` sorts within the zone, ascending. The platform's own items\nreserve 0-99, so the default of 100 puts an extension after them\nwithout having to know their numbers.\n\nExample::\n\n    @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread messages\")\n    async def tray_unread(ctx, **kwargs):\n        count = await ctx.store.count(\"messages\", where={\"read\": False})\n        return ui.Stack([\n            ui.Badge(str(count), color=\"red\" if count > 0 else \"gray\"),\n        ])",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -3028,6 +3135,24 @@
           "type": {
             "ref": "str"
           }
+        },
+        {
+          "annotation": "str",
+          "default": "status",
+          "name": "zone",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 100,
+          "name": "order",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
         }
       ],
       "returns": null
@@ -3035,7 +3160,7 @@
     "ext.webhook": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.\n\n        Also registers __webhook__{path} as a ToolDef so the platform runtime\n        can dispatch it without LLM routing. The handler receives:\n            ctx       \u2014 minimal context (user_id=\"__webhook__\")\n            headers   \u2014 dict of request headers (hop-by-hop stripped)\n            body      \u2014 raw request body as string\n            query_params \u2014 dict of URL query parameters\n\n        Secret verification must be done inside the handler using secret_header.\n\n        Return a dict. By default it is serialized as a 200 JSON response.\n        Three reserved keys shape the real HTTP response instead:\n            status_code \u2014 HTTP status sent to the caller (default 200)\n            headers     \u2014 dict of RESPONSE headers put on the wire; needed by\n                          handshakes that verify through a header rather than\n                          the body (Asana X-Hook-Secret, Slack Events API)\n            body        \u2014 response body; str is sent as-is, dict/list as JSON.\n                          Omit it and the remaining keys become the JSON body,\n                          so {\"status_code\": 401, \"error\": \"...\"} answers 401\n                          with that reason. Pass \"\" for an empty body.\n\n        Header-based handshake, echoing the secret back in a response header:\n\n            @ext.webhook(\"events\", method=\"POST\")\n            async def handle(ctx, headers, body, query_params):\n                secret = headers.get(\"x-hook-secret\")\n                if secret:\n                    return {\"status_code\": 200, \"body\": \"\",\n                            \"headers\": {\"X-Hook-Secret\": secret}}\n                return {\"status\": \"ok\"}",
+      "description": "Register webhook endpoint. Routes POST /v1/ext/{app_id}/webhook/{path}.\n\nAlso registers __webhook__{path} as a ToolDef so the platform runtime\ncan dispatch it without LLM routing. The handler receives:\n    ctx       \u2014 minimal context (user_id=\"__webhook__\")\n    headers   \u2014 dict of request headers (hop-by-hop stripped)\n    body      \u2014 raw request body as string\n    query_params \u2014 dict of URL query parameters\n\nSecret verification must be done inside the handler using secret_header.\n\nReturn a dict. By default it is serialized as a 200 JSON response.\nThree reserved keys shape the real HTTP response instead:\n    status_code \u2014 HTTP status sent to the caller (default 200)\n    headers     \u2014 dict of RESPONSE headers put on the wire; needed by\n                  handshakes that verify through a header rather than\n                  the body (Asana X-Hook-Secret, Slack Events API)\n    body        \u2014 response body; str is sent as-is, dict/list as JSON.\n                  Omit it and the remaining keys become the JSON body,\n                  so {\"status_code\": 401, \"error\": \"...\"} answers 401\n                  with that reason. Pass \"\" for an empty body.\n\nHeader-based handshake, echoing the secret back in a response header:\n\n    @ext.webhook(\"events\", method=\"POST\")\n    async def handle(ctx, headers, body, query_params):\n        secret = headers.get(\"x-hook-secret\")\n        if secret:\n            return {\"status_code\": 200, \"body\": \"\",\n                    \"headers\": {\"X-Hook-Secret\": secret}}\n        return {\"status\": \"ok\"}",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -6714,7 +6839,7 @@
     "sdl.Entity": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Canonical base for any SDL entity. Subclasses add domain fields + facets.\n\n    Required: id, title, kind. ``kind`` defaults to the subclass name lowercased.\n    An empty-string ``kind`` is treated as absent and is replaced by the subclass\n    name lowercased (e.g. ``Entity(id=1, title=\"X\", kind=\"\").kind == \"entity\"``).\n\n    Carries the schema marker ``x-sdl: \"entity\"`` so the platform can detect an\n    SDL-typed result from its ``return_schema`` alone. Inherited by subclasses.",
+      "description": "Canonical base for any SDL entity. Subclasses add domain fields + facets.\n\nRequired: id, title, kind. ``kind`` defaults to the subclass name lowercased.\nAn empty-string ``kind`` is treated as absent and is replaced by the subclass\nname lowercased (e.g. ``Entity(id=1, title=\"X\", kind=\"\").kind == \"entity\"``).\n\nCarries the schema marker ``x-sdl: \"entity\"`` so the platform can detect an\nSDL-typed result from its ``return_schema`` alone. Inherited by subclasses.",
       "enums": {
         "namespace": [
           "Entity"
@@ -6791,7 +6916,7 @@
     "sdl.EntityList": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Typed list result with list/pagination semantics. Mirrors Page[T].\n\n    Carries the schema marker ``x-sdl: \"entity-list\"`` for platform detection.",
+      "description": "Typed list result with list/pagination semantics. Mirrors Page[T].\n\nCarries the schema marker ``x-sdl: \"entity-list\"`` for platform detection.",
       "enums": {
         "namespace": [
           "EntityList"
@@ -8652,7 +8777,7 @@
     "sdl.Ref": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Lightweight reference to another entity (parent/related/list-item/cross-app).\n\n    Carries ``title`` so the kernel can render/resolve without a second lookup.",
+      "description": "Lightweight reference to another entity (parent/related/list-item/cross-app).\n\nCarries ``title`` so the kernel can render/resolve without a second lookup.",
       "enums": {
         "namespace": [
           "Ref"
@@ -10023,7 +10148,7 @@
     "sdl.field": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Pydantic field carrying an SDL semantic ``role``.\n\n    The role is stamped into ``json_schema_extra['x-sdl-role']`` (readable via\n    ``model_fields[name].json_schema_extra[ROLE_KEY]``). Use pydantic's native\n    ``description=`` for a human description; it is forwarded to ``pydantic.Field``.\n\n    Args:\n        role: dotted custom role in a non-reserved namespace (validated eagerly).\n        default: field default. Defaults to ``None`` (optional). Pass\n            ``default=...`` (Ellipsis) to make the field required.\n        **kwargs: forwarded to ``pydantic.Field`` (e.g. ``description=``).",
+      "description": "Pydantic field carrying an SDL semantic ``role``.\n\nThe role is stamped into ``json_schema_extra['x-sdl-role']`` (readable via\n``model_fields[name].json_schema_extra[ROLE_KEY]``). Use pydantic's native\n``description=`` for a human description; it is forwarded to ``pydantic.Field``.\n\nArgs:\n    role: dotted custom role in a non-reserved namespace (validated eagerly).\n    default: field default. Defaults to ``None`` (optional). Pass\n        ``default=...`` (Ellipsis) to make the field required.\n    **kwargs: forwarded to ``pydantic.Field`` (e.g. ``description=``).",
       "enums": {},
       "kind": "sdl_func",
       "params": [
@@ -10070,7 +10195,7 @@
     "sdl.namespace_of": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Return the first dotted segment (the namespace).\n\n    The caller is responsible for passing a syntactically valid role; this function\n    does not validate.",
+      "description": "Return the first dotted segment (the namespace).\n\nThe caller is responsible for passing a syntactically valid role; this function\ndoes not validate.",
       "enums": {},
       "kind": "sdl_func",
       "params": [
@@ -10089,7 +10214,7 @@
     "sdl.resolve_facets": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Resolve standard facet names to their merged ``{field: role}`` map.\n\n    Parameters\n    ----------\n    names:\n        Facet class names as exported from ``imperal_sdk.sdl.facets``\n        (e.g. ``[\"Invoiced\", \"Timestamped\"]``).\n\n    Returns\n    -------\n    dict[str, str]\n        Merged ``{field_name: dotted_role}`` for all requested facets.\n        An empty list returns an empty dict.\n\n    Raises\n    ------\n    KeyError\n        If any name in *names* is not a known facet class.",
+      "description": "Resolve standard facet names to their merged ``{field: role}`` map.\n\nParameters\n----------\nnames:\n    Facet class names as exported from ``imperal_sdk.sdl.facets``\n    (e.g. ``[\"Invoiced\", \"Timestamped\"]``).\n\nReturns\n-------\ndict[str, str]\n    Merged ``{field_name: dotted_role}`` for all requested facets.\n    An empty list returns an empty dict.\n\nRaises\n------\nKeyError\n    If any name in *names* is not a known facet class.",
       "enums": {},
       "kind": "sdl_func",
       "params": [
@@ -10121,7 +10246,7 @@
     "sdl.roles_of": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Map field-name \u2192 semantic role for an Entity subclass (or any model).\n\n    Core Entity fields resolve to their fixed ``core.*`` roles; other fields\n    resolve to a custom role iff declared via ``sdl.field`` (``x-sdl-role`` in\n    ``json_schema_extra``). Plain untagged fields are omitted.\n\n    Accepts either an Entity subclass OR an instance (an instance is coerced to its\n    type) so callers (e.g. the kernel) can pass whichever they have.",
+      "description": "Map field-name \u2192 semantic role for an Entity subclass (or any model).\n\nCore Entity fields resolve to their fixed ``core.*`` roles; other fields\nresolve to a custom role iff declared via ``sdl.field`` (``x-sdl-role`` in\n``json_schema_extra``). Plain untagged fields are omitted.\n\nAccepts either an Entity subclass OR an instance (an instance is coerced to its\ntype) so callers (e.g. the kernel) can pass whichever they have.",
       "enums": {},
       "kind": "sdl_func",
       "params": [
@@ -10140,7 +10265,7 @@
     "sdl.validate_custom_role": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Validate an extension-declared custom role. Raises RoleError on bad grammar\n    or use of a reserved namespace.",
+      "description": "Validate an extension-declared custom role. Raises RoleError on bad grammar\nor use of a reserved namespace.",
       "enums": {},
       "kind": "sdl_func",
       "params": [
@@ -10187,7 +10312,7 @@
     "ui.Alert": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Alert banner \u2014 info/success/warn/error.\n\n    The severity is ``variant``. ``type`` is kept as a permanent alias because\n    every extension written before v5.9.15 passes it; ``variant`` wins if both\n    are given.\n\n    Why this matters: the renderer only ever read ``variant``, so a node built\n    as ``Alert(type=\"error\")`` used to serialize a prop nothing consumed and\n    fell back to blue \"info\" \u2014 a red warning silently rendered as a neutral\n    notice. Both spellings now land on the prop the renderer actually reads.\n\n    dismissible: give the banner a close button (transient notices only \u2014\n    never for a state the user still needs to see after a refresh).",
+      "description": "Alert banner \u2014 info/success/warn/error.\n\nThe severity is ``variant``. ``type`` is kept as a permanent alias because\nevery extension written before v5.9.15 passes it; ``variant`` wins if both\nare given.\n\nWhy this matters: the renderer only ever read ``variant``, so a node built\nas ``Alert(type=\"error\")`` used to serialize a prop nothing consumed and\nfell back to blue \"info\" \u2014 a red warning silently rendered as a neutral\nnotice. Both spellings now land on the prop the renderer actually reads.\n\ndismissible: give the banner a close button (transient notices only \u2014\nnever for a state the user still needs to see after a refresh).",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10242,7 +10367,7 @@
     "ui.Audio": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "HTML5 audio player.\n\n    src: audio URL (mp3, wav, ogg).\n    controls: show play/pause/seek/volume (default True).",
+      "description": "HTML5 audio player.\n\nsrc: audio URL (mp3, wav, ogg).\ncontrols: show play/pause/seek/volume (default True).",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10334,7 +10459,7 @@
     "ui.BackButton": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "The standard 'go back' control for a detail view.\n\n    ``to`` names the DESTINATION, not the button::\n\n        ui.BackButton(\"Projects\", on_click=ui.Call(\"open_list\"))   # \"\u2190 Back to Projects\"\n        ui.BackButton(on_click=ui.Call(\"open_list\"))               # \"\u2190 Back\"\n\n    WHY THIS EXISTS (platform sweep #10): the platform had no standard for\n    this, so every app invented one. A live scan found NINE hand-rolled\n    variants across the installed apps -- \"\u2190 Back\", \"\u2190 Back to Extensions\",\n    \"\u2190 Back to articles\", \"\u2190 Back to overview\", \"\u2190 Back to newsletters\" -- plus\n    a private ``_back_button()`` helper in billing. Each picked its own arrow,\n    variant and size, so the same gesture looked different on every screen and\n    every new detail page re-litigated the decision.\n\n    Composition on purpose: this returns an ordinary ``Button`` node, NOT a new\n    node type. Every panel already renders Button, so this works on every\n    deployed frontend with no host-side change and nothing to keep in sync --\n    the standard lives in ONE place (here) instead of in a renderer the SDK\n    cannot see. Only the chrome is fixed: the arrow glyph, ``variant=\"ghost\"``\n    and ``size=\"sm\"`` -- the three things the nine copies happened to agree on\n    anyway.\n\n    ``on_click`` stays the caller's business: only the app knows where \"back\"\n    goes (a ``Call`` to reopen the list, a ``Navigate``, a state reset).\n    ``label`` overrides the whole string when a screen genuinely needs its own\n    wording; prefer ``to`` so the phrasing stays consistent.",
+      "description": "The standard 'go back' control for a detail view.\n\n``to`` names the DESTINATION, not the button::\n\n    ui.BackButton(\"Projects\", on_click=ui.Call(\"open_list\"))   # \"\u2190 Back to Projects\"\n    ui.BackButton(on_click=ui.Call(\"open_list\"))               # \"\u2190 Back\"\n\nWHY THIS EXISTS (platform sweep #10): the platform had no standard for\nthis, so every app invented one. A live scan found NINE hand-rolled\nvariants across the installed apps -- \"\u2190 Back\", \"\u2190 Back to Extensions\",\n\"\u2190 Back to articles\", \"\u2190 Back to overview\", \"\u2190 Back to newsletters\" -- plus\na private ``_back_button()`` helper in billing. Each picked its own arrow,\nvariant and size, so the same gesture looked different on every screen and\nevery new detail page re-litigated the decision.\n\nComposition on purpose: this returns an ordinary ``Button`` node, NOT a new\nnode type. Every panel already renders Button, so this works on every\ndeployed frontend with no host-side change and nothing to keep in sync --\nthe standard lives in ONE place (here) instead of in a renderer the SDK\ncannot see. Only the chrome is fixed: the arrow glyph, ``variant=\"ghost\"``\nand ``size=\"sm\"`` -- the three things the nine copies happened to agree on\nanyway.\n\n``on_click`` stays the caller's business: only the app knows where \"back\"\ngoes (a ``Call`` to reopen the list, a ``Navigate``, a state reset).\n``label`` overrides the whole string when a screen genuinely needs its own\nwording; prefer ``to`` so the phrasing stays consistent.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10371,7 +10496,7 @@
     "ui.Badge": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Colored badge/pill.\n\n    size: 'sm' (default) | 'md' | 'lg'.\n    dot: prefix a filled status dot in the same colour \u2014 for live/offline style\n    state, where the colour IS the information and must not rely on text alone.",
+      "description": "Colored badge/pill.\n\nsize: 'sm' (default) | 'md' | 'lg'.\ndot: prefix a filled status dot in the same colour \u2014 for live/offline style\nstate, where the colour IS the information and must not rely on text alone.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10426,7 +10551,7 @@
     "ui.Button": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Clickable button. size: sm/md/lg. icon: Lucide icon name.\n\n    icon_left / icon_right: place the glyph on a specific side. ``icon`` stays\n    as the shorthand for the leading position.\n    loading: show a spinner and block re-entry while the action runs \u2014 use it\n    for anything that writes, so a slow save cannot be double-submitted.\n    loading_label: what to say while it runs (\"Saving\u2026\"); the label alone often\n    leaves the user unsure whether the click registered.\n    type: native button type \u2014 ``submit`` inside a Form, ``button`` otherwise.",
+      "description": "Clickable button. size: sm/md/lg. icon: Lucide icon name.\n\nicon_left / icon_right: place the glyph on a specific side. ``icon`` stays\nas the shorthand for the leading position.\nloading: show a spinner and block re-entry while the action runs \u2014 use it\nfor anything that writes, so a slow save cannot be double-submitted.\nloading_label: what to say while it runs (\"Saving\u2026\"); the label alone often\nleaves the user unsure whether the click registered.\ntype: native button type \u2014 ``submit`` inside a Form, ``button`` otherwise.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10563,7 +10688,7 @@
     "ui.Card": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Container card with optional title, subtitle, content and footer slots.\n\n    border: tri-state. ``None`` keeps the renderer default; ``False`` drops the\n    frame for a card nested inside another card, where a second border reads as\n    clutter rather than structure.\n    padding: ``none`` | ``sm`` | ``md`` | ``lg``. Use ``none`` when the content\n    is a full-bleed table or image that should touch the card edges.",
+      "description": "Container card with optional title, subtitle, content and footer slots.\n\nborder: tri-state. ``None`` keeps the renderer default; ``False`` drops the\nframe for a card nested inside another card, where a second border reads as\nclutter rather than structure.\npadding: ``none`` | ``sm`` | ``md`` | ``lg``. Use ``none`` when the content\nis a full-bleed table or image that should touch the card edges.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10636,7 +10761,7 @@
     "ui.Chart": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Chart \u2014 line/bar/pie using Recharts.\n\n    colors : optional mapping ``{series_key: color}`` (CSS color or hex). Series not\n             listed fall through to the default PALETTE.\n    y2_keys : keys in ``data`` that should render on a secondary Y-axis (right side).\n              Use for mixed-scale metrics (e.g. spend $ on left, clicks on right).",
+      "description": "Chart \u2014 line/bar/pie using Recharts.\n\ncolors : optional mapping ``{series_key: color}`` (CSS color or hex). Series not\n         listed fall through to the default PALETTE.\ny2_keys : keys in ``data`` that should render on a secondary Y-axis (right side).\n          Use for mixed-scale metrics (e.g. spend $ on left, clicks on right).",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10736,7 +10861,7 @@
     "ui.Checkbox": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "A single boolean checkbox \u2014 consent, opt-in, one independent flag.\n\n    Distinct from ``ui.Toggle``: a toggle applies its change immediately (a\n    setting that takes effect the moment it flips), while a checkbox is a form\n    value submitted with the rest of the form. Use ``ui.Toggle`` for \"dark mode\n    on/off\", ``ui.Checkbox`` for \"I agree to the terms\".\n\n    Unlike every other labeled field the label renders BESIDE the box rather\n    than above it \u2014 a checkbox reads as one sentence with its label, and a\n    label floating above an empty box is a known usability failure. It is still\n    a real ``for``/``id`` binding, so clicking the text ticks the box.\n\n    ::\n\n        ui.Checkbox(label=\"Send me the monthly report\",\n                    description=\"One email a month. Unsubscribe anytime.\",\n                    param_name=\"subscribe\")",
+      "description": "A single boolean checkbox \u2014 consent, opt-in, one independent flag.\n\nDistinct from ``ui.Toggle``: a toggle applies its change immediately (a\nsetting that takes effect the moment it flips), while a checkbox is a form\nvalue submitted with the rest of the form. Use ``ui.Toggle`` for \"dark mode\non/off\", ``ui.Checkbox`` for \"I agree to the terms\".\n\nUnlike every other labeled field the label renders BESIDE the box rather\nthan above it \u2014 a checkbox reads as one sentence with its label, and a\nlabel floating above an empty box is a known usability failure. It is still\na real ``for``/``id`` binding, so clicking the text ticks the box.\n\n::\n\n    ui.Checkbox(label=\"Send me the monthly report\",\n                description=\"One email a month. Unsubscribe anytime.\",\n                param_name=\"subscribe\")",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10883,7 +11008,7 @@
     "ui.DataColumn": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Column definition for DataTable. Returns plain dict (not UINode).\n\n    editable: enable inline cell editing for this column.\n    edit_type: \"text\" for text input, \"toggle\" for boolean toggle.",
+      "description": "Column definition for DataTable. Returns plain dict (not UINode).\n\neditable: enable inline cell editing for this column.\nedit_type: \"text\" for text input, \"toggle\" for boolean toggle.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -10947,7 +11072,7 @@
     "ui.DataTable": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Sortable data table with optional inline cell editing.\n\n    Pair ``DataColumn(editable=True, edit_type=...)`` with ``on_cell_edit`` to\n    get BULK edits without opening each row: the action fires per committed\n    cell with the row id and the new value. Without ``on_cell_edit`` an\n    ``editable`` column stays read-only \u2014 the renderer refuses to offer an\n    edit affordance it cannot deliver.\n\n    empty_text: what to say when ``rows`` is empty. Say what is actually empty\n    (\"No refunds in this period\"), never a bare \"No data\".\n    max_height: pixel cap that makes the body scroll instead of the page.\n    sticky_header: keep the header row visible while the body scrolls \u2014 pair it\n    with ``max_height`` for long tables, otherwise column meaning scrolls away.",
+      "description": "Sortable data table with optional inline cell editing.\n\nPair ``DataColumn(editable=True, edit_type=...)`` with ``on_cell_edit`` to\nget BULK edits without opening each row: the action fires per committed\ncell with the row id and the new value. Without ``on_cell_edit`` an\n``editable`` column stays read-only \u2014 the renderer refuses to offer an\nedit affordance it cannot deliver.\n\nempty_text: what to say when ``rows`` is empty. Say what is actually empty\n(\"No refunds in this period\"), never a bare \"No data\".\nmax_height: pixel cap that makes the body scroll instead of the page.\nsticky_header: keep the header row visible while the body scrolls \u2014 pair it\nwith ``max_height`` for long tables, otherwise column meaning scrolls away.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11020,7 +11145,7 @@
     "ui.DatePicker": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Date picker calendar input.\n\n    Supports the LABELED-FIELD contract (``label``/``description``/``error``/\n    ``required``) exactly like ``ui.Input``, plus ``min``/``max`` to bound the\n    selectable range (ISO ``YYYY-MM-DD``) \u2014 the renderer enforces both natively.\n\n    Note: a native date control paints its own ``dd/mm/yyyy`` hint, so a\n    placeholder is physically not displayable here. The parameter is kept so\n    existing calls keep working, but it is NOT put on the wire \u2014 an ignored\n    prop travelling in every payload is a lie about what the UI does. Name the\n    field with ``label`` instead.",
+      "description": "Date picker calendar input.\n\nSupports the LABELED-FIELD contract (``label``/``description``/``error``/\n``required``) exactly like ``ui.Input``, plus ``min``/``max`` to bound the\nselectable range (ISO ``YYYY-MM-DD``) \u2014 the renderer enforces both natively.\n\nNote: a native date control paints its own ``dd/mm/yyyy`` hint, so a\nplaceholder is physically not displayable here. The parameter is kept so\nexisting calls keep working, but it is NOT put on the wire \u2014 an ignored\nprop travelling in every payload is a lie about what the UI does. Name the\nfield with ``label`` instead.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11129,7 +11254,7 @@
     "ui.Dialog": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Deprecated alias for :func:`Modal` \u2014 use ``ui.Modal`` in new code.\n\n    Kept working for every extension already shipped against ``ui.Dialog``.\n    It deliberately still emits ``type=\"Dialog\"`` rather than ``\"Modal\"``, so\n    panels running an older renderer keep rendering it exactly as before; both\n    wire types resolve to the same component on current panels.\n\n    Accepts everything :func:`Modal` does, ``destructive`` included.",
+      "description": "Deprecated alias for :func:`Modal` \u2014 use ``ui.Modal`` in new code.\n\nKept working for every extension already shipped against ``ui.Dialog``.\nIt deliberately still emits ``type=\"Dialog\"`` rather than ``\"Modal\"``, so\npanels running an older renderer keep rendering it exactly as before; both\nwire types resolve to the same component on current panels.\n\nAccepts everything :func:`Modal` does, ``destructive`` included.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11212,7 +11337,7 @@
     "ui.Empty": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Empty state placeholder \u2014 the standard for \"there is nothing here yet\".\n\n    Always prefer this over a bare ``ui.Text(\"No cases yet\")``: an empty screen\n    is the moment the user most needs a way forward, and plain text gives none.\n\n    message: name what is missing in the user's own terms.\n    icon: Lucide name, sized and muted by the renderer.\n    action: the way OUT of the empty state \u2014 ``Send(\"Start an evidence case\")``\n        to put the request in chat, or ``Call(...)`` to run a handler directly.\n        The button label comes from the action's own ``label`` param when set.\n\n    An empty state with no ``action`` is a dead end; add one whenever a\n    sensible next step exists.",
+      "description": "Empty state placeholder \u2014 the standard for \"there is nothing here yet\".\n\nAlways prefer this over a bare ``ui.Text(\"No cases yet\")``: an empty screen\nis the moment the user most needs a way forward, and plain text gives none.\n\nmessage: name what is missing in the user's own terms.\nicon: Lucide name, sized and muted by the renderer.\naction: the way OUT of the empty state \u2014 ``Send(\"Start an evidence case\")``\n    to put the request in chat, or ``Call(...)`` to run a handler directly.\n    The button label comes from the action's own ``label`` param when set.\n\nAn empty state with no ``action`` is a dead end; add one whenever a\nsensible next step exists.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11286,7 +11411,7 @@
     "ui.FileUpload": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "File upload dropzone with validation.\n    blocked_extensions: reject these file types (e.g. [\"exe\", \"bat\"]).\n    max_total_mb: total size limit across all files (0 = no limit).\n    max_files: max number of files (0 = no limit).\n    Frontend sends base64 file data in on_upload action.\n\n    Presentational hints (renderer owns pixels; wire stays declarative):\n    title/hint \u2014 heading + sub-line over the dropzone; variant \u2014 one of\n    ``FILEUPLOAD_VARIANTS`` (``\"futuristic\"`` = animated per-file rows with\n    progress/status; ``\"compact\"`` = dense); show_previews \u2014 image thumbnails.\n    All hints stay off the wire at their defaults, so older renderers are\n    unaffected.",
+      "description": "File upload dropzone with validation.\nblocked_extensions: reject these file types (e.g. [\"exe\", \"bat\"]).\nmax_total_mb: total size limit across all files (0 = no limit).\nmax_files: max number of files (0 = no limit).\nFrontend sends base64 file data in on_upload action.\n\nPresentational hints (renderer owns pixels; wire stays declarative):\ntitle/hint \u2014 heading + sub-line over the dropzone; variant \u2014 one of\n``FILEUPLOAD_VARIANTS`` (``\"futuristic\"`` = animated per-file rows with\nprogress/status; ``\"compact\"`` = dense); show_previews \u2014 image thumbnails.\nAll hints stay off the wire at their defaults, so older renderers are\nunaffected.",
       "enums": {
         "variant": [
           "default",
@@ -11456,7 +11581,7 @@
     "ui.Graph": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Entity graph visualisation (Cytoscape-backed).\n\n    Args:\n        nodes: list of node dicts. Accepts Cases API format `{\"data\": {...}}`\n            or flat `{\"id\": ..., \"label\": ..., \"type\": ..., \"size\": ...}`.\n        edges: list of edge dicts. Same unwrap rules as nodes.\n        layout: Cytoscape layout algorithm. One of:\n            ``cose-bilkent`` | ``circle`` | ``grid`` | ``breadthfirst`` | ``concentric``.\n        height: panel height in pixels.\n        min_node_size / max_node_size: node diameter clamp (Cytoscape `mapData` range).\n        edge_label_visible: render edge labels (off by default \u2014 cleaner for dense graphs).\n        color_by: node field used for colour dispatch (default ``type``).\n        on_node_click: optional UIAction fired when a node is selected.\n            The node's ``id`` is injected into the action's params as ``node_id``.\n\n    Returns:\n        UINode with ``type=\"Graph\"``. Panel unwraps and renders via cytoscape-js.",
+      "description": "Entity graph visualisation (Cytoscape-backed).\n\nArgs:\n    nodes: list of node dicts. Accepts Cases API format `{\"data\": {...}}`\n        or flat `{\"id\": ..., \"label\": ..., \"type\": ..., \"size\": ...}`.\n    edges: list of edge dicts. Same unwrap rules as nodes.\n    layout: Cytoscape layout algorithm. One of:\n        ``cose-bilkent`` | ``circle`` | ``grid`` | ``breadthfirst`` | ``concentric``.\n    height: panel height in pixels.\n    min_node_size / max_node_size: node diameter clamp (Cytoscape `mapData` range).\n    edge_label_visible: render edge labels (off by default \u2014 cleaner for dense graphs).\n    color_by: node field used for colour dispatch (default ``type``).\n    on_node_click: optional UIAction fired when a node is selected.\n        The node's ``id`` is injected into the action's params as ``node_id``.\n\nReturns:\n    UINode with ``type=\"Graph\"``. Panel unwraps and renders via cytoscape-js.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11547,7 +11672,7 @@
     "ui.Grid": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "CSS Grid layout.\n\n    columns: target column count. The renderer collapses toward one column on\n    narrow viewports, so pick the widest sensible layout rather than a\n    mobile-safe compromise.\n    className: escape hatch for a one-off grid rule.",
+      "description": "CSS Grid layout.\n\ncolumns: target column count. The renderer collapses toward one column on\nnarrow viewports, so pick the widest sensible layout rather than a\nmobile-safe compromise.\nclassName: escape hatch for a one-off grid rule.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11630,7 +11755,7 @@
     "ui.Html": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Raw HTML block.\n\n    sandbox: True isolates in an iframe.\n    max_height: scroll container height (0 = auto-size).\n    theme: \"dark\" (default, transparent bg) or \"light\" (white bg, for email).",
+      "description": "Raw HTML block.\n\nsandbox: True isolates in an iframe.\nmax_height: scroll container height (0 = auto-size).\ntheme: \"dark\" (default, transparent bg) or \"light\" (white bg, for email).",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11676,7 +11801,7 @@
     "ui.Icon": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Lucide icon by name.\n\n    name: exact Lucide export, PascalCase (``\"Coins\"``, ``\"TriangleAlert\"``).\n    An unknown name renders nothing at all, so verify the spelling rather than\n    trusting a guess.\n    className: extra classes for alignment tweaks.",
+      "description": "Lucide icon by name.\n\nname: exact Lucide export, PascalCase (``\"Coins\"``, ``\"TriangleAlert\"``).\nAn unknown name renders nothing at all, so verify the spelling rather than\ntrusting a guess.\nclassName: extra classes for alignment tweaks.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11795,7 +11920,7 @@
     "ui.Input": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Text input field. on_submit fires on Enter, value merged as param_name.\n\n    ``type`` (v4.2.6+) is a hint to the Panel renderer for native HTML input\n    behaviour: ``\"text\"`` (default), ``\"password\"`` (browser-blind, no echo),\n    ``\"email\"``, ``\"number\"``, ``\"url\"``. Prefer ``ui.Password(...)`` for\n    credential entry \u2014 it's a thin convenience wrapper that pins type for\n    federal EXT-SECRETS-V1 UIs.\n\n    LABELED VARIANT (v5.9.15+, preferred for new screens)::\n\n        ui.Input(label=\"Contract amount\", placeholder=\"e.g. 500.00\",\n                 description=\"Empty = use the plan price.\",\n                 param_name=\"contract_amount\")\n\n    Pass ``label`` and the renderer emits the label/control pair inside one\n    ``.field-gap`` container, wired together with a proper ``for``/``id``.\n    ``description`` renders as help text below the control (and is announced\n    via ``aria-describedby``); ``error`` renders an inline error and flips\n    ``aria-invalid``; ``required`` marks it both visually and semantically.\n    Use the label-less form only deliberately, where a nearby heading already\n    names the field \u2014 a placeholder alone does not.\n\n    ``variant``: ``\"default\"`` (recessed control chrome) or ``\"ghost\"``\n    (transparent, for dense toolbars and inline editing).",
+      "description": "Text input field. on_submit fires on Enter, value merged as param_name.\n\n``type`` (v4.2.6+) is a hint to the Panel renderer for native HTML input\nbehaviour: ``\"text\"`` (default), ``\"password\"`` (browser-blind, no echo),\n``\"email\"``, ``\"number\"``, ``\"url\"``. Prefer ``ui.Password(...)`` for\ncredential entry \u2014 it's a thin convenience wrapper that pins type for\nfederal EXT-SECRETS-V1 UIs.\n\nLABELED VARIANT (v5.9.15+, preferred for new screens)::\n\n    ui.Input(label=\"Contract amount\", placeholder=\"e.g. 500.00\",\n             description=\"Empty = use the plan price.\",\n             param_name=\"contract_amount\")\n\nPass ``label`` and the renderer emits the label/control pair inside one\n``.field-gap`` container, wired together with a proper ``for``/``id``.\n``description`` renders as help text below the control (and is announced\nvia ``aria-describedby``); ``error`` renders an inline error and flips\n``aria-invalid``; ``required`` marks it both visually and semantically.\nUse the label-less form only deliberately, where a nearby heading already\nnames the field \u2014 a placeholder alone does not.\n\n``variant``: ``\"default\"`` (recessed control chrome) or ``\"ghost\"``\n(transparent, for dense toolbars and inline editing).",
       "enums": {
         "type": [
           "text",
@@ -11949,7 +12074,7 @@
     "ui.Link": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Hyperlink \u2014 navigates via href or fires on_click action.\n\n    The visible text can be passed as either ``label`` (canonical) or\n    ``text`` (alias matching the HTML/JSX `<a>text</a>` mental model).\n    Exactly one must be provided; ``label`` wins if both are set.",
+      "description": "Hyperlink \u2014 navigates via href or fires on_click action.\n\nThe visible text can be passed as either ``label`` (canonical) or\n``text`` (alias matching the HTML/JSX `<a>text</a>` mental model).\nExactly one must be provided; ``label`` wins if both are set.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -11995,7 +12120,7 @@
     "ui.List": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Scrollable list of ListItems. Searchable + auto-paginated.\n\n    page_size: items per page. 0 = no pagination (show all).\n    on_end_reached: action fired when user scrolls to bottom (infinite scroll).\n    selectable: enable multi-select with checkboxes on hover.\n    bulk_actions: buttons for bulk operations. Each: {\"label\", \"icon\", \"action\": Call(...)}.\n        Selected item IDs are injected as 'message_ids' param.\n    total_items: total number of items across all pages (for Paginator display).\n    extra_info: extra text in Paginator footer (e.g. \"3 unread\").\n    title: header above the list.\n    empty_text: what to show when there are no items. For a genuinely empty\n        collection prefer ``ui.Empty(..., action=...)``, which can offer the way\n        out instead of just stating the absence.\n    search_placeholder: hint in the search box \u2014 name what is searched\n        (\"Search by email or id\") rather than a bare \"Search\".\n    max_height: pixel cap that makes the list scroll instead of the page.",
+      "description": "Scrollable list of ListItems. Searchable + auto-paginated.\n\npage_size: items per page. 0 = no pagination (show all).\non_end_reached: action fired when user scrolls to bottom (infinite scroll).\nselectable: enable multi-select with checkboxes on hover.\nbulk_actions: buttons for bulk operations. Each: {\"label\", \"icon\", \"action\": Call(...)}.\n    Selected item IDs are injected as 'message_ids' param.\ntotal_items: total number of items across all pages (for Paginator display).\nextra_info: extra text in Paginator footer (e.g. \"3 unread\").\ntitle: header above the list.\nempty_text: what to show when there are no items. For a genuinely empty\n    collection prefer ``ui.Empty(..., action=...)``, which can offer the way\n    out instead of just stating the absence.\nsearch_placeholder: hint in the search box \u2014 name what is searched\n    (\"Search by email or id\") rather than a bare \"Search\".\nmax_height: pixel cap that makes the list scroll instead of the page.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12122,7 +12247,7 @@
     "ui.ListItem": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Single list entry \u2014 used inside List.\n\n    actions: hover actions, e.g. [{\"icon\": \"Trash2\", \"on_click\": Call(...), \"confirm\": \"Delete?\"}]\n    expandable: if True, clicking toggles expanded_content instead of firing on_click.\n    expanded_content: list of UINodes rendered when expanded.",
+      "description": "Single list entry \u2014 used inside List.\n\nactions: hover actions, e.g. [{\"icon\": \"Trash2\", \"on_click\": Call(...), \"confirm\": \"Delete?\"}]\nexpandable: if True, clicking toggles expanded_content instead of firing on_click.\nexpanded_content: list of UINodes rendered when expanded.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12314,7 +12439,7 @@
     "ui.Menu": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Dropdown menu. Each item: {\"label\", \"icon\", \"on_click\", \"separator\"}.\n\n    An item may also carry ``\"confirm\": \"Delete this?\"`` \u2014 the renderer gates\n    that entry behind an inline confirmation, so a destructive menu row does not\n    need its own Dialog.\n    align: ``start`` | ``end`` \u2014 which edge the panel aligns to. Use ``end`` for\n    a trigger sitting at the right of a row, so the menu opens inward.",
+      "description": "Dropdown menu. Each item: {\"label\", \"icon\", \"on_click\", \"separator\"}.\n\nAn item may also carry ``\"confirm\": \"Delete this?\"`` \u2014 the renderer gates\nthat entry behind an inline confirmation, so a destructive menu row does not\nneed its own Dialog.\nalign: ``start`` | ``end`` \u2014 which edge the panel aligns to. Use ``end`` for\na trigger sitting at the right of a row, so the menu opens inward.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12351,7 +12476,7 @@
     "ui.Modal": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "A modal window: an overlay layered on top of the current panel.\n\n    This is the correctly-named primitive. It used to be called ``ui.Dialog``,\n    which was simply the wrong word \u2014 \"dialog\" is the native browser\n    ``<dialog>``/``window.confirm`` concept, while this is a modal window in\n    every UI vocabulary. ``ui.Dialog`` still works as a deprecated alias.\n\n    Sizing (fixes the \"center overlays are stuck at one width\" bug):\n      * ``size`` \u2014 xs (20rem), sm (24rem), md (32rem, default), lg (42rem),\n        xl (56rem), 2xl (72rem), full (fills the viewport).\n      * ``max_width`` \u2014 any CSS length (\"40rem\", \"600px\", \"80%\") when the named\n        steps do not fit. Wins over ``size``.\n\n    Responsive by construction, no per-extension work:\n      * phones get a full-width bottom sheet that respects the safe-area inset;\n      * from ``sm`` up it is a centred window capped at 90dvh;\n      * the body is the only scrolling region, so the title and the buttons\n        stay put no matter how long the content is.\n\n    Content:\n      * ``content`` \u2014 any UINode (use ``ui.Stack`` for several children).\n      * ``subtitle`` \u2014 optional secondary line under the title.\n\n    Buttons: pass ``confirm_label=\"\"`` or ``cancel_label=\"\"`` to drop that\n    button; blank both and the footer is not rendered at all.\n\n    Args:\n        title: Heading. Wraps to two lines instead of being cut off.\n        content: Body node.\n        confirm_label: Primary button text; \"\" hides it.\n        cancel_label: Secondary button text; \"\" hides it.\n        on_confirm: Action fired by the primary button.\n        subtitle: Optional line under the title.\n        size: One of ``MODAL_SIZES``.\n        max_width: Explicit CSS width; overrides ``size``.\n        dismissible: When False, Esc / backdrop / \u2715 do not close it.\n        destructive: STRICT confirmation for an irreversible action \u2014 delete,\n            purge, revoke. Implies not dismissible (a stray backdrop click must\n            never look like a decision on \"permanently delete 15,769 rows\") and\n            tints the confirm button with the danger colour.\n        on_close: Action fired when it closes.\n        open: Render it closed by passing False.",
+      "description": "A modal window: an overlay layered on top of the current panel.\n\nThis is the correctly-named primitive. It used to be called ``ui.Dialog``,\nwhich was simply the wrong word \u2014 \"dialog\" is the native browser\n``<dialog>``/``window.confirm`` concept, while this is a modal window in\nevery UI vocabulary. ``ui.Dialog`` still works as a deprecated alias.\n\nSizing (fixes the \"center overlays are stuck at one width\" bug):\n  * ``size`` \u2014 xs (20rem), sm (24rem), md (32rem, default), lg (42rem),\n    xl (56rem), 2xl (72rem), full (fills the viewport).\n  * ``max_width`` \u2014 any CSS length (\"40rem\", \"600px\", \"80%\") when the named\n    steps do not fit. Wins over ``size``.\n\nResponsive by construction, no per-extension work:\n  * phones get a full-width bottom sheet that respects the safe-area inset;\n  * from ``sm`` up it is a centred window capped at 90dvh;\n  * the body is the only scrolling region, so the title and the buttons\n    stay put no matter how long the content is.\n\nContent:\n  * ``content`` \u2014 any UINode (use ``ui.Stack`` for several children).\n  * ``subtitle`` \u2014 optional secondary line under the title.\n\nButtons: pass ``confirm_label=\"\"`` or ``cancel_label=\"\"`` to drop that\nbutton; blank both and the footer is not rendered at all.\n\nArgs:\n    title: Heading. Wraps to two lines instead of being cut off.\n    content: Body node.\n    confirm_label: Primary button text; \"\" hides it.\n    cancel_label: Secondary button text; \"\" hides it.\n    on_confirm: Action fired by the primary button.\n    subtitle: Optional line under the title.\n    size: One of ``MODAL_SIZES``.\n    max_width: Explicit CSS width; overrides ``size``.\n    dismissible: When False, Esc / backdrop / \u2715 do not close it.\n    destructive: STRICT confirmation for an irreversible action \u2014 delete,\n        purge, revoke. Implies not dismissible (a stray backdrop click must\n        never look like a decision on \"permanently delete 15,769 rows\") and\n        tints the confirm button with the danger colour.\n    on_close: Action fired when it closes.\n    open: Render it closed by passing False.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12469,7 +12594,7 @@
     "ui.MultiSelect": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Multi-select dropdown. Each option: {\"value\", \"label\"}.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n    ``label`` to get the label/control pair in one ``.field-gap`` container,\n    bound with a proper ``for``/``id``. Preferred for new screens.\n\n    This control needs the label more than a plain input does: once the first\n    chip is selected the placeholder is replaced by the selection itself, so\n    without a label nothing on screen still says what is being chosen.",
+      "description": "Multi-select dropdown. Each option: {\"value\", \"label\"}.\n\nSupports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n``label`` to get the label/control pair in one ``.field-gap`` container,\nbound with a proper ``for``/``id``. Preferred for new screens.\n\nThis control needs the label more than a plain input does: once the first\nchip is selected the placeholder is replaced by the selection itself, so\nwithout a label nothing on screen still says what is being chosen.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12635,7 +12760,7 @@
     "ui.Password": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Password input \u2014 browser-blind, no echo, autocomplete='new-password'.\n\n    EXT-SECRETS-V1 (federal v4.2.6+) \u2014 the canonical credential-entry primitive.\n    Renders as ``<input type=\"password\" autocomplete=\"new-password\">`` in the\n    Panel UI so values are visually masked while the user types. Submitted\n    value rides into the action as ``param_name`` (default ``\"value\"``); use\n    inside ``ui.Form(defaults={...})`` to attach hidden context fields like\n    ``app_id`` and ``name``.\n\n    Federal note: type=password is a defence against shoulder-surfing, NOT a\n    security control. The plaintext still travels in the POST body to the\n    server, which is the only correctness boundary. Audit chokepoint + Vault\n    transit are what make this federal-grade.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+) \u2014 and\n    needs it more than most: a credential field asks for something the user\n    cannot verify by reading it back, so \"which secret does this want?\" must be\n    answerable from a permanent label. A masked control shows dots the moment\n    typing starts, which is exactly when a placeholder disappears.",
+      "description": "Password input \u2014 browser-blind, no echo, autocomplete='new-password'.\n\nEXT-SECRETS-V1 (federal v4.2.6+) \u2014 the canonical credential-entry primitive.\nRenders as ``<input type=\"password\" autocomplete=\"new-password\">`` in the\nPanel UI so values are visually masked while the user types. Submitted\nvalue rides into the action as ``param_name`` (default ``\"value\"``); use\ninside ``ui.Form(defaults={...})`` to attach hidden context fields like\n``app_id`` and ``name``.\n\nFederal note: type=password is a defence against shoulder-surfing, NOT a\nsecurity control. The plaintext still travels in the POST body to the\nserver, which is the only correctness boundary. Audit chokepoint + Vault\ntransit are what make this federal-grade.\n\nSupports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+) \u2014 and\nneeds it more than most: a credential field asks for something the user\ncannot verify by reading it back, so \"which secret does this want?\" must be\nanswerable from a permanent label. A masked control shows dots the moment\ntyping starts, which is exactly when a placeholder disappears.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12735,7 +12860,7 @@
     "ui.Progress": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Progress bar or circular indicator.\n\n    value: current amount. Percentage by default (0-100); pass ``max`` to count\n    in natural units instead (e.g. ``value=7, max=12`` for \"7 of 12 files\") so\n    callers stop hand-computing percentages and rounding away the real numbers.\n    color: one of 'blue' (default), 'green', 'red', 'yellow', 'purple'. Empty string\n    uses the default blue. Use semantic colors for status bars (e.g. red for\n    over-budget, green for healthy).\n    show_value: print the number next to the track.\n    size: 'sm' | 'md' | 'lg' \u2014 track thickness.",
+      "description": "Progress bar or circular indicator.\n\nvalue: current amount. Percentage by default (0-100); pass ``max`` to count\nin natural units instead (e.g. ``value=7, max=12`` for \"7 of 12 files\") so\ncallers stop hand-computing percentages and rounding away the real numbers.\ncolor: one of 'blue' (default), 'green', 'red', 'yellow', 'purple'. Empty string\nuses the default blue. Use semantic colors for status bars (e.g. red for\nover-budget, green for healthy).\nshow_value: print the number next to the track.\nsize: 'sm' | 'md' | 'lg' \u2014 track thickness.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12808,7 +12933,7 @@
     "ui.RadioGroup": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Pick exactly ONE option from a small set, with every choice visible.\n\n    Each option is ``{\"value\", \"label\"}`` \u2014 the same shape as ``ui.Select``,\n    plus an optional per-option ``\"description\"`` and ``\"disabled\"``.\n\n    Prefer this over ``ui.Select`` when there are 2-5 options and the choice\n    matters enough that the user should see them all without opening a dropdown\n    (billing mode, plan tier, destructive-vs-safe strategy). Past roughly six\n    options a dropdown is kinder.\n\n    ``orientation``: ``\"vertical\"`` (default) or ``\"horizontal\"`` for short\n    labels that fit on one line.\n\n    The group renders as a real ``role=\"radiogroup\"`` labelled by its own\n    label, and arrow keys move between options \u2014 the native radio behaviour\n    keyboard and assistive-technology users expect.\n\n    ::\n\n        ui.RadioGroup(label=\"How should this customer pay?\",\n                      options=[\n                          {\"value\": \"card\", \"label\": \"By card\",\n                           \"description\": \"Charged automatically each period.\"},\n                          {\"value\": \"manual\", \"label\": \"Manually, by invoice\"},\n                          {\"value\": \"free\", \"label\": \"Free \u2014 no charge\"},\n                      ],\n                      value=\"card\", param_name=\"billing_mode\")",
+      "description": "Pick exactly ONE option from a small set, with every choice visible.\n\nEach option is ``{\"value\", \"label\"}`` \u2014 the same shape as ``ui.Select``,\nplus an optional per-option ``\"description\"`` and ``\"disabled\"``.\n\nPrefer this over ``ui.Select`` when there are 2-5 options and the choice\nmatters enough that the user should see them all without opening a dropdown\n(billing mode, plan tier, destructive-vs-safe strategy). Past roughly six\noptions a dropdown is kinder.\n\n``orientation``: ``\"vertical\"`` (default) or ``\"horizontal\"`` for short\nlabels that fit on one line.\n\nThe group renders as a real ``role=\"radiogroup\"`` labelled by its own\nlabel, and arrow keys move between options \u2014 the native radio behaviour\nkeyboard and assistive-technology users expect.\n\n::\n\n    ui.RadioGroup(label=\"How should this customer pay?\",\n                  options=[\n                      {\"value\": \"card\", \"label\": \"By card\",\n                       \"description\": \"Charged automatically each period.\"},\n                      {\"value\": \"manual\", \"label\": \"Manually, by invoice\"},\n                      {\"value\": \"free\", \"label\": \"Free \u2014 no charge\"},\n                  ],\n                  value=\"card\", param_name=\"billing_mode\")",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -12908,7 +13033,7 @@
     "ui.RichEditor": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Rich text editor (TipTap). content: HTML string. on_save fires on Ctrl+S.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n    ``label`` to get the label/control pair in one ``.field-gap`` container,\n    bound with a proper ``for``/``id``. Preferred for new screens.\n\n    The editor's placeholder lives *inside* the editable area and is gone after\n    the first keystroke, so on a screen with several editors (body, summary,\n    notes) only a real label still tells them apart.",
+      "description": "Rich text editor (TipTap). content: HTML string. on_save fires on Ctrl+S.\n\nSupports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n``label`` to get the label/control pair in one ``.field-gap`` container,\nbound with a proper ``for``/``id``. Preferred for new screens.\n\nThe editor's placeholder lives *inside* the editable area and is gone after\nthe first keystroke, so on a screen with several editors (body, summary,\nnotes) only a real label still tells them apart.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13073,7 +13198,7 @@
     "ui.Select": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Single-select dropdown. Each option: {\"value\", \"label\"}.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input``: pass ``label``\n    to get the label/control pair in one ``.field-gap`` container, bound with\n    a proper ``for``/``id``. Preferred for new screens.",
+      "description": "Single-select dropdown. Each option: {\"value\", \"label\"}.\n\nSupports the same LABELED-FIELD contract as ``ui.Input``: pass ``label``\nto get the label/control pair in one ``.field-gap`` container, bound with\na proper ``for``/``id``. Preferred for new screens.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13256,7 +13381,7 @@
     "ui.Slider": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Numeric range slider.\n\n    The renderer already pairs ``label`` with the control inside a\n    ``.field-gap`` container and binds them via ``for``/``id``.",
+      "description": "Numeric range slider.\n\nThe renderer already pairs ``label`` with the control inside a\n``.field-gap`` container and binds them via ``for``/``id``.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13329,7 +13454,7 @@
     "ui.Stack": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Flex layout \u2014 vertical or horizontal.\n\n    wrap: tri-state flex-wrap. ``None`` (default) \u2192 emit no prop, Panel applies\n    direction-specific default (horizontal auto-wraps, vertical does not).\n    ``True`` / ``False`` \u2192 explicit override, Panel respects as-is. Pass\n    ``wrap=False`` on a horizontal Stack to opt out of auto-wrap.\n    align/justify: flex alignment.\n    sticky: pin to top of scroll container (useful for toolbars).\n    className: custom CSS classes (overrides default system padding).",
+      "description": "Flex layout \u2014 vertical or horizontal.\n\nwrap: tri-state flex-wrap. ``None`` (default) \u2192 emit no prop, Panel applies\ndirection-specific default (horizontal auto-wraps, vertical does not).\n``True`` / ``False`` \u2192 explicit override, Panel respects as-is. Pass\n``wrap=False`` on a horizontal Stack to opt out of auto-wrap.\nalign/justify: flex alignment.\nsticky: pin to top of scroll container (useful for toolbars).\nclassName: custom CSS classes (overrides default system padding).",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13411,7 +13536,7 @@
     "ui.Stat": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Metric card \u2014 label + value + optional trend.\n\n    color: semantic tint for the value (blue default, green, red, yellow,\n    purple, gray). Use it to make a number mean something at a glance \u2014\n    money spent in red, healthy balance in green.\n\n    trend_direction: 'up' | 'down' | 'neutral'. Drives the arrow and its\n    colour independently of ``trend``'s text, because \"up\" is not always good:\n    rising spend is bad, rising revenue is good. Defaults to neutral.\n\n    description: one short line under the value for the caveat that would\n    otherwise be lost \u2014 e.g. \"excludes admin grants\".",
+      "description": "Metric card \u2014 label + value + optional trend.\n\ncolor: semantic tint for the value (blue default, green, red, yellow,\npurple, gray). Use it to make a number mean something at a glance \u2014\nmoney spent in red, healthy balance in green.\n\ntrend_direction: 'up' | 'down' | 'neutral'. Drives the arrow and its\ncolour independently of ``trend``'s text, because \"up\" is not always good:\nrising spend is bad, rising revenue is good. Defaults to neutral.\n\ndescription: one short line under the value for the caveat that would\notherwise be lost \u2014 e.g. \"excludes admin grants\".",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13540,7 +13665,7 @@
     "ui.TagInput": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Tag/chip input with autocomplete.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n    ``label`` to get the label/control pair in one ``.field-gap`` container,\n    bound with a proper ``for``/``id``. Preferred for new screens \u2014 here the\n    placeholder is only rendered while the field is still empty, so after the\n    first tag nothing on screen names the field any more.\n\n    grouped_by      : group suggestions by prefix (e.g. 'extensions:read').\n    delimiters      : extra keystrokes that create a tag in addition to Enter.\n                      Accepts individual characters (e.g. [' ', ',', ';']). Default\n                      is Enter-only to preserve prior behaviour.\n    validate        : optional regex pattern (string). Tags failing the pattern are\n                      refused; the input is highlighted red and ``validate_message``\n                      is shown as a tooltip. Anchor yourself \u2014 use '^...$' for\n                      full-string match.\n    validate_message: human-readable hint shown on rejected tags. Fallback generic\n                      message is used when empty.",
+      "description": "Tag/chip input with autocomplete.\n\nSupports the same LABELED-FIELD contract as ``ui.Input`` (v5.9.17+): pass\n``label`` to get the label/control pair in one ``.field-gap`` container,\nbound with a proper ``for``/``id``. Preferred for new screens \u2014 here the\nplaceholder is only rendered while the field is still empty, so after the\nfirst tag nothing on screen names the field any more.\n\ngrouped_by      : group suggestions by prefix (e.g. 'extensions:read').\ndelimiters      : extra keystrokes that create a tag in addition to Enter.\n                  Accepts individual characters (e.g. [' ', ',', ';']). Default\n                  is Enter-only to preserve prior behaviour.\nvalidate        : optional regex pattern (string). Tags failing the pattern are\n                  refused; the input is highlighted red and ``validate_message``\n                  is shown as a tooltip. Anchor yourself \u2014 use '^...$' for\n                  full-string match.\nvalidate_message: human-readable hint shown on rejected tags. Fallback generic\n                  message is used when empty.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13667,7 +13792,7 @@
     "ui.Text": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Text block. variant: heading/body/caption/code.\n\n    truncate: clip to a single line with an ellipsis instead of wrapping. For\n    unbounded values inside a fixed-width cell (a long email, a raw ledger\n    reason) \u2014 the full text stays in the DOM, so it is still selectable and\n    readable by assistive tech; only the pixels are clipped.\n    className: escape hatch for one-off spacing. Prefer a layout primitive.",
+      "description": "Text block. variant: heading/body/caption/code.\n\ntruncate: clip to a single line with an ellipsis instead of wrapping. For\nunbounded values inside a fixed-width cell (a long email, a raw ledger\nreason) \u2014 the full text stays in the DOM, so it is still selectable and\nreadable by assistive tech; only the pixels are clipped.\nclassName: escape hatch for one-off spacing. Prefer a layout primitive.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13713,7 +13838,7 @@
     "ui.TextArea": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Multi-line text area.\n\n    HOW ``on_submit`` ACTUALLY FIRES \u2014 **Ctrl+Enter / Cmd+Enter**, not a plain\n    Enter. A bare Enter inserts a newline, which is the whole point of a\n    multi-line field; ``ui.Input`` submits on Enter precisely because it is\n    single-line. This was previously undocumented, so a TextArea with\n    ``on_submit`` looked like it silently did nothing.\n\n    READING THE VALUE FROM ELSEWHERE \u2014 wrap it in ``ui.Form``. Inside a Form\n    the current text is registered under ``param_name``, so the Form's submit\n    button sends it automatically::\n\n        ui.Form(action=\"save_note\", submit_label=\"Save\", children=[\n            ui.TextArea(label=\"Note\", param_name=\"body\"),\n        ])\n\n    Outside a Form there is no shared state: a plain ``ui.Button`` sitting next\n    to a TextArea CANNOT read what the user typed \u2014 buttons carry a fixed\n    action, they do not read sibling controls. Use ``ui.Form``, or\n    ``on_submit`` with Ctrl/Cmd+Enter. There is no third way, by design.\n\n    Supports the same LABELED-FIELD contract as ``ui.Input`` \u2014 pass ``label``\n    and the renderer pairs label + control inside one ``.field-gap`` container\n    with a real ``for``/``id`` binding. See ``_field_props`` for the full rule.",
+      "description": "Multi-line text area.\n\nHOW ``on_submit`` ACTUALLY FIRES \u2014 **Ctrl+Enter / Cmd+Enter**, not a plain\nEnter. A bare Enter inserts a newline, which is the whole point of a\nmulti-line field; ``ui.Input`` submits on Enter precisely because it is\nsingle-line. This was previously undocumented, so a TextArea with\n``on_submit`` looked like it silently did nothing.\n\nREADING THE VALUE FROM ELSEWHERE \u2014 wrap it in ``ui.Form``. Inside a Form\nthe current text is registered under ``param_name``, so the Form's submit\nbutton sends it automatically::\n\n    ui.Form(action=\"save_note\", submit_label=\"Save\", children=[\n        ui.TextArea(label=\"Note\", param_name=\"body\"),\n    ])\n\nOutside a Form there is no shared state: a plain ``ui.Button`` sitting next\nto a TextArea CANNOT read what the user typed \u2014 buttons carry a fixed\naction, they do not read sibling controls. Use ``ui.Form``, or\n``on_submit`` with Ctrl/Cmd+Enter. There is no third way, by design.\n\nSupports the same LABELED-FIELD contract as ``ui.Input`` \u2014 pass ``label``\nand the renderer pairs label + control inside one ``.field-gap`` container\nwith a real ``for``/``id`` binding. See ``_field_props`` for the full rule.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13822,7 +13947,7 @@
     "ui.Timeline": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Vertical timeline \u2014 the canonical AUDIT TRAIL / history primitive.\n\n    Each item: ``{\"title\", \"description\", \"time\", \"icon\", \"color\"}``.\n\n    * ``title`` \u2014 what happened (required in practice; the only line always shown)\n    * ``description`` \u2014 the detail: who did it, what changed\n    * ``time`` \u2014 when, as a preformatted string. The renderer prints it verbatim,\n      so format it for humans (\"13 Aug 2026, 20:39\") and keep the timezone honest.\n    * ``icon`` \u2014 Lucide icon name, drawn inside the dot\n    * ``color`` \u2014 ``blue`` | ``green`` | ``red`` | ``amber`` | ``purple`` | ``gray``,\n      the dot's tint. Note ``amber`` (not \"yellow\") is the warning tone here.\n\n    Prefer this over a List for anything chronological \u2014 review history, revision\n    history, chain of custody: the rail makes \"one thing after another\" visible,\n    which a list of rows only implies.",
+      "description": "Vertical timeline \u2014 the canonical AUDIT TRAIL / history primitive.\n\nEach item: ``{\"title\", \"description\", \"time\", \"icon\", \"color\"}``.\n\n* ``title`` \u2014 what happened (required in practice; the only line always shown)\n* ``description`` \u2014 the detail: who did it, what changed\n* ``time`` \u2014 when, as a preformatted string. The renderer prints it verbatim,\n  so format it for humans (\"13 Aug 2026, 20:39\") and keep the timezone honest.\n* ``icon`` \u2014 Lucide icon name, drawn inside the dot\n* ``color`` \u2014 ``blue`` | ``green`` | ``red`` | ``amber`` | ``purple`` | ``gray``,\n  the dot's tint. Note ``amber`` (not \"yellow\") is the warning tone here.\n\nPrefer this over a List for anything chronological \u2014 review history, revision\nhistory, chain of custody: the rail makes \"one thing after another\" visible,\nwhich a list of rows only implies.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13841,7 +13966,7 @@
     "ui.Toast": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Transient notification that appears over the panel and fades away.\n\n    Use it for the outcome of something the user just did \u2014 \"Saved\", \"Deploy\n    started\", \"Could not reach the API\". It is NOT for state the user still\n    needs after a refresh: a toast disappears, so anything that must survive\n    belongs in ``ui.Alert`` (banner) or the panel body itself.\n\n    Severity uses the SAME vocabulary as ``ui.Alert``: info / success / warn /\n    error, with the same unambiguous aliases (\"warning\", \"danger\", \"ok\", \"err\").\n\n    ``duration``: milliseconds before it fades. Pass ``0`` to make it stay\n    until the user dismisses it \u2014 appropriate for an error the user must\n    actually read, never for routine success.\n\n    ``action`` + ``action_label``: one optional button inside the toast, for\n    the natural follow-up (\"Undo\", \"View\"). Both must be given together.\n\n    Example::\n\n        return ui.Toast(\"Draft saved\", variant=\"success\")\n\n        return ui.Toast(\n            \"Could not reach the Analytics API\",\n            variant=\"error\", duration=0,\n            action=ui.Call(\"retry_sync\"), action_label=\"Retry\",\n        )",
+      "description": "Transient notification that appears over the panel and fades away.\n\nUse it for the outcome of something the user just did \u2014 \"Saved\", \"Deploy\nstarted\", \"Could not reach the API\". It is NOT for state the user still\nneeds after a refresh: a toast disappears, so anything that must survive\nbelongs in ``ui.Alert`` (banner) or the panel body itself.\n\nSeverity uses the SAME vocabulary as ``ui.Alert``: info / success / warn /\nerror, with the same unambiguous aliases (\"warning\", \"danger\", \"ok\", \"err\").\n\n``duration``: milliseconds before it fades. Pass ``0`` to make it stay\nuntil the user dismisses it \u2014 appropriate for an error the user must\nactually read, never for routine success.\n\n``action`` + ``action_label``: one optional button inside the toast, for\nthe natural follow-up (\"Undo\", \"View\"). Both must be given together.\n\nExample::\n\n    return ui.Toast(\"Draft saved\", variant=\"success\")\n\n    return ui.Toast(\n        \"Could not reach the Analytics API\",\n        variant=\"error\", duration=0,\n        action=ui.Call(\"retry_sync\"), action_label=\"Retry\",\n    )",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13951,7 +14076,7 @@
     "ui.Tooltip": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Hover tooltip wrapping an optional child node.\n\n    delay_ms: hover dwell before it appears. Raise it for tooltips on dense\n    rows, so sweeping the cursor across a table does not flash a trail of them.\n\n    A tooltip is supplementary by nature \u2014 it is unreachable on touch and\n    transient for screen readers, so never put information here that the user\n    needs in order to act.",
+      "description": "Hover tooltip wrapping an optional child node.\n\ndelay_ms: hover dwell before it appears. Raise it for tooltips on dense\nrows, so sweeping the cursor across a table does not flash a trail of them.\n\nA tooltip is supplementary by nature \u2014 it is unreachable on touch and\ntransient for screen readers, so never put information here that the user\nneeds in order to act.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -13988,7 +14113,7 @@
     "ui.TrayResponse": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Structure a system tray handler response.\n\n    NOTE \u2014 this is an ENVELOPE, not a rendered component. It is consumed by the\n    kernel (the manifest carries a ``tray`` section and ``__tray__*`` synthetic\n    handlers), which unpacks ``badge`` and ``panel`` and renders each with its\n    own real component. So there is deliberately no ``TrayResponse`` entry in\n    the panel component registry, and its absence there is not a gap.\n\n    Args:\n        badge: UINode for the tray icon badge (e.g. Badge(\"5\", color=\"red\")).\n               Shown as a small number/dot overlay on the tray icon.\n        panel: UINode for the dropdown panel (e.g. List of alerts).\n               Shown when user clicks the tray icon.\n\n    Example::\n\n        @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread\")\n        async def tray_mail(ctx, **kw):\n            count = await ctx.store.count(\"messages\", where={\"read\": False})\n            msgs = await ctx.store.query(\"messages\", where={\"read\": False}, limit=5)\n            return TrayResponse(\n                badge=Badge(str(count), color=\"red\" if count else \"gray\"),\n                panel=List(items=[\n                    ListItem(id=m[\"id\"], title=m[\"subject\"], subtitle=m[\"from\"])\n                    for m in msgs\n                ]) if msgs else None,\n            )",
+      "description": "Structure a system tray handler response.\n\nNOTE \u2014 this is an ENVELOPE, not a rendered component. It is consumed by the\nkernel (the manifest carries a ``tray`` section and ``__tray__*`` synthetic\nhandlers), which unpacks ``badge`` and ``panel`` and renders each with its\nown real component. So there is deliberately no ``TrayResponse`` entry in\nthe panel component registry, and its absence there is not a gap.\n\nArgs:\n    badge: UINode for the tray icon badge (e.g. Badge(\"5\", color=\"red\")).\n           Shown as a small number/dot overlay on the tray icon.\n    panel: UINode for the dropdown panel (e.g. List of alerts).\n           Shown when user clicks the tray icon.\n\nExample::\n\n    @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread\")\n    async def tray_mail(ctx, **kw):\n        count = await ctx.store.count(\"messages\", where={\"read\": False})\n        msgs = await ctx.store.query(\"messages\", where={\"read\": False}, limit=5)\n        return TrayResponse(\n            badge=Badge(str(count), color=\"red\" if count else \"gray\"),\n            panel=List(items=[\n                ListItem(id=m[\"id\"], title=m[\"subject\"], subtitle=m[\"from\"])\n                for m in msgs\n            ]) if msgs else None,\n        )",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -14016,7 +14141,7 @@
     "ui.Tree": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Hierarchical tree view \u2014 for real parent/child structure.\n\n    Each node::\n\n        {\n          \"id\":       \"cat-7\",           # stable key\n          \"label\":    \"Case studies\",    # visible text\n          \"children\": [ ...same shape... ],\n          \"icon\":     \"FolderOpen\",      # optional Lucide name; falls back to\n                                         # folder/file by whether it has children\n          \"badge\":    12,                # optional trailing count\n          \"expanded\": True,              # optional: open this branch initially\n          \"on_click\": Call(\"open\", id=\"cat-7\"),\n        }\n\n    ``children`` nests the same shape to any depth; a node with children gets a\n    disclosure chevron, one without renders as a leaf. ``on_click`` fires a\n    UIAction for that node.\n\n    ``label`` names the whole tree for assistive tech (\"Product categories\") \u2014\n    the tree is exposed with real tree/treeitem semantics, so a screen reader\n    announces depth and expanded state instead of a wall of anonymous buttons.\n\n    Use it wherever a hierarchy is currently flattened into an indented list \u2014\n    content categories, product categories, folder structures: the nesting is\n    real information, and a flat list throws it away.",
+      "description": "Hierarchical tree view \u2014 for real parent/child structure.\n\nEach node::\n\n    {\n      \"id\":       \"cat-7\",           # stable key\n      \"label\":    \"Case studies\",    # visible text\n      \"children\": [ ...same shape... ],\n      \"icon\":     \"FolderOpen\",      # optional Lucide name; falls back to\n                                     # folder/file by whether it has children\n      \"badge\":    12,                # optional trailing count\n      \"expanded\": True,              # optional: open this branch initially\n      \"on_click\": Call(\"open\", id=\"cat-7\"),\n    }\n\n``children`` nests the same shape to any depth; a node with children gets a\ndisclosure chevron, one without renders as a leaf. ``on_click`` fires a\nUIAction for that node.\n\n``label`` names the whole tree for assistive tech (\"Product categories\") \u2014\nthe tree is exposed with real tree/treeitem semantics, so a screen reader\nannounces depth and expanded state instead of a wall of anonymous buttons.\n\nUse it wherever a hierarchy is currently flattened into an indented list \u2014\ncontent categories, product categories, folder structures: the nesting is\nreal information, and a flat list throws it away.",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -14044,7 +14169,7 @@
     "ui.Video": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "HTML5 video player.\n\n    src: video URL (mp4, webm, ogg, or HLS m3u8).\n    poster: thumbnail image shown before playback.\n    controls: show play/pause/seek/volume (default True).",
+      "description": "HTML5 video player.\n\nsrc: video URL (mp4, webm, ogg, or HLS m3u8).\nposter: thumbnail image shown before playback.\ncontrols: show play/pause/seek/volume (default True).",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -14135,7 +14260,7 @@
     "ui.theme": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Return the active agency's theme, or an empty theme if none is set.\n\n    ``ctx`` is the extension's current ``Context``. Passing ``None`` returns\n    the default Imperal theme \u2014 handy in unit tests where no context exists.",
+      "description": "Return the active agency's theme, or an empty theme if none is set.\n\n``ctx`` is the extension's current ``Context``. Passing ``None`` returns\nthe default Imperal theme \u2014 handy in unit tests where no context exists.",
       "enums": {},
       "kind": "ui_component",
       "params": [

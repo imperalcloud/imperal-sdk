@@ -5,7 +5,11 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from imperal_sdk.types.contributions import ALLOWED_PANEL_SLOTS
+from imperal_sdk.types.contributions import (
+    ALLOWED_MENU_SECTIONS,
+    ALLOWED_PANEL_SLOTS,
+    ALLOWED_TRAY_ZONES,
+)
 
 @dataclass
 class ToolDef:
@@ -96,14 +100,62 @@ class ExposedMethod:
 
 @dataclass
 class TrayDef:
-    """System tray item — icon + badge + optional dropdown panel in the OS top bar."""
+    """System tray item — icon + badge + optional dropdown panel in the OS top bar.
+
+    ``zone`` is what makes the tray a structure instead of a row: see
+    ``ALLOWED_TRAY_ZONES``. ``order`` sorts within the zone (ascending); leave
+    it at the default to land after the platform's own items, which reserve
+    0-99.
+    """
     tray_id: str
     func: Callable
     icon: str = "Circle"
     tooltip: str = ""
+    zone: str = "status"
+    order: int = 100
 
     def to_manifest(self) -> dict:
-        return {"tray_id": self.tray_id, "icon": self.icon, "tooltip": self.tooltip}
+        return {
+            "tray_id": self.tray_id,
+            "icon": self.icon,
+            "tooltip": self.tooltip,
+            "zone": self.zone,
+            "order": self.order,
+        }
+
+
+@dataclass
+class MenuItemDef:
+    """One entry contributed to the Panel's top-right user menu.
+
+    Two shapes, and the difference is only whether ``path`` is set:
+
+    * ``path`` set — a plain navigation link. The host routes to it directly
+      and the handler is never called (it still exists, so the decorator has
+      something to decorate and the item can grow a handler later without a
+      contract change).
+    * no ``path`` — clicking calls ``__menu__{item_id}``, and whatever the
+      handler returns is treated exactly like any other panel action result.
+    """
+    item_id: str
+    func: Callable
+    label: str = ""
+    icon: str = ""
+    section: str = "main"
+    path: str = ""
+    order: int = 100
+    danger: bool = False
+
+    def to_manifest(self) -> dict:
+        return {
+            "item_id": self.item_id,
+            "label": self.label or self.item_id,
+            "icon": self.icon,
+            "section": self.section,
+            "path": self.path,
+            "order": self.order,
+            "danger": self.danger,
+        }
 
 class Extension:
     """Imperal Cloud Extension.
@@ -155,6 +207,7 @@ class Extension:
         self._exposed: dict[str, ExposedMethod] = {}
         self._panels: dict[str, dict] = {}
         self._tray: dict[str, "TrayDef"] = {}
+        self._menu_items: dict[str, "MenuItemDef"] = {}
         self._cache_models: dict[str, type] = {}
         # EXT-SECRETS-V1 (v4.2.2) — declared secrets emitted into manifest.secrets[]
         self._secrets: dict[str, "SecretSpec"] = {}
@@ -664,11 +717,25 @@ class Extension:
             return func
         return decorator
 
-    def tray(self, tray_id: str, icon: str = "Circle", tooltip: str = ""):
-        """Declare a system tray item in the OS top bar.
+    def tray(self, tray_id: str, icon: str = "Circle", tooltip: str = "",
+             zone: str = "status", order: int = 100):
+        """Declare a system tray item in the Panel's top bar.
 
-        The handler returns a UINode tree with badge and optional dropdown panel.
-        Called via /call endpoint as __tray__{tray_id}.
+        The handler returns a UINode tree: a badge, and optionally a whole
+        dropdown panel that opens when the icon is clicked. Fetched via the
+        /call endpoint as ``__tray__{tray_id}``.
+
+        ``zone`` decides WHERE in the strip it lands, and it is the reason the
+        tray reads as a structure rather than a pile of icons:
+
+        * ``"status"``  — passive state (default). Connection, counts, balance.
+        * ``"actions"`` — things the user flips or triggers.
+        * ``"system"``  — platform furniture at the far right (clock,
+          settings). Contribute here only if the item truly belongs there.
+
+        ``order`` sorts within the zone, ascending. The platform's own items
+        reserve 0-99, so the default of 100 puts an extension after them
+        without having to know their numbers.
 
         Example::
 
@@ -679,11 +746,20 @@ class Extension:
                     ui.Badge(str(count), color="red" if count > 0 else "gray"),
                 ])
         """
+        if zone not in ALLOWED_TRAY_ZONES:
+            raise ValueError(
+                f"@ext.tray({tray_id!r}, zone={zone!r}): unknown zone. "
+                f"Must be one of {sorted(ALLOWED_TRAY_ZONES)}."
+            )
+
         def decorator(func: Callable) -> Callable:
             async def wrapper(ctx, **params):
                 result = await func(ctx, **params)
                 if hasattr(result, 'to_dict'):
-                    return {"ui": result.to_dict(), "tray_id": tray_id, "icon": icon}
+                    return {
+                        "ui": result.to_dict(), "tray_id": tray_id,
+                        "icon": icon, "zone": zone,
+                    }
                 return result
             self._tools[f"__tray__{tray_id}"] = ToolDef(
                 name=f"__tray__{tray_id}", func=wrapper,
@@ -691,6 +767,68 @@ class Extension:
             )
             self._tray[tray_id] = TrayDef(
                 tray_id=tray_id, func=wrapper, icon=icon, tooltip=tooltip,
+                zone=zone, order=order,
+            )
+            return func
+        return decorator
+
+    def menu_item(self, item_id: str, label: str = "", icon: str = "",
+                  section: str = "main", path: str = "", order: int = 100,
+                  danger: bool = False):
+        """Contribute an entry to the Panel's top-right user menu.
+
+        The menu behind the avatar was a hardcoded list of four links, so an
+        extension had no way to put anything there. Now it is composed: the
+        host renders its own entries and every declared one through the same
+        path.
+
+        Two shapes:
+
+        * ``path="/somewhere"`` — a plain navigation link. The host routes
+          straight there; the handler is not called.
+        * no ``path`` — clicking calls ``__menu__{item_id}`` and the result is
+          handled like any other panel action (return a UINode to open it, or
+          an action dict to navigate/refresh).
+
+        ``section`` is one of ``"main"`` (default) or ``"admin"`` — the latter
+        is hidden wholesale for non-admins, so the item inherits that gate.
+        ``account`` and ``footer`` belong to the platform (identity, theme,
+        sign out) and are rejected here: an extension landing there would
+        shove "Sign out" around under the user's cursor.
+
+        Example::
+
+            @ext.menu_item("workspace", label="My Workspace",
+                           icon="LayoutGrid", path="/ext/my-app")
+            async def menu_workspace(ctx, **kwargs):
+                return None
+        """
+        if section not in ALLOWED_MENU_SECTIONS:
+            raise ValueError(
+                f"@ext.menu_item({item_id!r}, section={section!r}): unknown "
+                f"section. Must be one of {sorted(ALLOWED_MENU_SECTIONS)}."
+            )
+        if section in ("account", "footer"):
+            raise ValueError(
+                f"@ext.menu_item({item_id!r}, section={section!r}): the "
+                f"{section!r} section is reserved for the platform's own "
+                "identity/theme and sign-out entries. Use 'main' (or 'admin' "
+                "for admin-gated tools)."
+            )
+
+        def decorator(func: Callable) -> Callable:
+            async def wrapper(ctx, **params):
+                result = await func(ctx, **params)
+                if hasattr(result, 'to_dict'):
+                    return {"ui": result.to_dict(), "item_id": item_id}
+                return result
+            self._tools[f"__menu__{item_id}"] = ToolDef(
+                name=f"__menu__{item_id}", func=wrapper,
+                description=f"Menu item: {label or item_id}",
+            )
+            self._menu_items[item_id] = MenuItemDef(
+                item_id=item_id, func=wrapper, label=label, icon=icon,
+                section=section, path=path, order=order, danger=danger,
             )
             return func
         return decorator
@@ -808,6 +946,10 @@ class Extension:
     @property
     def tray_items(self) -> dict[str, "TrayDef"]:
         return self._tray
+
+    @property
+    def menu_items(self) -> dict[str, "MenuItemDef"]:
+        return self._menu_items
 
     @property
     def panels(self) -> dict[str, dict]:

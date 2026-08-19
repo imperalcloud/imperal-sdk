@@ -23,7 +23,7 @@ from imperal_sdk.devtools.reference._introspect import (
 # gate can record it as a degraded placeholder with an explanatory note.
 _EXT_DECORATORS = (
     "secret", "tool", "skeleton", "cache_model", "on_upgrade",
-    "webhook", "emits", "tray", "panel", "widget", "lifecycle",
+    "webhook", "emits", "tray", "menu_item", "panel", "widget", "lifecycle",
     "oauth", "file_sink",
 )
 

@@ -13,7 +13,7 @@ _SDL_VOCAB_VERSION = str(_SDL_VOCAB_VERSION_INT)
 
 # Tool name prefixes that belong to ui/skeleton slots — handled in later tasks
 # (E2/E5). Exclude them from the IR functions list.
-_SKIP_PREFIXES = ("__panel__", "__webhook__", "__widget__", "__tray__", "skeleton_refresh_", "skeleton_alert_")
+_SKIP_PREFIXES = ("__panel__", "__webhook__", "__widget__", "__tray__", "__menu__", "skeleton_refresh_", "skeleton_alert_")
 
 
 def generate_ir(ext: Any) -> dict[str, Any]:
@@ -23,8 +23,8 @@ def generate_ir(ext: Any) -> dict[str, Any]:
     (``declarative``) is reserved for future tasks (L0-2 phase B).
 
     Skips synthetic tool entries:
-    - ``__panel__`` / ``__webhook__`` / ``__widget__`` / ``__tray__`` —
-      handled by their own manifest sections.
+    - ``__panel__`` / ``__webhook__`` / ``__widget__`` / ``__tray__`` /
+      ``__menu__`` — handled by their own manifest sections.
     - ``skeleton_refresh_`` / ``skeleton_alert_`` — handled by the skeleton
       slot (E2/E5).
     """

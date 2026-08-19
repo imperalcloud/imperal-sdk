@@ -13,6 +13,53 @@ ALLOWED_PANEL_SLOTS: frozenset[str] = frozenset({
 })
 
 
+# === System tray zones (Ф3) ==================================================
+#
+# The tray is the OS-style status strip in the Panel's top bar. It is NOT a
+# free-for-all row of icons: every item — the platform's own clock and gear
+# just as much as an extension's — declares WHICH zone it belongs to, and the
+# host renders the zones in a fixed left-to-right order with separators
+# between them. One contract for built-ins and extensions, which is the whole
+# point: before this, the built-in items were hardcoded JSX and extensions had
+# no way in at all.
+#
+#   "status"  — passive, at-a-glance state. Live connection, running tasks,
+#               unread counts, balance. Read-only: a click may open a detail
+#               dropdown, but the icon itself never toggles anything.
+#   "actions" — things the user flips or triggers. Toggles, quick switches.
+#   "system"  — the platform's own furniture at the far right: clock,
+#               settings. Extensions MAY contribute here, but should not
+#               unless the item genuinely belongs next to the clock.
+#
+# Rendered left to right in exactly this order; within a zone, items sort by
+# `order` ascending, then by id for a stable tie-break.
+TRAY_ZONE_ORDER: tuple[str, ...] = ("status", "actions", "system")
+ALLOWED_TRAY_ZONES: frozenset[str] = frozenset(TRAY_ZONE_ORDER)
+
+
+# === User-menu sections (Ф3) =================================================
+#
+# The avatar menu at the top right. Sections render in this fixed order,
+# separated by hairlines. `account` (identity + theme) and `footer` (sign out)
+# are owned by the platform — an extension contributing there would push
+# "Sign out" around, so they are declarable but reserved for the host.
+#
+#   "main"   — the normal place for an extension's own entry.
+#   "admin"  — admin-only tools; the host hides the whole section for
+#              non-admins, so an item here inherits that gate for free.
+MENU_SECTION_ORDER: tuple[str, ...] = ("account", "main", "admin", "footer")
+ALLOWED_MENU_SECTIONS: frozenset[str] = frozenset(MENU_SECTION_ORDER)
+
+# Declarable (the host renders them) but NOT contributable: `account` carries
+# identity and the theme switch, `footer` carries sign-out. Both sit at the
+# ends of the menu where muscle memory lives, so an extension landing there
+# would move "Sign out" under a cursor already on its way to it. Enforced in
+# two places — @ext.menu_item raises at decoration time, MenuItemDecl rejects
+# at manifest-validation time — because a manifest can be hand-edited.
+RESERVED_MENU_SECTIONS: frozenset[str] = frozenset({"account", "footer"})
+CONTRIBUTABLE_MENU_SECTIONS: frozenset[str] = ALLOWED_MENU_SECTIONS - RESERVED_MENU_SECTIONS
+
+
 # I-PANEL-RENDERING-CONTRACT (federal v4.1.6+):
 # Single source of truth for *what the Imperal Panel host actually does*
 # with each declared slot. The keys MUST equal ALLOWED_PANEL_SLOTS exactly

@@ -56,7 +56,7 @@ def generate_manifest(ext: Extension) -> dict:
 
     for name, tool_def in ext.tools.items():
         if name.startswith("__"):
-            # Synthetic entries (__webhook__*, __panel__*, __widget__*, __tray__*)
+            # Synthetic entries (__webhook__*, __panel__*, __widget__*, __tray__*, __menu__*)
             # belong to their own declarative sections — keep them out of the
             # user-facing tools list. The kernel reads them from
             # webhooks / tray / exposed / panel sections directly.
@@ -180,6 +180,12 @@ def generate_manifest(ext: Extension) -> dict:
     if ext.tray_items:
         manifest["tray"] = [t.to_manifest() for t in ext.tray_items.values()]
 
+    # Ф3 — user-menu contributions (@ext.menu_item). Emitted only when the
+    # extension declares any, so manifests of everything written before this
+    # existed stay byte-identical.
+    if getattr(ext, "menu_items", None):
+        manifest["menu"] = [m.to_manifest() for m in ext.menu_items.values()]
+
     if ext.migrations_dir:
         manifest["migrations_dir"] = ext.migrations_dir
 
@@ -246,6 +252,7 @@ GENERATOR_OWNED_FIELDS = frozenset({
     "actions_explicit", "system", "capabilities", "tools", "signals",
     "schedules", "required_scopes", "icon_size_bytes", "webhooks", "oauth",
     "events", "exposed", "lifecycle", "lifecycle_hooks", "tray",
+    "menu",
     "migrations_dir", "config_defaults", "secrets", "panels",
     "file_sinks",
 })

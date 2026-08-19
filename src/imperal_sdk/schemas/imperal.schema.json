@@ -238,6 +238,87 @@
       "title": "LifecycleDecl",
       "type": "object"
     },
+    "MenuItemDecl": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['menu']` \u2014 \u04243 user-menu contribution.\n\nMirrors :meth:`imperal_sdk.extension.MenuItemDef.to_manifest` exactly, so\nthe emitted shape round-trips through :func:`validate_manifest_dict`\n(the symmetry rule that TrayDecl/SecretDecl already follow).",
+      "properties": {
+        "item_id": {
+          "pattern": "^[a-z][a-z0-9_-]+$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order"
+        },
+        "danger": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Danger"
+        }
+      },
+      "required": [
+        "item_id",
+        "label"
+      ],
+      "title": "MenuItemDecl",
+      "type": "object"
+    },
     "OAuthDecl": {
       "additionalProperties": false,
       "description": "One entry in `manifest['oauth']` \u2014 unified OAuth-connect declaration.",
@@ -721,7 +802,7 @@
     },
     "TrayDecl": {
       "additionalProperties": false,
-      "description": "One entry in `manifest['tray']` (M10).",
+      "description": "One entry in `manifest['tray']` (M10).\n\n``zone``/``order`` (\u04243) are what let the host lay the tray out as three\nlabelled groups instead of one undifferentiated row. Both are optional so\nmanifests emitted before \u04243 still validate; the host defaults a missing\n``zone`` to ``\"status\"``.",
       "properties": {
         "tray_id": {
           "pattern": "^[a-z][a-z0-9_-]+$",
@@ -751,6 +832,30 @@
           ],
           "default": null,
           "title": "Tooltip"
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zone"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order"
         }
       },
       "required": [
@@ -958,6 +1063,21 @@
       ],
       "default": null,
       "title": "Tray"
+    },
+    "menu": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/MenuItemDecl"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Menu"
     },
     "actions_explicit": {
       "anyOf": [
