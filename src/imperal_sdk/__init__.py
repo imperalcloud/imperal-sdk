@@ -1,7 +1,7 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from typing import TYPE_CHECKING
 
-__version__ = "5.10.0"
+__version__ = "5.11.0"
 
 # 5.2.2 (2026-06-11): the package root resolves its public surface lazily
 # (PEP 562). The eager imports pulled the HTTP transport (Context / client
@@ -35,6 +35,18 @@ _LAZY_ATTRS = {
     "TenantContext": "imperal_sdk.types.identity",
     "generate_manifest": "imperal_sdk.manifest",
     "save_manifest": "imperal_sdk.manifest",
+    # Callable surface — the ONE way to ask "what can be called on this app?".
+    # Reaching into ext.tools directly misses every @chat.function and is what
+    # made a 260-function app report "5 tools synced" (2026-08-21).
+    "callable_functions": "imperal_sdk.catalog",
+    "callable_function_names": "imperal_sdk.catalog",
+    # OAuth token refresh — the ONE implementation. Connectors must NOT
+    # hand-roll a token_refresh.py; four divergent copies are how an expired
+    # Google Analytics token turned into "please reconnect" (2026-08-21).
+    "fresh_token": "imperal_sdk.oauth_tokens",
+    "with_fresh_token": "imperal_sdk.oauth_tokens",
+    "needs_refresh": "imperal_sdk.oauth_tokens",
+    "TokenRefreshError": "imperal_sdk.oauth_tokens",
     "ChatExtension": "imperal_sdk.chat",
     "ActionResult": "imperal_sdk.chat.action_result",
     # LLM

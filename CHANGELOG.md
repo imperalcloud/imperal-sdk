@@ -2,6 +2,65 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.11.0 — 2026-08-21
+
+### Added
+- **One way to ask what an app can do: `callable_functions(ext)`.**
+  An extension declares callables through two decorators that write to two
+  different registries — `@ext.tool` lands in `Extension._tools`, while
+  `@chat.function` lands in `ChatExtension._functions`, reachable only via
+  `ext._chat_extensions`. `generate_manifest` had always read both, so
+  manifests were complete; every other consumer reached for `ext.tools` alone
+  and silently saw a fraction of the app.
+
+  WordPress Hub made it impossible to ignore: 260 `@chat.function`
+  declarations, one `@ext.tool`, three `@ext.panel`. Deploying it reported
+  **"5 of 259 functions synced"** — the 5 being one real tool plus the
+  synthetic `__panel__*` entries — and the catalog served 5 callables for an
+  app with 260. Nothing was broken in the app; the platform was asking the
+  wrong registry.
+
+  `imperal_sdk.catalog.callable_functions()` returns the whole callable
+  surface, synthetic UI plumbing excluded. A federal test
+  (`I-CALLABLE-SURFACE-SINGLE-SOURCE`) asserts its name set is *exactly* the
+  manifest's tool names, so a third registry cannot appear without both
+  learning about it on the same day.
+
+- **One implementation of OAuth token refresh: `imperal_sdk.oauth_tokens`.**
+  "Google Analytics: an expired `access_token` is not refreshed automatically
+  via `refresh_token` — a manual reconnect is required." Analytics stored a
+  valid refresh token and never spent it: its request path read the stored
+  access token and mapped HTTP 401 to "reconnect the account".
+
+  It was not the odd one out for having the bug — it was the odd one out for
+  *missing the copy*. The same ~50-line `token_refresh.py` had been pasted into
+  the Drive connector, the Search Console connector and the mail client, and
+  those copies had already drifted: different constants, different error text,
+  different persistence. A fourth copy would have drifted too.
+
+  `fresh_token(ctx, account, provider=...)` refreshes and persists;
+  `with_fresh_token(ctx, account, call, ...)` wraps a call with the two layers
+  a stale token actually needs:
+
+  - **Proactive** — refresh when the token is within `skew` (default 120s) of
+    expiry, *or when `expires_at` is absent or unparseable*. The hand-rolled
+    copies wrote `if expires_at and ...`, so an account saved without an expiry
+    never refreshed proactively and 401'd forever.
+  - **Reactive** — retry exactly once on a 401, for what a clock cannot
+    predict: skew, early revocation, a provider expiring a token sooner than
+    advertised. This is the layer that removes the manual reconnect.
+
+  Refresh-token **rotation** is handled (Microsoft, and Google when it chooses
+  to, return a new refresh token — replaying a retired one is a slow-motion
+  forced reconnect). Terminal failures (`invalid_grant`, no refresh token) are
+  distinguished from transient ones (network blip, provider 5xx): the first
+  surfaces an honest reconnect instead of attempting a call with a token that
+  is already dead, the second still tries the token in hand. Persistence
+  failures are non-fatal — the token in hand is valid regardless.
+
+  Both helpers are exported from the package root, because a helper nobody can
+  find is how you get a fifth copy.
+
 ## 5.10.0 — 2026-08-20
 
 ### Added
