@@ -35,6 +35,18 @@ def _load_namespaces() -> dict:
         "skeleton": SkeletonClient,
         "notify": NotifyClient,
     }
+    # Gateway-backed namespaces (5.12.0). Not optional — they depend only on
+    # the SDK's own _gateway base, so an ImportError here is a real breakage
+    # and should surface rather than silently shrink the documented surface.
+    from imperal_sdk.apps.client import AppsClient
+    from imperal_sdk.conversations.client import ConversationsClient
+    from imperal_sdk.rbac.client import RBACClient
+    from imperal_sdk.users.client import UsersClient
+
+    nss["conversations"] = ConversationsClient
+    nss["users"] = UsersClient
+    nss["apps"] = AppsClient
+    nss["rbac"] = RBACClient
     try:
         from imperal_sdk.billing.client import BillingClient
         nss["billing"] = BillingClient

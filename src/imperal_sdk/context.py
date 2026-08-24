@@ -238,6 +238,18 @@ class Context:
                 # cache property will surface the problem on first use.
                 self._cache = None
 
+        # Gateway-backed namespaces (5.12.0). Built lazily on first access
+        # rather than here: they are cheap, but most turns touch none of
+        # them, and a Context is constructed for every single invocation.
+        #
+        # WHY THEY DERIVE THEIR OWN URL/TOKEN INSTEAD OF BEING INJECTED.
+        # The kernel injects store/notify/billing/... at construction time,
+        # so a namespace added to the SDK would stay ``None`` until the
+        # kernel itself shipped a release that knows to pass it. Deriving
+        # from the clients the kernel ALREADY injected means these work the
+        # day the SDK is installed — the same trick ``ctx.cache`` uses.
+        self._gw_namespaces: dict = {}
+
     # ------------------------------------------------------------------
     # Gateway URL / service-token derivation for ctx.cache.
     # ------------------------------------------------------------------
@@ -283,6 +295,66 @@ class Context:
                 "issue — use a real kernel-built Context in production."
             )
         return self._cache
+
+    # ------------------------------------------------------------------
+    # Gateway-backed namespaces (5.12.0)
+    # ------------------------------------------------------------------
+
+    def _gw_namespace(self, name: str, cls):
+        """Lazily build (and remember) one gateway-backed client.
+
+        One builder for all of them: a namespace is its route module plus a
+        name, and nothing else differs. Adding the fifth costs a property.
+        """
+        cached = self._gw_namespaces.get(name)
+        if cached is not None:
+            return cached
+        gw = self._gateway_url or self._derive_gateway_url()
+        if not gw:
+            raise RuntimeError(
+                f"ctx.{name} is not available in this context: no gateway URL "
+                "could be derived. This is normally a test harness built "
+                "without kernel clients — use a real Context in production."
+            )
+        client = cls(
+            gateway_url=gw,
+            service_token=self._service_token or self._derive_service_token(),
+            user_id=self.user.imperal_id,
+            extension_id=self._extension_id or getattr(
+                self._extension, "app_id", ""),
+            tenant_id=getattr(self.user, "tenant_id", "") or "",
+        )
+        self._gw_namespaces[name] = client
+        return client
+
+    @property
+    def conversations(self):
+        """The Thoughts Room — the acting user's own conversation threads.
+
+        Owner-scoped by construction: the gateway resolves the acting user
+        from the header and accepts no user_id, so this can only ever reach
+        the caller's own history.
+        """
+        from imperal_sdk.conversations.client import ConversationsClient
+        return self._gw_namespace("conversations", ConversationsClient)
+
+    @property
+    def users(self):
+        """Platform user records, their settings and connected surfaces."""
+        from imperal_sdk.users.client import UsersClient
+        return self._gw_namespace("users", UsersClient)
+
+    @property
+    def apps(self):
+        """App settings, app membership, and the moderation lifecycle."""
+        from imperal_sdk.apps.client import AppsClient
+        return self._gw_namespace("apps", AppsClient)
+
+    @property
+    def rbac(self):
+        """Roles, scopes, and what a user may actually do."""
+        from imperal_sdk.rbac.client import RBACClient
+        return self._gw_namespace("rbac", RBACClient)
 
     async def progress(self, percent: float, message: str = "") -> None:
         """Report task progress. May raise TaskCancelled if user cancelled."""

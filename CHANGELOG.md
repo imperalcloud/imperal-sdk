@@ -2,6 +2,51 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.12.0 — 2026-08-24
+
+### Added
+- **Four gateway namespaces, so extensions stop hand-rolling platform calls:
+  `ctx.conversations`, `ctx.users`, `ctx.apps`, `ctx.rbac`.**
+  An audit of this tree found ten extensions assembling `httpx` requests
+  against `/v1/...` by hand — not because they wanted to, but because the SDK
+  had no client for the route. Admin alone carried nineteen call sites for the
+  user family; the RBAC routes were reached fourteen different ways, including
+  three spellings of the same scope query.
+
+  Every hand-rolled copy re-invented the same four decisions: header names,
+  which failures are worth retrying, how a non-2xx body becomes an error, and
+  what a missing id should do. They had already drifted from each other, and
+  each one breaks independently on the day a route changes.
+
+  The 34 methods added here are deliberately thin — the value is not the code,
+  it is that there is now one place where these decisions live. `_gateway.py`
+  holds the single request implementation (headers, bounded retry via the
+  existing `retry_transient`, typed errors from the existing taxonomy); a
+  namespace on top is a few lines per route, which is the point: adding the
+  fifth namespace must be cheaper than hand-rolling it.
+
+- **`ctx.conversations` — the Thoughts Room as a platform surface.**
+  The room holds every conversation a user has with Webbee across panel,
+  Telegram and terminal. Reaching it from an extension previously meant
+  knowing six URLs. Owner-scoping is structural rather than checked: the
+  gateway resolves the acting user from a header and its routes accept no
+  user_id at all, so there is no shape of request that could ask for somebody
+  else's history.
+
+### Fixed
+- **A whitespace-only id is no longer a valid id.** `if not value` is the
+  obvious guard and the wrong one: `"   "` is falsy to a human and truthy to
+  Python, so it passed straight through and became a request path with spaces
+  in it — which the gateway can only reject confusingly. `_gateway.require()`
+  validates and returns the stripped value, so a padded id cannot reach a URL.
+  Found by the new suite, not by review.
+
+### Notes
+- New namespaces build themselves lazily from clients the kernel already
+  injects, the same way `ctx.cache` does. That is deliberate: a namespace that
+  waited to be passed in by the kernel would stay `None` until the kernel cut
+  its own release. These work the day the SDK is installed.
+
 ## 5.11.0 — 2026-08-21
 
 ### Added
