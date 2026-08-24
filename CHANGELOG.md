@@ -2,6 +2,64 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.13.0 — 2026-08-24
+
+### Added
+- **A tray glyph can say what it MEANS, not just which drawing to use:
+  `icon_color` on `@ext.tray` and on `TrayResponse`.**
+  The tray contract could describe an icon's name, its zone, its order and how
+  its badge is drawn — but not its colour. That gap was invisible while the
+  platform's own tray items were hardcoded React, because those were tinted by
+  hand: the agent bot went green while agents were armed, the credit mark went
+  amber and then red as the balance ran down. Colour was carrying real meaning
+  at a glance.
+
+  When those items moved out to their own extensions through `@ext.tray`, every
+  contributed glyph arrived neutral grey. So the handover from built-in to
+  contribution was *visible* — not because the swap was slow, but because the
+  thing that replaced it had lost a whole channel of information.
+
+  A tray colour has two lifetimes, so it is declared in two places:
+
+  ```python
+  @ext.tray("balance", icon="credits", icon_color="muted")   # RESTING colour
+  async def tray_balance(ctx, **kw):
+      ...
+      return ui.TrayResponse(
+          badge=ui.Badge(value=compact, color=tone),
+          icon_color=tone,                                   # colour NOW
+      )
+  ```
+
+  The declaration is what the item looks like before its handler has said
+  anything — including the very first frame of a page load. The returned value
+  is its colour for *this* reading, and it outranks the declaration, which
+  outranks the strip's own ink. That ordering is the whole point: a manifest
+  cannot know that a balance just hit zero or that no agents are armed. Only
+  the handler that just read the number does.
+
+  Vocabulary is `default`, `primary`, `success`, `warning`, `danger`, `muted`,
+  plus the badge-colour words (`red`, `green`, `blue`, `yellow`, `amber`,
+  `gray`) as aliases — an author who already coloured a badge `red` should not
+  have to learn a second vocabulary for the glyph beside it.
+
+  **Names, never hex — deliberately.** An extension says `danger`; the host
+  maps that word onto its own design tokens, so a contributed icon follows the
+  active theme and keeps working when the palette changes. A manifest full of
+  raw hex would freeze one theme's palette into every extension ever published.
+
+  An unknown word falls back to `default`, which renders exactly as before the
+  field existed. The honest reading of a typo is "no opinion about the colour"
+  — never a hidden or blanked glyph, because a misspelling would then take an
+  indicator away from the user rather than just leaving it plain.
+
+### Why it shipped
+  Reported from the live panel: the credit mark and the agent counter had gone
+  flat grey, and the built-in was visibly replaced a moment after each page
+  load. The colour half is fixed here in the contract; the flicker half was a
+  host-side change (the panel now remembers which items have served before, so
+  the wait is paid once per item instead of once per page load).
+
 ## 5.12.1 — 2026-08-24
 
 ### Fixed
@@ -206,6 +264,88 @@ All notable changes to `imperal-sdk` are documented here.
   unchanged, and the host defaults a missing zone to `"status"`.
 - Requires kernel support for the published `tray`/`menu` surfaces; older
   kernels ignore the extra keys.
+
+## 5.9.23 — 2026-08-13
+
+### Added
+- **`ui.BackButton(to=..., on_click=...)` — one standard "← Back" instead of
+  nine hand-rolled ones.** Every detail view needs a way back and the platform
+  had no standard for it, so each app invented its own. A live scan of the
+  installed apps found NINE variants — "← Back", "← Back to Extensions",
+  "← Back to articles", "← Back to overview" — plus a private `_back_button()`
+  helper in billing. Each picked its own arrow, variant and size, so the same
+  gesture looked different on every screen.
+
+  It fixes only the chrome: the arrow glyph, `variant="ghost"` and `size="sm"`
+  — the three things all nine copies happened to agree on anyway. `to` names
+  the DESTINATION ("← Back to Projects"), bare gives "← Back", and `label`
+  overrides the whole string when a screen genuinely needs its own wording.
+
+  **Composition on purpose:** it returns an ordinary `Button` node, not a new
+  node type. Every deployed panel already renders `Button`, so this works on
+  every existing frontend with no host-side change and nothing to keep in
+  sync — the standard lives in ONE place (the SDK) instead of in a renderer
+  the SDK cannot see.
+
+## 5.9.22 — 2026-08-13
+
+### Added
+- **Public `for_user()` on `ctx.store` and `ctx.notify`.**
+  Webhook handlers had no supported way to act on a real user's data.
+  `ctx.as_user(uid)` is the normal route, but it requires SYSTEM context and
+  raises for anything else — and a webhook ctx is `__webhook__`, a different
+  pseudo-identity. So a webhook that had just resolved *which* user an event
+  belongs to could not re-scope at all through the public API.
+
+  Extensions solved it by rebuilding the client by hand out of private
+  attributes (`ctx.store._gateway_url`, `._auth_token`, `._extension_id`).
+  `github-connector`, `telegram-publisher` and `google-drive-connector` each
+  carried a copy of that helper, and every copy breaks silently the day that
+  constructor changes. It could not even be documented: the docs accuracy gate
+  rejects private attributes, correctly.
+
+## 5.9.21 — 2026-08-13
+
+### Added
+- **`imperal schedules`** — every registered task, its cron, and the next three
+  UTC fire times computed from the real expression, flagging any cron the
+  scheduler cannot parse. A four-field typo otherwise just never fires, with
+  nothing to see anywhere.
+
+### Changed
+- **`@ext.schedule` is documented instead of merely existing.** Its docstring
+  was one line — "Register a scheduled task." — with no mention that the
+  handler runs as `__system__`, so a plain `ctx.store.query()` there reads the
+  system's own (empty) rows and the author concludes the fan-out is broken. It
+  is not: on a real scheduler context `ctx.as_user(uid)` rewires `ctx.store` to
+  the target user and `ctx.store.list_users()` enumerates who holds rows. The
+  gap was purely discoverability, next to a `@ext.skeleton` decorator that was
+  documented in full. Now carries the fan-out pattern, the system-context
+  guards, dedup and timeout behaviour.
+
+## 5.9.20 — 2026-08-13
+
+### Fixed
+- **`WebhookResponse` silently lost its status code and its headers.**
+  It is the SDK's own declared, exported and documented way to shape a
+  webhook's real HTTP reply — the status line and the response headers, not
+  just a JSON body — and it was a trap.
+
+  The dataclass had no `to_dict()`, so the runtime's result serializer fell
+  through to its catch-all branch and wrapped the whole object as
+  `{"status": "success", "data": {...}}`. The gateway reads the control keys
+  (`status_code` / `headers` / `body`) at the TOP level only — buried under
+  `data` they are invisible — so every webhook returning one answered a plain
+  200 with no custom headers.
+
+  That silently breaks the handshakes that live OUTSIDE the body: Asana echoes
+  `X-Hook-Secret` in a response *header* and refuses to activate the
+  subscription without it (Slack's Events API works the same way). Nothing
+  raised and nothing logged — the subscription simply never activated.
+  `asana-connector` hit exactly this and worked around it by returning a bare
+  dict, leaving a comment in its own source that `WebhookResponse` "is
+  referenced by nothing". The class stayed exported and documented, waiting
+  for the next extension to fall into it.
 
 ## 5.9.19 — 2026-08-13
 
