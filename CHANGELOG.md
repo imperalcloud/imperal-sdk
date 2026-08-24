@@ -2,6 +2,39 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.12.1 — 2026-08-24
+
+### Fixed
+- **`ctx.apps.get_settings()` / `update_settings()` called a route that does
+  not exist.** 5.12.0 pointed both at `/v1/apps/{app_id}/settings`. The
+  gateway serves nothing there: `/v1/apps` carries app *sessions*, and app
+  settings live in unified_config under the `app` scope, at
+  `/v1/internal/config/app/{app_id}`.
+
+  Three things were wrong, not one. The path was invented; the write verb was
+  PATCH where the route is an upserting PUT; and the patch was sent bare where
+  the route reads it from a `config` key — so even against the right URL the
+  write would have stored nothing and returned success.
+
+  `get_settings()` now unwraps the envelope (scope, scope_id, config,
+  enforced, role_defaults) and returns the `config` blob, because every call
+  site otherwise unwraps it identically. A missing config row — the normal
+  state of a freshly deployed app — returns `{}` instead of raising, since
+  404 here means "not configured yet", not "broken".
+
+  `update_settings()` gained `replace_paths`, which the route supports and
+  the platform needs: deep merge can only add keys, so an authoritative
+  writer pruning a removed panel slot had no way to express it.
+
+### Why it shipped
+  The route came from reading call sites in extensions rather than the
+  gateway's own routers, and the test suite asserted the *user* settings
+  route while never asserting the *app* one. A plausible invention with no
+  test is indistinguishable from a fact. Four tests now pin the path, the
+  verb, the body shape and the empty-row behaviour, and the remaining 33
+  methods were re-verified directly against the gateway's registered
+  prefixes — conversations, users and rbac were correct as shipped.
+
 ## 5.12.0 — 2026-08-24
 
 ### Added

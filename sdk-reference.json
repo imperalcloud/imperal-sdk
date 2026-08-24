@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.12.0",
+  "sdk_version": "5.12.1",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -1458,7 +1458,7 @@
     "ctx.apps.get_settings": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "The app's settings blob.",
+      "description": "The app's settings, unwrapped.\n\nApp settings live in unified_config under the ``app`` scope, not on a\nroute of their own: the gateway serves them from\n``/v1/internal/config/app/{app_id}``. The response is an envelope\n(scope, scope_id, tenant_id, config, enforced, role_defaults); callers\nwant the ``config`` blob, so unwrapping happens once here rather than\nat every call site.\n\nReturns ``{}`` when the app has no config row yet \u2014 a first-run app is\na normal state, not a failure, and the gateway signals it with 404.",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1570,7 +1570,7 @@
     "ctx.apps.update_settings": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Merge a patch into the app's settings blob.",
+      "description": "Deep-merge a patch into the app's settings.\n\nThe route is an upsert with deep merge, so a patch touching one key\nleaves its siblings alone \u2014 which is what \"patch\" should mean and why\nthe raw dict must be wrapped in ``{\"config\": ...}`` rather than sent\nbare. Sending it bare silently wrote nothing.\n\n``replace_paths`` opts specific dotted subtrees out of the merge and\nreplaces them wholesale \u2014 needed when the writer is authoritative and\nmust prune keys it omits (a removed panel slot being the case the\nplatform hit).",
       "enums": {},
       "kind": "client_method",
       "params": [
@@ -1590,6 +1590,24 @@
           "required": true,
           "type": {
             "ref": "dict"
+          }
+        },
+        {
+          "annotation": "str | None",
+          "default": null,
+          "name": "updated_by",
+          "required": false,
+          "type": {
+            "ref": "str | None"
+          }
+        },
+        {
+          "annotation": "list[str] | None",
+          "default": null,
+          "name": "replace_paths",
+          "required": false,
+          "type": {
+            "ref": "list[str] | None"
           }
         }
       ],

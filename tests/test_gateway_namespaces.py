@@ -198,6 +198,64 @@ async def test_app_and_rbac_routes(gw):
     assert gw.last.url.path == f"/v1/scopes/effective/{UID}"
 
 
+# ── app settings: the family that shipped wrong in 5.12.0 ───────────────── #
+#
+# These four exist because 5.12.0 shipped get_settings/update_settings
+# pointing at /v1/apps/{id}/settings — a route the gateway does not serve.
+# The suite was green: it asserted the USER settings route and never the app
+# one, so a plausible-looking invention sailed into a public release. The
+# lesson is not "add a test", it is that a route nobody asserts is a route
+# nobody has checked exists.
+
+@pytest.mark.asyncio
+async def test_app_settings_read_hits_unified_config_and_unwraps(gw):
+    """App settings live in unified_config's `app` scope, not a route of
+    their own, and arrive wrapped in an envelope."""
+    gw.program("GET", "/v1/internal/config/app/some-app",
+               json_body={"scope": "app", "scope_id": "some-app",
+                          "config": {"theme": "dark"},
+                          "enforced": {}, "role_defaults": {}})
+
+    got = await _client(AppsClient).get_settings("some-app")
+
+    assert gw.last.url.path == "/v1/internal/config/app/some-app"
+    assert got == {"theme": "dark"}, "caller wants config, not the envelope"
+
+
+@pytest.mark.asyncio
+async def test_app_settings_read_treats_a_missing_row_as_empty(gw):
+    """A first-run app has no config row. That is a normal state, and the
+    gateway says so with 404 — callers should not have to catch it."""
+    gw.program("GET", "/v1/internal/config/app/fresh-app",
+               json_body={"detail": "Config not found"}, status=404)
+
+    assert await _client(AppsClient).get_settings("fresh-app") == {}
+
+
+@pytest.mark.asyncio
+async def test_app_settings_write_is_a_put_wrapped_in_config(gw):
+    """The route upserts with a deep merge and reads the patch from a
+    `config` key. Sent bare, the write silently stored nothing."""
+    await _client(AppsClient).update_settings("some-app", {"theme": "dark"})
+
+    assert (gw.last.method, gw.last.url.path) == (
+        "PUT", "/v1/internal/config/app/some-app")
+    assert json.loads(gw.last.content) == {"config": {"theme": "dark"}}
+
+
+@pytest.mark.asyncio
+async def test_app_settings_write_can_prune_a_subtree(gw):
+    """An authoritative writer must be able to remove keys it omits —
+    deep merge alone can only ever add."""
+    await _client(AppsClient).update_settings(
+        "some-app", {"ui": {"slots": []}},
+        updated_by="imp_u_ADMIN", replace_paths=["ui.slots"])
+
+    body = json.loads(gw.last.content)
+    assert body["replace_paths"] == ["ui.slots"]
+    assert body["updated_by"] == "imp_u_ADMIN"
+
+
 # ── guards: refusing to send a meaningless call ─────────────────────────── #
 
 @pytest.mark.parametrize("call", [

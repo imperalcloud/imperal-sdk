@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from imperal_sdk._gateway import GatewayClient, require
+from imperal_sdk.errors import NotFoundError
 
 
 class AppsClient(GatewayClient):
@@ -30,18 +31,52 @@ class AppsClient(GatewayClient):
     # -- settings --------------------------------------------------------
 
     async def get_settings(self, app_id: str) -> dict:
-        """The app's settings blob."""
-        app_id = require(app_id, "app_id")
-        return await self._call("GET", f"/v1/apps/{app_id}/settings",
-                                resource="app settings")
+        """The app's settings, unwrapped.
 
-    async def update_settings(self, app_id: str, patch: dict) -> dict:
-        """Merge a patch into the app's settings blob."""
+        App settings live in unified_config under the ``app`` scope, not on a
+        route of their own: the gateway serves them from
+        ``/v1/internal/config/app/{app_id}``. The response is an envelope
+        (scope, scope_id, tenant_id, config, enforced, role_defaults); callers
+        want the ``config`` blob, so unwrapping happens once here rather than
+        at every call site.
+
+        Returns ``{}`` when the app has no config row yet — a first-run app is
+        a normal state, not a failure, and the gateway signals it with 404.
+        """
+        app_id = require(app_id, "app_id")
+        try:
+            envelope = await self._call(
+                "GET", f"/v1/internal/config/app/{app_id}",
+                resource="app settings")
+        except NotFoundError:
+            return {}
+        return (envelope or {}).get("config", {}) if isinstance(envelope, dict) else {}
+
+    async def update_settings(self, app_id: str, patch: dict,
+                              *, updated_by: str | None = None,
+                              replace_paths: list[str] | None = None) -> dict:
+        """Deep-merge a patch into the app's settings.
+
+        The route is an upsert with deep merge, so a patch touching one key
+        leaves its siblings alone — which is what "patch" should mean and why
+        the raw dict must be wrapped in ``{"config": ...}`` rather than sent
+        bare. Sending it bare silently wrote nothing.
+
+        ``replace_paths`` opts specific dotted subtrees out of the merge and
+        replaces them wholesale — needed when the writer is authoritative and
+        must prune keys it omits (a removed panel slot being the case the
+        platform hit).
+        """
         app_id = require(app_id, "app_id")
         if not isinstance(patch, dict) or not patch:
             raise ValueError("patch must be a non-empty dict")
-        return await self._call("PATCH", f"/v1/apps/{app_id}/settings",
-                                json=patch, resource="app settings")
+        body: dict[str, Any] = {"config": patch}
+        if updated_by:
+            body["updated_by"] = updated_by
+        if replace_paths:
+            body["replace_paths"] = replace_paths
+        return await self._call("PUT", f"/v1/internal/config/app/{app_id}",
+                                json=body, resource="app settings")
 
     # -- membership ------------------------------------------------------
 
