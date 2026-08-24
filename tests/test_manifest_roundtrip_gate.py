@@ -381,7 +381,9 @@ def test_maximal_canary_sections_carry_full_feature_surface(tmp_path, monkeypatc
     # travel in the manifest, and the canary pins their defaults too.
     assert m["tray"] == [{"tray_id": "unread", "icon": "Mail",
                           "tooltip": "Unread canaries",
-                          "zone": "status", "order": 100}]
+                          "zone": "status", "order": 100,
+                          "badge_style": "corner",
+                          "icon_color": "default"}]
     assert m["menu"] == [
         {"item_id": "workspace", "label": "Canary Workspace",
          "icon": "LayoutGrid", "section": "main",

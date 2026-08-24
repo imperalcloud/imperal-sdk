@@ -37,6 +37,102 @@ TRAY_ZONE_ORDER: tuple[str, ...] = ("status", "actions", "system")
 ALLOWED_TRAY_ZONES: frozenset[str] = frozenset(TRAY_ZONE_ORDER)
 
 
+# === How a tray badge is drawn (Ф3.1) ========================================
+#
+# `zone` says WHERE an item sits; this says WHAT ITS NUMBER LOOKS LIKE. They
+# are separate questions and the host cannot guess the second one, because the
+# right answer depends on what the number MEANS:
+#
+#   "corner" — a small overlay dot on the corner of the icon. The OS
+#              convention for a COUNT you might act on: unread mail, pending
+#              invites. It is deliberately tiny; it says "there are some",
+#              not "there are exactly 1,240,000".
+#
+#   "inline" — the value sits NEXT TO the glyph, on the same baseline, in
+#              tabular figures. The right shape for a MEASUREMENT the user
+#              reads rather than clears: a credit balance, an agent count, a
+#              temperature. A 7-character value ("1.2M") is legible here and
+#              illegible squeezed onto a 14px corner disc.
+#
+# WHY THIS EXISTS AT ALL. The platform's own credit counter and agent counter
+# were hardcoded React components drawing their number inline. When they moved
+# out to `@ext.billing` / `@ext.automations` — which is the whole point of
+# `@ext.tray` being a real contract — the host had only one way to draw a
+# badge, the corner dot, so a balance the user had read inline for a year
+# silently became a dot with "1.2M" crushed into it. The contract was missing
+# a word for a difference the user could see, so the host had to guess, and it
+# guessed the same way for everyone.
+#
+# Default is "corner": it is the conservative choice for an unknown count, and
+# it keeps every manifest emitted before this field rendering exactly as it did.
+TRAY_BADGE_STYLES: tuple[str, ...] = ("corner", "inline")
+ALLOWED_TRAY_BADGE_STYLES: frozenset[str] = frozenset(TRAY_BADGE_STYLES)
+DEFAULT_TRAY_BADGE_STYLE: str = "corner"
+
+
+# === What colour a tray GLYPH is (Ф3.2) ======================================
+#
+# `badge_style` says how the NUMBER is drawn. This says what the ICON ITSELF
+# looks like, which is a different question the host also cannot guess.
+#
+# WHY IT IS NEEDED. The platform's own tray items were hardcoded React, and
+# every one of them was tinted: the agent bot went green while agents were
+# armed, the credit mark went amber then red as the balance ran down, the
+# shield went blue while confirmations were on. Colour was carrying real
+# meaning at a glance. When those items moved out to their own extensions
+# through `@ext.tray`, the contract had no word for it, so every contributed
+# glyph rendered in the same neutral grey -- the strip lost a whole channel
+# of information, and the swap from built-in to contributed item was visible
+# precisely BECAUSE the colour vanished.
+#
+# NAMES, NOT HEX. An extension says what the state MEANS ("danger"), never
+# what shade to paint ("#ef4444"). The host maps the word onto its own design
+# tokens, so a contributed icon follows the active theme, respects contrast,
+# and keeps working when the palette changes. A manifest full of raw hex codes
+# would freeze one theme into every extension on the platform forever.
+#
+#   "default" — inherit the tray's own text colour (what a normal item does)
+#   "primary" — the accent: this is on / active / selected
+#   "success" — healthy, armed, connected
+#   "warning" — needs attention soon (a balance getting low, an expiring job)
+#   "danger"  — broken, empty, failing
+#   "muted"   — deliberately de-emphasised; present but not asking for the eye
+#
+# The badge colours ('red'/'green'/'blue'/'yellow'/'gray') are accepted as
+# aliases so an author does not have to remember two vocabularies for the same
+# six ideas.
+TRAY_ICON_COLORS: tuple[str, ...] = (
+    "default", "primary", "success", "warning", "danger", "muted",
+)
+TRAY_ICON_COLOR_ALIASES: dict[str, str] = {
+    "blue": "primary",
+    "green": "success",
+    "yellow": "warning",
+    "amber": "warning",
+    "red": "danger",
+    "gray": "muted",
+    "grey": "muted",
+}
+ALLOWED_TRAY_ICON_COLORS: frozenset[str] = (
+    frozenset(TRAY_ICON_COLORS) | frozenset(TRAY_ICON_COLOR_ALIASES)
+)
+DEFAULT_TRAY_ICON_COLOR: str = "default"
+
+
+def normalize_tray_icon_color(value: str | None) -> str:
+    """Fold an alias onto its canonical name.
+
+    Done ONCE here, at the edge of the contract, so the manifest that reaches
+    the host is already canonical and the host never has to know the alias
+    table. Two spellings of one colour must not be able to become two
+    behaviours further down the pipe.
+    """
+    if not value:
+        return DEFAULT_TRAY_ICON_COLOR
+    v = value.strip().lower()
+    return TRAY_ICON_COLOR_ALIASES.get(v, v)
+
+
 # === User-menu sections (Ф3) =================================================
 #
 # The avatar menu at the top right. Sections render in this fixed order,

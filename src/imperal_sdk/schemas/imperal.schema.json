@@ -856,6 +856,30 @@
           ],
           "default": null,
           "title": "Order"
+        },
+        "badge_style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Badge Style"
+        },
+        "icon_color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon Color"
         }
       },
       "required": [

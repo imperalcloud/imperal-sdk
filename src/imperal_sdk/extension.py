@@ -8,7 +8,12 @@ from typing import Any, Callable
 from imperal_sdk.types.contributions import (
     ALLOWED_MENU_SECTIONS,
     ALLOWED_PANEL_SLOTS,
+    ALLOWED_TRAY_BADGE_STYLES,
+    ALLOWED_TRAY_ICON_COLORS,
     ALLOWED_TRAY_ZONES,
+    DEFAULT_TRAY_BADGE_STYLE,
+    DEFAULT_TRAY_ICON_COLOR,
+    normalize_tray_icon_color,
 )
 
 @dataclass
@@ -113,6 +118,8 @@ class TrayDef:
     tooltip: str = ""
     zone: str = "status"
     order: int = 100
+    badge_style: str = DEFAULT_TRAY_BADGE_STYLE
+    icon_color: str = DEFAULT_TRAY_ICON_COLOR
 
     def to_manifest(self) -> dict:
         return {
@@ -121,6 +128,8 @@ class TrayDef:
             "tooltip": self.tooltip,
             "zone": self.zone,
             "order": self.order,
+            "badge_style": self.badge_style,
+            "icon_color": self.icon_color,
         }
 
 
@@ -718,7 +727,9 @@ class Extension:
         return decorator
 
     def tray(self, tray_id: str, icon: str = "Circle", tooltip: str = "",
-             zone: str = "status", order: int = 100):
+             zone: str = "status", order: int = 100,
+             badge_style: str = DEFAULT_TRAY_BADGE_STYLE,
+             icon_color: str = DEFAULT_TRAY_ICON_COLOR):
         """Declare a system tray item in the Panel's top bar.
 
         The handler returns a UINode tree: a badge, and optionally a whole
@@ -737,6 +748,25 @@ class Extension:
         reserve 0-99, so the default of 100 puts an extension after them
         without having to know their numbers.
 
+        ``badge_style`` decides HOW the number is drawn, which the host cannot
+        infer from the number itself:
+
+        * ``"corner"`` (default) — a small overlay disc on the icon's corner.
+          The OS convention for a count you act on and clear: unread mail,
+          pending invites.
+        * ``"inline"`` — the value next to the glyph, same baseline, tabular
+          figures. For a measurement the user READS rather than clears: a
+          credit balance, an agent count. Long values ("1.2M") stay legible
+          here and do not fit on a 14px disc.
+
+        ``icon_color`` tints the GLYPH itself — the channel the platform's own
+        tray items always used and contributed ones had no word for: ``
+        "default"`` (inherit), ``"primary"``, ``"success"``, ``"warning"``,
+        ``"danger"``, ``"muted"``. Say what the state MEANS, never a hex code:
+        the host maps the name onto its own design tokens, so the icon follows
+        the active theme instead of pinning one shade. The badge colour words
+        ('red', 'green', 'blue', 'yellow', 'gray') work as aliases.
+
         Example::
 
             @ext.tray("unread", icon="Mail", tooltip="Unread messages")
@@ -745,12 +775,31 @@ class Extension:
                 return ui.Stack([
                     ui.Badge(str(count), color="red" if count > 0 else "gray"),
                 ])
+
+            @ext.tray("balance", icon="Coins", badge_style="inline")
+            async def tray_balance(ctx, **kwargs):
+                info = await ctx.billing.get_balance()
+                return ui.TrayResponse(badge=ui.Badge(value=info.balance))
         """
         if zone not in ALLOWED_TRAY_ZONES:
             raise ValueError(
                 f"@ext.tray({tray_id!r}, zone={zone!r}): unknown zone. "
                 f"Must be one of {sorted(ALLOWED_TRAY_ZONES)}."
             )
+        if badge_style not in ALLOWED_TRAY_BADGE_STYLES:
+            raise ValueError(
+                f"@ext.tray({tray_id!r}, badge_style={badge_style!r}): unknown "
+                f"style. Must be one of {sorted(ALLOWED_TRAY_BADGE_STYLES)}."
+            )
+        if icon_color not in ALLOWED_TRAY_ICON_COLORS:
+            raise ValueError(
+                f"@ext.tray({tray_id!r}, icon_color={icon_color!r}): unknown "
+                f"colour. Must be one of {sorted(ALLOWED_TRAY_ICON_COLORS)}. "
+                f"Names, not hex: the host maps the name onto its own theme."
+            )
+        # Fold the alias here, once, so everything downstream — manifest,
+        # gateway, host — only ever sees a canonical name.
+        icon_color_norm = normalize_tray_icon_color(icon_color)
 
         def decorator(func: Callable) -> Callable:
             async def wrapper(ctx, **params):
@@ -759,6 +808,8 @@ class Extension:
                     return {
                         "ui": result.to_dict(), "tray_id": tray_id,
                         "icon": icon, "zone": zone,
+                        "badge_style": badge_style,
+                        "icon_color": icon_color_norm,
                     }
                 return result
             self._tools[f"__tray__{tray_id}"] = ToolDef(
@@ -767,7 +818,8 @@ class Extension:
             )
             self._tray[tray_id] = TrayDef(
                 tray_id=tray_id, func=wrapper, icon=icon, tooltip=tooltip,
-                zone=zone, order=order,
+                zone=zone, order=order, badge_style=badge_style,
+                icon_color=icon_color_norm,
             )
             return func
         return decorator

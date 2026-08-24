@@ -52,7 +52,9 @@ def test_manifest_emits_tray():
     # default zone cannot slip through unnoticed.
     assert m["tray"] == [{"tray_id": "unread", "icon": "Mail",
                           "tooltip": "Unread",
-                          "zone": "status", "order": 100}]
+                          "zone": "status", "order": 100,
+                          "badge_style": "corner",
+                          "icon_color": "default"}]
 
 
 def test_manifest_emits_menu_items():

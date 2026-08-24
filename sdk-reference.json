@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.12.1",
+  "sdk_version": "5.13.0",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -1137,6 +1137,24 @@
           "required": false,
           "type": {
             "ref": "int"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "corner",
+          "name": "badge_style",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "default",
+          "name": "icon_color",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],
@@ -3895,7 +3913,7 @@
     "ext.tray": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Declare a system tray item in the Panel's top bar.\n\nThe handler returns a UINode tree: a badge, and optionally a whole\ndropdown panel that opens when the icon is clicked. Fetched via the\n/call endpoint as ``__tray__{tray_id}``.\n\n``zone`` decides WHERE in the strip it lands, and it is the reason the\ntray reads as a structure rather than a pile of icons:\n\n* ``\"status\"``  \u2014 passive state (default). Connection, counts, balance.\n* ``\"actions\"`` \u2014 things the user flips or triggers.\n* ``\"system\"``  \u2014 platform furniture at the far right (clock,\n  settings). Contribute here only if the item truly belongs there.\n\n``order`` sorts within the zone, ascending. The platform's own items\nreserve 0-99, so the default of 100 puts an extension after them\nwithout having to know their numbers.\n\nExample::\n\n    @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread messages\")\n    async def tray_unread(ctx, **kwargs):\n        count = await ctx.store.count(\"messages\", where={\"read\": False})\n        return ui.Stack([\n            ui.Badge(str(count), color=\"red\" if count > 0 else \"gray\"),\n        ])",
+      "description": "Declare a system tray item in the Panel's top bar.\n\nThe handler returns a UINode tree: a badge, and optionally a whole\ndropdown panel that opens when the icon is clicked. Fetched via the\n/call endpoint as ``__tray__{tray_id}``.\n\n``zone`` decides WHERE in the strip it lands, and it is the reason the\ntray reads as a structure rather than a pile of icons:\n\n* ``\"status\"``  \u2014 passive state (default). Connection, counts, balance.\n* ``\"actions\"`` \u2014 things the user flips or triggers.\n* ``\"system\"``  \u2014 platform furniture at the far right (clock,\n  settings). Contribute here only if the item truly belongs there.\n\n``order`` sorts within the zone, ascending. The platform's own items\nreserve 0-99, so the default of 100 puts an extension after them\nwithout having to know their numbers.\n\n``badge_style`` decides HOW the number is drawn, which the host cannot\ninfer from the number itself:\n\n* ``\"corner\"`` (default) \u2014 a small overlay disc on the icon's corner.\n  The OS convention for a count you act on and clear: unread mail,\n  pending invites.\n* ``\"inline\"`` \u2014 the value next to the glyph, same baseline, tabular\n  figures. For a measurement the user READS rather than clears: a\n  credit balance, an agent count. Long values (\"1.2M\") stay legible\n  here and do not fit on a 14px disc.\n\n``icon_color`` tints the GLYPH itself \u2014 the channel the platform's own\ntray items always used and contributed ones had no word for: ``\n\"default\"`` (inherit), ``\"primary\"``, ``\"success\"``, ``\"warning\"``,\n``\"danger\"``, ``\"muted\"``. Say what the state MEANS, never a hex code:\nthe host maps the name onto its own design tokens, so the icon follows\nthe active theme instead of pinning one shade. The badge colour words\n('red', 'green', 'blue', 'yellow', 'gray') work as aliases.\n\nExample::\n\n    @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread messages\")\n    async def tray_unread(ctx, **kwargs):\n        count = await ctx.store.count(\"messages\", where={\"read\": False})\n        return ui.Stack([\n            ui.Badge(str(count), color=\"red\" if count > 0 else \"gray\"),\n        ])\n\n    @ext.tray(\"balance\", icon=\"Coins\", badge_style=\"inline\")\n    async def tray_balance(ctx, **kwargs):\n        info = await ctx.billing.get_balance()\n        return ui.TrayResponse(badge=ui.Badge(value=info.balance))",
       "enums": {},
       "kind": "decorator",
       "params": [
@@ -3942,6 +3960,24 @@
           "required": false,
           "type": {
             "ref": "int"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "corner",
+          "name": "badge_style",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "default",
+          "name": "icon_color",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],
@@ -14903,7 +14939,7 @@
     "ui.TrayResponse": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "Structure a system tray handler response.\n\nNOTE \u2014 this is an ENVELOPE, not a rendered component. It is consumed by the\nkernel (the manifest carries a ``tray`` section and ``__tray__*`` synthetic\nhandlers), which unpacks ``badge`` and ``panel`` and renders each with its\nown real component. So there is deliberately no ``TrayResponse`` entry in\nthe panel component registry, and its absence there is not a gap.\n\nArgs:\n    badge: UINode for the tray icon badge (e.g. Badge(\"5\", color=\"red\")).\n           Shown as a small number/dot overlay on the tray icon.\n    panel: UINode for the dropdown panel (e.g. List of alerts).\n           Shown when user clicks the tray icon.\n\nExample::\n\n    @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread\")\n    async def tray_mail(ctx, **kw):\n        count = await ctx.store.count(\"messages\", where={\"read\": False})\n        msgs = await ctx.store.query(\"messages\", where={\"read\": False}, limit=5)\n        return TrayResponse(\n            badge=Badge(str(count), color=\"red\" if count else \"gray\"),\n            panel=List(items=[\n                ListItem(id=m[\"id\"], title=m[\"subject\"], subtitle=m[\"from\"])\n                for m in msgs\n            ]) if msgs else None,\n        )",
+      "description": "Structure a system tray handler response.\n\nNOTE \u2014 this is an ENVELOPE, not a rendered component. It is consumed by the\nkernel (the manifest carries a ``tray`` section and ``__tray__*`` synthetic\nhandlers), which unpacks ``badge`` and ``panel`` and renders each with its\nown real component. So there is deliberately no ``TrayResponse`` entry in\nthe panel component registry, and its absence there is not a gap.\n\nArgs:\n    badge: UINode for the tray icon badge (e.g. Badge(\"5\", color=\"red\")).\n           Shown as a small number/dot overlay on the tray icon.\n    panel: UINode for the dropdown panel (e.g. List of alerts).\n           Shown when user clicks the tray icon.\n    icon_color: Tint the GLYPH for THIS reading, overriding the static\n           ``icon_color`` declared on ``@ext.tray``. The declaration is the\n           item's resting colour; this is its colour right now. That\n           distinction is the whole point: a balance is amber when it runs\n           low and red when it is empty, an agent count is green while\n           agents are armed and muted when none are. A manifest cannot\n           know any of that \u2014 only the handler that just read the number\n           does. Same vocabulary as the declaration (\"default\", \"primary\",\n           \"success\", \"warning\", \"danger\", \"muted\", plus the badge-colour\n           aliases); names, never hex.\n\nExample::\n\n    @ext.tray(\"unread\", icon=\"Mail\", tooltip=\"Unread\")\n    async def tray_mail(ctx, **kw):\n        count = await ctx.store.count(\"messages\", where={\"read\": False})\n        msgs = await ctx.store.query(\"messages\", where={\"read\": False}, limit=5)\n        return TrayResponse(\n            badge=Badge(str(count), color=\"red\" if count else \"gray\"),\n            panel=List(items=[\n                ListItem(id=m[\"id\"], title=m[\"subject\"], subtitle=m[\"from\"])\n                for m in msgs\n            ]) if msgs else None,\n        )",
       "enums": {},
       "kind": "ui_component",
       "params": [
@@ -14920,6 +14956,15 @@
           "annotation": null,
           "default": null,
           "name": "panel",
+          "required": false,
+          "type": {
+            "kind": "any"
+          }
+        },
+        {
+          "annotation": null,
+          "default": null,
+          "name": "icon_color",
           "required": false,
           "type": {
             "kind": "any"

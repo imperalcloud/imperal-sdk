@@ -24,7 +24,7 @@ def Open(url: str) -> UIAction:
     return UIAction(action="open", params={"url": url})
 
 
-def TrayResponse(badge=None, panel=None):
+def TrayResponse(badge=None, panel=None, icon_color=None):
     """Structure a system tray handler response.
 
     NOTE — this is an ENVELOPE, not a rendered component. It is consumed by the
@@ -38,6 +38,16 @@ def TrayResponse(badge=None, panel=None):
                Shown as a small number/dot overlay on the tray icon.
         panel: UINode for the dropdown panel (e.g. List of alerts).
                Shown when user clicks the tray icon.
+        icon_color: Tint the GLYPH for THIS reading, overriding the static
+               ``icon_color`` declared on ``@ext.tray``. The declaration is the
+               item's resting colour; this is its colour right now. That
+               distinction is the whole point: a balance is amber when it runs
+               low and red when it is empty, an agent count is green while
+               agents are armed and muted when none are. A manifest cannot
+               know any of that — only the handler that just read the number
+               does. Same vocabulary as the declaration ("default", "primary",
+               "success", "warning", "danger", "muted", plus the badge-colour
+               aliases); names, never hex.
 
     Example::
 
@@ -59,4 +69,17 @@ def TrayResponse(badge=None, panel=None):
         props["badge"] = badge
     if panel is not None:
         props["panel"] = panel
+    if icon_color is not None:
+        # Normalised here, once, so the host only ever sees a canonical name
+        # and an alias ('green') behaves exactly like its canonical twin
+        # ('success'). An unknown word is dropped rather than forwarded: the
+        # honest reading of a typo is "no opinion about the colour", which
+        # leaves the declared resting colour in place instead of blanking the
+        # glyph over a spelling mistake.
+        from imperal_sdk.types.contributions import (
+            ALLOWED_TRAY_ICON_COLORS,
+            normalize_tray_icon_color,
+        )
+        if icon_color in ALLOWED_TRAY_ICON_COLORS:
+            props["icon_color"] = normalize_tray_icon_color(icon_color)
     return UINode(type="TrayResponse", props=props)

@@ -27,6 +27,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from imperal_sdk.types.contributions import (
     ALLOWED_MENU_SECTIONS,
+    ALLOWED_TRAY_BADGE_STYLES,
+    ALLOWED_TRAY_ICON_COLORS,
+    normalize_tray_icon_color,
     ALLOWED_TRAY_ZONES,
     RESERVED_MENU_SECTIONS,
 )
@@ -272,6 +275,8 @@ class TrayDecl(BaseModel):
     tooltip: Optional[str] = None
     zone: Optional[str] = None
     order: Optional[int] = None
+    badge_style: Optional[str] = None
+    icon_color: Optional[str] = None
 
     @field_validator("zone")
     @classmethod
@@ -282,6 +287,34 @@ class TrayDecl(BaseModel):
                 f"{sorted(ALLOWED_TRAY_ZONES)}"
             )
         return v
+
+    @field_validator("badge_style")
+    @classmethod
+    def _known_badge_style(cls, v: Optional[str]) -> Optional[str]:
+        # Optional, so a manifest emitted before Ф3.1 still validates; the
+        # host defaults a missing value to DEFAULT_TRAY_BADGE_STYLE. A WRONG
+        # value is refused rather than silently coerced: a typo'd style is a
+        # bug the author can fix, and a host that guesses would hide it.
+        if v is not None and v not in ALLOWED_TRAY_BADGE_STYLES:
+            raise ValueError(
+                f"unknown tray badge_style {v!r}; must be one of "
+                f"{sorted(ALLOWED_TRAY_BADGE_STYLES)}"
+            )
+        return v
+
+    @field_validator("icon_color")
+    @classmethod
+    def _known_icon_color(cls, v: Optional[str]) -> Optional[str]:
+        # Same bargain as badge_style: absent is fine (pre-Ф3.2 manifests
+        # render exactly as before), wrong is refused. Accepted values are
+        # NAMES the host maps onto its theme -- a hex code is rejected on
+        # purpose, because it would freeze one palette into the manifest.
+        if v is not None and v not in ALLOWED_TRAY_ICON_COLORS:
+            raise ValueError(
+                f"unknown tray icon_color {v!r}; must be one of "
+                f"{sorted(ALLOWED_TRAY_ICON_COLORS)} (names, not hex)"
+            )
+        return normalize_tray_icon_color(v) if v is not None else v
 
 
 class MenuItemDecl(BaseModel):
