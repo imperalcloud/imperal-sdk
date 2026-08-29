@@ -54,8 +54,11 @@ _TTL_MAX = 300
 # paired skeleton_alert_* tool inherits the same access by convention.
 _SKELETON_DECORATORS = {"skeleton"}
 
-# File globs to skip in source scan — venv + compiled + test fixtures.
+# Directories outside an extension's deployable production source tree.
+# Test fixtures deliberately exercise invalid patterns and must never be
+# interpreted as handlers during deployment validation.
 _SKIP_DIR_NAMES = {
+    "tests",
     "venv",
     ".venv",
     "__pycache__",

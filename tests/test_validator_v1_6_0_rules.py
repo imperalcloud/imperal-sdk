@@ -282,6 +282,24 @@ async def refresh_monitors(ctx):
     assert _rules(issues, "MANIFEST-SKELETON-1") == []
 
 
+def test_manifest_skeleton_1_ignores_test_fixture_sources(tmp_path):
+    """Invalid examples under tests/ are not deployable extension code."""
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_bad_fixture.py").write_text("""
+from imperal_sdk import Extension
+
+ext = Extension("app", version="1.0.0")
+
+@ext.tool("skeleton_refresh_bad_fixture")
+async def refresh_bad_fixture(ctx):
+    return {"response": {"count": 0}}
+""", encoding="utf-8")
+
+    issues = validate_source_tree(str(tmp_path))
+    assert _rules(issues, "MANIFEST-SKELETON-1") == []
+
+
 def test_manifest_skeleton_1_silent_on_paired_alert_via_ext_tool(tmp_path):
     """skeleton_alert_* via @ext.tool is the canonical pattern, not an error.
 
