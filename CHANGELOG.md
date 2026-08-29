@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.13.1 — 2026-08-29
+
+### Fixed
+- **Deploy validation no longer scans an extension's `tests/` fixtures as
+  production source.** Fixtures deliberately contain invalid examples to test
+  validator rules; treating them as deployable handlers produced false deploy
+  failures despite a valid extension package.
+
 ## 5.13.0 — 2026-08-24
 
 ### Added
