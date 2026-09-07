@@ -1,5 +1,5 @@
 {
-  "sdk_version": "5.14.0",
+  "sdk_version": "5.15.0",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
@@ -78,6 +78,33 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "Any | None",
+          "default": null,
+          "name": "undo",
+          "required": false,
+          "type": {
+            "ref": "Any | None"
+          }
+        },
+        {
+          "annotation": "dict[str, Any] | None",
+          "default": null,
+          "name": "diff",
+          "required": false,
+          "type": {
+            "ref": "dict[str, Any] | None"
+          }
+        },
+        {
+          "annotation": "str | None",
+          "default": null,
+          "name": "action_receipt",
+          "required": false,
+          "type": {
+            "ref": "str | None"
           }
         }
       ],
@@ -903,6 +930,43 @@
       ],
       "returns": null
     },
+    "PipeStep": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Single stage in a pipe chain.",
+      "enums": {},
+      "kind": "dataclass",
+      "params": [
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "app_id",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "tool_name",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "dict[str, Any]",
+          "default": null,
+          "name": "params_template",
+          "required": false,
+          "type": {
+            "ref": "dict[str, Any]"
+          }
+        }
+      ],
+      "returns": null
+    },
     "ScheduleDef": {
       "action_vocab_safe": false,
       "declarative_capable": false,
@@ -943,7 +1007,7 @@
     "SignalDef": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "SignalDef(name: 'str', func: 'Callable')",
+      "description": "SignalDef(name: 'str', func: 'Callable', inputs: 'list[str]' = <factory>, outputs: 'list[str]' = <factory>)",
       "enums": {},
       "kind": "dataclass",
       "params": [
@@ -963,6 +1027,24 @@
           "required": true,
           "type": {
             "ref": "Callable"
+          }
+        },
+        {
+          "annotation": "list[str]",
+          "default": null,
+          "name": "inputs",
+          "required": false,
+          "type": {
+            "ref": "list[str]"
+          }
+        },
+        {
+          "annotation": "list[str]",
+          "default": null,
+          "name": "outputs",
+          "required": false,
+          "type": {
+            "ref": "list[str]"
           }
         }
       ],
@@ -1035,7 +1117,7 @@
     "ToolDef": {
       "action_vocab_safe": false,
       "declarative_capable": false,
-      "description": "ToolDef(name: 'str', func: 'Callable', scopes: 'list[str]' = <factory>, description: 'str' = '')",
+      "description": "ToolDef(name: 'str', func: 'Callable', scopes: 'list[str]' = <factory>, description: 'str' = '', inputs: 'list[str]' = <factory>, outputs: 'list[str]' = <factory>)",
       "enums": {},
       "kind": "dataclass",
       "params": [
@@ -1073,6 +1155,24 @@
           "required": false,
           "type": {
             "ref": "str"
+          }
+        },
+        {
+          "annotation": "list[str]",
+          "default": null,
+          "name": "inputs",
+          "required": false,
+          "type": {
+            "ref": "list[str]"
+          }
+        },
+        {
+          "annotation": "list[str]",
+          "default": null,
+          "name": "outputs",
+          "required": false,
+          "type": {
+            "ref": "list[str]"
           }
         }
       ],
@@ -1384,6 +1484,24 @@
           "required": false,
           "type": {
             "ref": "bool"
+          }
+        },
+        {
+          "annotation": "list[str] | None",
+          "default": null,
+          "name": "inputs",
+          "required": false,
+          "type": {
+            "ref": "list[str] | None"
+          }
+        },
+        {
+          "annotation": "list[str] | None",
+          "default": null,
+          "name": "outputs",
+          "required": false,
+          "type": {
+            "ref": "list[str] | None"
           }
         },
         {
@@ -3740,6 +3858,52 @@
           "required": false,
           "type": {
             "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": true,
+          "name": "stale_while_revalidate",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 60,
+          "name": "cache_ttl",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
+        }
+      ],
+      "returns": null
+    },
+    "ext.search_provider": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Register a semantic search provider for OS-level omnisearch (Cmd+K).",
+      "enums": {},
+      "kind": "decorator",
+      "params": [
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "entity_type",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "description",
+          "required": false,
+          "type": {
+            "ref": "str"
           }
         }
       ],
@@ -11135,6 +11299,52 @@
       ],
       "returns": "UINode"
     },
+    "ui.AgentPresence": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Live Agentic Co-Presence indicator for workspace headers and cards.\n\nstatus: 'idle' | 'thinking' | 'executing' | 'completed' | 'failed'\naction: Short phrase explaining current agentic intent (e.g. 'Deploying release 5.14')\nprogress: Optional integer percentage (0-100)",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "str",
+          "default": "active",
+          "name": "status",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "",
+          "name": "action",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "int | None",
+          "default": null,
+          "name": "progress",
+          "required": false,
+          "type": {
+            "ref": "int | None"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "\ud83d\udc1d",
+          "name": "avatar",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
     "ui.Alert": {
       "action_vocab_safe": false,
       "declarative_capable": false,
@@ -11506,6 +11716,79 @@
           "required": true,
           "type": {
             "ref": "str"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
+    "ui.Canvas": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Create an interactive spatial workspace canvas.",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "list[CanvasNode | dict]",
+          "default": null,
+          "name": "nodes",
+          "required": true,
+          "type": {
+            "ref": "list[CanvasNode | dict]"
+          }
+        },
+        {
+          "annotation": "list[CanvasEdge | dict] | None",
+          "default": null,
+          "name": "edges",
+          "required": false,
+          "type": {
+            "ref": "list[CanvasEdge | dict] | None"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": 700,
+          "name": "height",
+          "required": false,
+          "type": {
+            "ref": "int"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": true,
+          "name": "interactive",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": true,
+          "name": "show_minimap",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": true,
+          "name": "show_controls",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "UIAction | None",
+          "default": null,
+          "name": "on_node_click",
+          "required": false,
+          "type": {
+            "ref": "UIAction | None"
           }
         }
       ],
@@ -12399,6 +12682,52 @@
           "required": false,
           "type": {
             "ref": "dict | None"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
+    "ui.Ghost": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Live Agentic Ghost state wrapping a UI component during agent operations.\n\nRenders the wrapped component in a semi-transparent, pulsating state with\nan optional agent execution badge or tooltip, indicating that Webbee or\na background task is actively working on it.",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "UINode",
+          "default": null,
+          "name": "child",
+          "required": true,
+          "type": {
+            "ref": "UINode"
+          }
+        },
+        {
+          "annotation": "str",
+          "default": "Webbee executing...",
+          "name": "reason",
+          "required": false,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "bool",
+          "default": true,
+          "name": "pulse",
+          "required": false,
+          "type": {
+            "ref": "bool"
+          }
+        },
+        {
+          "annotation": "float",
+          "default": 0.6,
+          "name": "opacity",
+          "required": false,
+          "type": {
+            "ref": "float"
           }
         }
       ],
@@ -14135,6 +14464,34 @@
           "required": true,
           "type": {
             "ref": "str"
+          }
+        }
+      ],
+      "returns": "UINode"
+    },
+    "ui.Signal": {
+      "action_vocab_safe": false,
+      "declarative_capable": false,
+      "description": "Bind a component prop to a reactive signal key.\n\nExample::\n    ui.Badge(\n        text=ui.Signal(\"deploy:status\", default=\"idle\"),\n        color=ui.Signal(\"deploy:color\", default=\"gray\")\n    )",
+      "enums": {},
+      "kind": "ui_component",
+      "params": [
+        {
+          "annotation": "str",
+          "default": null,
+          "name": "key",
+          "required": true,
+          "type": {
+            "ref": "str"
+          }
+        },
+        {
+          "annotation": "Any",
+          "default": null,
+          "name": "default",
+          "required": false,
+          "type": {
+            "ref": "Any"
           }
         }
       ],

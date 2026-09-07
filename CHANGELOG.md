@@ -2,6 +2,28 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.15.0 — 2026-09-07
+
+### Added
+- **Reactive Signals Protocol (`ctx.signals` & `ui.signals`)**:
+  - `ctx.signals.emit(key, value, **metadata)` emits state updates to local in-process subscribers and broadcasts across the Imperal event bus via gateway SSE/WebSocket.
+  - `@ext.signal(key)` declarative handler decorator for subscriptions.
+  - `ui.signal_prop(signal_key, default)` dynamic declarative UI binding that auto-updates in frontend renderers without full panel re-fetch.
+- **Unified Action Ledger, Evidence & Time-Travel (`ActionResult`)**:
+  - `ActionResult` gains `state_snapshot`, `compensating_action`, and `can_undo` properties.
+  - Full support for verifiable state reversal, audit compliance, and undo actions in user-facing timelines.
+- **Cross-Extension Typed Piping (`@ext.pipe` & `Pipe`)**:
+  - Declarative pipeline composition allowing output of one extension tool to pipe directly into another with typed transformation steps.
+- **Agent Co-Presence & Ghost States (`ui.Ghost` & `ui.AgentPresence`)**:
+  - `ui.Ghost(child, reason, pulse, opacity)` declarative wrapper to visually ghost UI elements while an agent or task is modifying them.
+  - `ui.AgentPresence(status, action, progress, avatar)` component for real-time agent presence indicators.
+- **Spatial Topology Canvas (`ui.Canvas`)**:
+  - `ui.Canvas(nodes, edges, height, show_minimap)` spatial graph renderer with node metrics, health status, latency, and interactive click handlers.
+- **Semantic Omnisearch Integration (`@ext.search_provider`)**:
+  - First-class semantic omnisearch registration via `search_providers` manifest schema.
+- **Stale-While-Revalidate Panel Caching**:
+  - Declarative `@ext.panel(stale_while_revalidate=True, cache_ttl=60)` caching semantics for ultra-responsive panel rendering.
+
 ## 5.14.0 — 2026-09-07
 
 ### Added

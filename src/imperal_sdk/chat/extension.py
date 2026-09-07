@@ -56,6 +56,8 @@ class FunctionDef:
     chain_callable: bool = True  # platform uses typed dispatch
     effects: list[str] = field(default_factory=list)  # ["create:note", "delete:folder", ...]
     id_projection: str = ""  # params field carrying resolved target id
+    inputs: list[str] = field(default_factory=list)  # declared input types/ports for Unix piping
+    outputs: list[str] = field(default_factory=list)  # declared output types/ports for Unix piping
     background: bool = False  # advisory per-tool hint; kernel does not consume this decorator field (runtime path: ctx.background_task(long_running=…))
     long_running: bool = False  # advisory per-tool hint; kernel does not consume this decorator field
     _pydantic_model: type | None = None  # auto-detected Pydantic BaseModel class
@@ -118,6 +120,8 @@ class ChatExtension:
                  id_projection: str | None = None,
                  background: bool = False,
                  long_running: bool = False,
+                 inputs: list[str] | None = None,
+                 outputs: list[str] | None = None,
                  data_model: type | None = None,
                  ui_builder: bool = False):
         """Register a chat function.
@@ -264,6 +268,8 @@ class ChatExtension:
                 chain_callable=chain_callable,
                 effects=list(effects or []),
                 id_projection=id_projection or "",
+                inputs=list(inputs or []),
+                outputs=list(outputs or []),
                 background=background,
                 long_running=long_running,
                 _pydantic_model=_detected_model, _pydantic_param=_detected_param,

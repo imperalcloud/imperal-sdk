@@ -22,11 +22,17 @@ class ToolDef:
     func: Callable
     scopes: list[str] = field(default_factory=list)
     description: str = ""
+    # Cross-Extension Unix Piping (Point 3)
+    inputs: list[str] = field(default_factory=list)
+    outputs: list[str] = field(default_factory=list)
 
 @dataclass
 class SignalDef:
     name: str
     func: Callable
+    # Cross-Extension Unix Piping (Point 3)
+    inputs: list[str] = field(default_factory=list)
+    outputs: list[str] = field(default_factory=list)
 
 @dataclass
 class ScheduleDef:
@@ -211,6 +217,7 @@ class Extension:
         self._health_check: HealthCheckDef | None = None
         self._webhooks: dict[str, WebhookDef] = {}
         self._oauth_providers: dict[str, OAuthDef] = {}
+        self._search_providers: dict[str, Any] = {}
         self._event_handlers: list[EventHandlerDef] = []
         self._declared_emits: list[EmitsDef] = []
         self._exposed: dict[str, ExposedMethod] = {}
@@ -691,6 +698,18 @@ class Extension:
             return func
         return decorator
 
+    def search_provider(self, entity_type: str, description: str = ""):
+        """Register a semantic search provider for OS-level omnisearch (Cmd+K)."""
+        from .search import SearchProviderDef
+        def decorator(func: Callable) -> Callable:
+            self._search_providers[entity_type] = SearchProviderDef(
+                entity_type=entity_type,
+                func=func,
+                description=description or f"Search provider for {entity_type}",
+            )
+            return func
+        return decorator
+
     def on_event(self, event_type: str):
         """Subscribe to a platform event."""
         def decorator(func: Callable) -> Callable:
@@ -887,7 +906,10 @@ class Extension:
 
     def panel(self, panel_id: str, slot: str = "center", title: str = "",
               icon: str = "", refresh: str = "manual",
-              center_overlay: bool = False, **kwargs):
+              center_overlay: bool = False,
+              stale_while_revalidate: bool = True,
+              cache_ttl: int = 60,
+              **kwargs):
         """Declare a UI panel. Handler returns UINode tree.
         Panel fetched via /call endpoint with function __panel__{panel_id}.
 
@@ -924,6 +946,8 @@ class Extension:
             self._panels[panel_id] = {
                 "slot": slot, "title": title, "icon": icon,
                 "refresh": refresh, "center_overlay": center_overlay,
+                "stale_while_revalidate": stale_while_revalidate,
+                "cache_ttl": cache_ttl,
                 **kwargs,
             }
             return func

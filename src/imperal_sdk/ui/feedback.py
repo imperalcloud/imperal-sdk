@@ -212,3 +212,49 @@ def Error(message: str, title: str = "Error", retry: UIAction | None = None) -> 
     props: dict[str, Any] = {"message": message, "title": title}
     if retry: props["retry"] = retry
     return UINode(type="Error", props=props)
+
+
+def Ghost(
+    child: UINode,
+    *,
+    reason: str = "Webbee executing...",
+    pulse: bool = True,
+    opacity: float = 0.6,
+) -> UINode:
+    """Live Agentic Ghost state wrapping a UI component during agent operations.
+
+    Renders the wrapped component in a semi-transparent, pulsating state with
+    an optional agent execution badge or tooltip, indicating that Webbee or
+    a background task is actively working on it.
+    """
+    return UINode(
+        type="Ghost",
+        props={
+            "child": child,
+            "reason": reason,
+            "pulse": pulse,
+            "opacity": opacity,
+        },
+    )
+
+
+def AgentPresence(
+    status: str = "active",
+    action: str = "",
+    progress: int | None = None,
+    avatar: str = "🐝",
+) -> UINode:
+    """Live Agentic Co-Presence indicator for workspace headers and cards.
+
+    status: 'idle' | 'thinking' | 'executing' | 'completed' | 'failed'
+    action: Short phrase explaining current agentic intent (e.g. 'Deploying release 5.14')
+    progress: Optional integer percentage (0-100)
+    """
+    props: dict[str, Any] = {
+        "status": status,
+        "action": action,
+        "avatar": avatar,
+    }
+    if progress is not None:
+        props["progress"] = progress
+    return UINode(type="AgentPresence", props=props)

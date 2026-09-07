@@ -250,6 +250,7 @@ class Context:
         # from the clients the kernel ALREADY injected means these work the
         # day the SDK is installed — the same trick ``ctx.cache`` uses.
         self._gw_namespaces: dict = {}
+        self._signals = None
 
     # ------------------------------------------------------------------
     # Gateway URL / service-token derivation for ctx.cache.
@@ -336,6 +337,16 @@ class Context:
         )
         self._gw_namespaces[name] = client
         return client
+
+    @property
+    def signals(self):
+        """Reactive state signals client (ctx.signals.emit)."""
+        if self._signals is None:
+            from imperal_sdk.signals.client import SignalsClient
+            gw = self._gateway_url or self._derive_gateway_url()
+            svc = self._service_token or self._derive_service_token()
+            self._signals = SignalsClient(gateway_url=gw, service_token=svc)
+        return self._signals
 
     @property
     def conversations(self):

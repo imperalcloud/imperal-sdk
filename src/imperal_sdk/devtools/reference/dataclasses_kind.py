@@ -25,7 +25,7 @@ from imperal_sdk.devtools.reference._introspect import (
 _TYPES = (
     "ActionResult", "ToolDef", "ScheduleDef", "WebhookDef", "LifecycleHook",
     "HealthCheckDef", "EventHandlerDef", "TrayDef", "ExposedMethod",
-    "SignalDef", "Page", "Document", "HTTPResponse", "ChatResult",
+    "SignalDef", "PipeStep", "Page", "Document", "HTTPResponse", "ChatResult",
     "FunctionCall", "CompletionResult", "LimitsResult", "SubscriptionInfo",
     "BalanceInfo", "FileInfo", "MeteredEvent", "Event", "WebhookRequest",
     "WebhookResponse", "HealthStatus",

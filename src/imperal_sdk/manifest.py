@@ -206,6 +206,12 @@ def generate_manifest(ext: Extension) -> dict:
             s.model_dump() for s in ext._file_sinks.values()
         ]
 
+    # Semantic Omnisearch (5.15) — emit declared search providers
+    if getattr(ext, "_search_providers", None):
+        manifest["search_providers"] = [
+            sp.to_manifest() for sp in ext._search_providers.values()
+        ]
+
     # Ф2 — emit the ui.* surface into the contract (additive). Always present
     # (possibly empty []) so the key shape is stable. ``tree`` is serialized
     # only for panels declaring a STATIC ui tree via @ext.panel(..., tree=...);

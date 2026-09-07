@@ -6,12 +6,14 @@ from typing import Any
 
 
 def _serialize(v: Any) -> Any:
-    """Recursively serialize UINode/UIAction/list/dict to JSON-safe types."""
+    """Recursively serialize UINode/UIAction/UISignal/list/dict to JSON-safe types."""
     if v is None:
         return None
     if isinstance(v, UINode):
         return v.to_dict()
     if isinstance(v, UIAction):
+        return v.to_dict()
+    if hasattr(v, "to_dict") and getattr(v, "__class__", None).__name__ == "UISignal":
         return v.to_dict()
     if isinstance(v, list):
         return [_serialize(item) for item in v]

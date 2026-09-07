@@ -1,7 +1,7 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from typing import TYPE_CHECKING
 
-__version__ = "5.14.0"
+__version__ = "5.15.0"
 
 # 5.2.2 (2026-06-11): the package root resolves its public surface lazily
 # (PEP 562). The eager imports pulled the HTTP transport (Context / client
@@ -20,6 +20,9 @@ _LAZY_ATTRS = {
     "ToolDef": "imperal_sdk.extension",
     "SignalDef": "imperal_sdk.extension",
     "ScheduleDef": "imperal_sdk.extension",
+    "Pipe": "imperal_sdk.pipes",
+    "ExtensionPipe": "imperal_sdk.pipes",
+    "PipeStep": "imperal_sdk.pipes",
     "LifecycleHook": "imperal_sdk.extension",
     "HealthCheckDef": "imperal_sdk.extension",
     "WebhookDef": "imperal_sdk.extension",
@@ -178,6 +181,7 @@ def __dir__():
 __all__ = [
     # Core
     "Extension", "ToolDef", "SignalDef", "ScheduleDef",
+    "Pipe", "ExtensionPipe", "PipeStep",
     "LifecycleHook", "HealthCheckDef", "WebhookDef", "EventHandlerDef", "ExposedMethod", "TrayDef",
     "Context", "ImperalAuth", "AuthError",
     "User", "UserContext", "Tenant", "TenantContext",

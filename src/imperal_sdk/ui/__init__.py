@@ -22,14 +22,16 @@ from .data import (
 )
 from .display import Text, Icon, Header, Image, Code, Markdown, Empty, Divider, Html, Video, Audio
 from .interactive import Button, BackButton, Card, Menu, Modal, MODAL_SIZES, Dialog, Tooltip, Link, SlideOver
-from .feedback import Alert, Toast, Progress, Chart, Loading, Error
+from .feedback import Alert, Toast, Progress, Chart, Loading, Error, Ghost, AgentPresence
 from .input_components import (
     Input, Password, Form, Select, MultiSelect, Toggle,
     Slider, DatePicker, FileUpload, TextArea, RichEditor, TagInput,
     Checkbox, RadioGroup,
 )
 from .graph import Graph
+from .canvas import Canvas, CanvasNode, CanvasEdge
 from .actions import Call, Navigate, Send, Open, TrayResponse
+from .signals import Signal, UISignal
 from .theme import theme, AgencyTheme, ColorPair
 
 __all__ = [
@@ -45,15 +47,16 @@ __all__ = [
     # extensions already shipped against it (2026-08-15).
     "Button", "BackButton", "Card", "Menu", "Modal", "MODAL_SIZES", "Dialog", "Tooltip", "Link", "SlideOver",
     # Feedback
-    "Alert", "Toast", "Progress", "Chart", "Loading", "Error",
+    "Alert", "Toast", "Progress", "Chart", "Loading", "Error", "Ghost", "AgentPresence",
     # Input
     "Input", "Password", "Form", "Select", "MultiSelect", "Toggle",
     "Slider", "DatePicker", "FileUpload", "TextArea", "RichEditor", "TagInput",
     "Checkbox", "RadioGroup",
-    # Graph (Cytoscape-backed)
-    "Graph",
+    # Graph (Cytoscape-backed) & Spatial Canvas
+    "Graph", "Canvas", "CanvasNode", "CanvasEdge",
     # Actions
     "Call", "Navigate", "Send", "Open", "TrayResponse",
+    "Signal", "UISignal",
     # Theme
     "theme", "AgencyTheme", "ColorPair",
 ]

@@ -50,6 +50,10 @@ class ActionResult(Generic[T]):
     # the user MUST carry a stable code; a code-less error is stamped
     # EXT_UNSTRUCTURED_ERROR by the kernel at the dispatch boundary.
     error_code: str = ""
+    # Unified Action Ledger & Time-Travel (Point 2: undo / diff / receipt)
+    undo: Any | None = None
+    diff: dict[str, Any] | None = None
+    action_receipt: str | None = None
 
     @staticmethod
     def success(
@@ -58,6 +62,9 @@ class ActionResult(Generic[T]):
         *,
         ui: Any | None = None,
         refresh_panels: list[str] | None = None,
+        undo: Any | None = None,
+        diff: dict[str, Any] | None = None,
+        action_receipt: str | None = None,
     ) -> ActionResult[T]:
         """Create a success result.
 
@@ -68,11 +75,15 @@ class ActionResult(Generic[T]):
             ui: Optional inline UINode for rich chat rendering.
             refresh_panels: Optional list of panel IDs to refresh (e.g. ["sidebar"]).
                 If None, all panels refresh. If empty list [], no panels refresh.
+            undo: Optional UIAction or inverse call for Time-Travel rollback (Cmd+Z).
+            diff: Optional state transition dictionary {"field": (old_val, new_val)}.
+            action_receipt: Optional unique cryptographic receipt hash for ledger.
         """
         return ActionResult(
             status="success", data=data, summary=summary,
             error=None, retryable=False, ui=ui,
             refresh_panels=refresh_panels,
+            undo=undo, diff=diff, action_receipt=action_receipt,
         )
 
     @staticmethod
@@ -115,6 +126,12 @@ class ActionResult(Generic[T]):
             d["ui"] = self.ui.to_dict() if hasattr(self.ui, 'to_dict') else self.ui
         if self.refresh_panels is not None:
             d["refresh_panels"] = self.refresh_panels
+        if self.undo is not None:
+            d["undo"] = self.undo.to_dict() if hasattr(self.undo, "to_dict") else self.undo
+        if self.diff is not None:
+            d["diff"] = self.diff
+        if self.action_receipt is not None:
+            d["action_receipt"] = self.action_receipt
         return d
 
     @staticmethod
