@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.14.0 — 2026-09-07
+
+### Added
+- **Fail-safe environment fallback for gateway connection and tokens**: `Context._derive_gateway_url` and `Context._derive_service_token` now transparently fall back to `IMPERAL_GATEWAY_URL` and `IMPERAL_SERVICE_TOKEN` environment variables when running in isolated contexts, background workers, or CLI tools without pre-injected clients.
+
+### Fixed
+- **Loop-closure resilience in `_shared_http` connection pool**: Added active `loop.is_closed()` inspection to prevent `RuntimeError: Event loop is closed` across Temporal activity worker thread transitions and async event-loop recreation.
+
 ## 5.13.1 — 2026-08-29
 
 ### Fixed
