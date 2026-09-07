@@ -68,7 +68,7 @@ def get_shared_client() -> httpx.AsyncClient:
     if (
         _client is None
         or _client.is_closed
-        or (loop is not None and loop is not _client_loop)
+        or (loop is not None and (loop is not _client_loop or loop.is_closed()))
     ):
         _client = httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT, limits=_LIMITS)
         _client_loop = loop

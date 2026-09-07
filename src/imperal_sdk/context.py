@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the Apache-2.0 License. See LICENSE file for details.
 from __future__ import annotations
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -255,10 +256,15 @@ class Context:
     # ------------------------------------------------------------------
 
     def _derive_gateway_url(self) -> str:
+        # 1. Direct candidates from injected SDK clients
         for candidate in (self._raw_skeleton, self.store, self.notify):
             url = getattr(candidate, "_gateway_url", "") if candidate else ""
             if url:
                 return url
+        # 2. Invariant fallback: system env variable
+        env_gw = os.environ.get("IMPERAL_GATEWAY_URL", "").rstrip("/")
+        if env_gw:
+            return env_gw
         return ""
 
     def _derive_service_token(self) -> str:
@@ -272,6 +278,10 @@ class Context:
             tok = getattr(candidate, attr, "") if candidate else ""
             if tok:
                 return tok
+        # Invariant fallback: system env variable
+        env_tok = os.environ.get("IMPERAL_SERVICE_TOKEN", "")
+        if env_tok:
+            return env_tok
         return ""
 
     @property
