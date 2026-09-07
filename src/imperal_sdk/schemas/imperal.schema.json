@@ -509,6 +509,41 @@
       "title": "Schedule",
       "type": "object"
     },
+    "SearchProviderDecl": {
+      "additionalProperties": false,
+      "description": "One entry in `manifest['search_providers']` (5.15 Semantic Omnisearch).",
+      "properties": {
+        "entity_type": {
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "handler": {
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "title": "Handler",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "entity_type",
+        "handler"
+      ],
+      "title": "SearchProviderDecl",
+      "type": "object"
+    },
     "SecretDecl": {
       "additionalProperties": false,
       "description": "One entry in `manifest['secrets']` \u2014 EXT-SECRETS-V1 (v4.2.2+).\n\nMirrors :class:`imperal_sdk.secrets.spec.SecretSpec` after\n``to_manifest_dict()``. The Pydantic model exists so\n:func:`validate_manifest_dict` round-trips the emitted shape \u2014 closes\nthe `I-MANIFEST-EMITTER-SCHEMA-SYMMETRIC` drift gap that lived\nsilently from v4.2.2 \u2192 v4.2.7.",
@@ -1196,6 +1231,21 @@
       ],
       "default": null,
       "title": "File Sinks"
+    },
+    "search_providers": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SearchProviderDecl"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Search Providers"
     },
     "oauth": {
       "anyOf": [

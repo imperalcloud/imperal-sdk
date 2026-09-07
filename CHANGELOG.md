@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.15.1 — 2026-09-07
+
+### Fixed
+- **Manifest schema validation for Semantic Omnisearch (`search_providers`)**:
+  - Declared `SearchProviderDecl` and added `search_providers` to `Manifest` Pydantic model (`src/imperal_sdk/manifest_schema.py`).
+  - Added `search_providers` to `GENERATOR_OWNED_FIELDS` in `src/imperal_sdk/manifest.py`.
+  - Regenerated static JSON schema `src/imperal_sdk/schemas/imperal.schema.json` to prevent `[M3] [search_providers] Extra inputs are not permitted` failure during `imperal build` / `imperal validate`.
+
 ## 5.15.0 — 2026-09-07
 
 ### Added

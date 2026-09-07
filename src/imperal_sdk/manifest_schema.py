@@ -394,6 +394,16 @@ class SecretDecl(BaseModel):
         return self
 
 
+class SearchProviderDecl(BaseModel):
+    """One entry in `manifest['search_providers']` (5.15 Semantic Omnisearch)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_type: str = Field(..., pattern=r"^[a-z0-9_]{1,64}$")
+    handler: str = Field(..., pattern=r"^[a-z0-9_]{1,64}$")
+    description: Optional[str] = Field(default="", max_length=200)
+
+
 class FileSink(BaseModel):
     """One entry in ``manifest['file_sinks']`` — File Mage L3 (the mage).
 
@@ -500,6 +510,7 @@ class Manifest(BaseModel):
     # publish-time validators didn't gate through here).
     secrets: Optional[List[SecretDecl]] = None
     file_sinks: Optional[List[FileSink]] = None
+    search_providers: Optional[List[SearchProviderDecl]] = None
 
     # Unified OAuth-connect (2026-06-30). Additive list of provider declarations
     # the platform connects on the extension's behalf via the generic gateway

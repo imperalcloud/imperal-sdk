@@ -260,7 +260,7 @@ GENERATOR_OWNED_FIELDS = frozenset({
     "events", "exposed", "lifecycle", "lifecycle_hooks", "tray",
     "menu",
     "migrations_dir", "config_defaults", "secrets", "panels",
-    "file_sinks",
+    "file_sinks", "search_providers",
 })
 
 

@@ -184,6 +184,11 @@ def _build_canary_extension() -> Extension:
         description="Canary file destination exercising every file_sink field.",
     )
 
+    # Semantic Omnisearch 5.15 — search_providers[] emission site.
+    @ext.search_provider("canaries", description="Search canary entities.")
+    def _search_canaries(query: str):  # noqa: ARG001
+        return []
+
     @ext.panel("sidebar", slot="left", title="Canary", icon="Bug",
                refresh="30s", center_overlay=False,
                default_width=300, min_width=200, max_width=500,
