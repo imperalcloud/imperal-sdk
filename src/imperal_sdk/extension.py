@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
 # Licensed under the Apache-2.0 License. See LICENSE file for details.
 from __future__ import annotations
+import asyncio
 import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -1032,13 +1033,19 @@ class Extension:
         return self._panels
 
     async def call_tool(self, name: str, ctx: Any, **kwargs) -> Any:
-        """Call a registered tool with context."""
+        """Call a registered tool with context (Sync/Async Parity: runs sync in threadpool)."""
         if name not in self._tools:
             raise ValueError(f"Unknown tool: {name}")
-        return await self._tools[name].func(ctx, **kwargs)
+        fn = self._tools[name].func
+        if asyncio.iscoroutinefunction(fn):
+            return await fn(ctx, **kwargs)
+        return await asyncio.to_thread(fn, ctx, **kwargs)
 
     async def call_signal(self, name: str, ctx: Any, **kwargs) -> Any:
-        """Call a registered signal handler."""
+        """Call a registered signal handler (Sync/Async Parity: runs sync in threadpool)."""
         if name not in self._signals:
             raise ValueError(f"Unknown signal: {name}")
-        return await self._signals[name].func(ctx, **kwargs)
+        fn = self._signals[name].func
+        if asyncio.iscoroutinefunction(fn):
+            return await fn(ctx, **kwargs)
+        return await asyncio.to_thread(fn, ctx, **kwargs)

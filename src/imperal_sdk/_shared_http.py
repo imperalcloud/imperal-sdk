@@ -56,20 +56,25 @@ _LIMITS = httpx.Limits(
 def get_shared_client() -> httpx.AsyncClient:
     """Lazy per-process singleton ``httpx.AsyncClient`` (keepalive pool).
 
-    Loop-identity guard: pytest-asyncio and one-off ``asyncio.run`` tools
-    spin fresh event loops; a loop change transparently rebuilds the client
-    (the orphan dies with its loop).
+    Runtime-agnostic transport guard:
+    Pytest-asyncio, Celery workers, and one-off ``asyncio.run`` scripts spin
+    fresh event loops or invoke handlers in auxiliary threads.
+    A loop change or closed loop transparently rebuilds the client.
     """
     global _client, _client_loop
     try:
         loop: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
-    if (
-        _client is None
-        or _client.is_closed
-        or (loop is not None and (loop is not _client_loop or loop.is_closed()))
-    ):
+
+    needs_rebuild = False
+    if _client is None or _client.is_closed:
+        needs_rebuild = True
+    elif loop is not None:
+        if _client_loop is None or _client_loop.is_closed() or loop is not _client_loop:
+            needs_rebuild = True
+
+    if needs_rebuild:
         _client = httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT, limits=_LIMITS)
         _client_loop = loop
     return _client

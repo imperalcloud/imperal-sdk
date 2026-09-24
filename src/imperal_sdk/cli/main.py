@@ -68,6 +68,28 @@ def cli():
     pass
 
 
+@cli.group(name="sdk")
+def sdk_cli():
+    """Developer Experience & SDK commands (init, validate --fix, lint)."""
+    pass
+
+
+@sdk_cli.command(name="init")
+@click.argument("name")
+@click.option("--template", type=click.Choice(["chat", "tool"]), default="chat", help="Extension template")
+def sdk_init(name: str, template: str):
+    """Scaffold a new extension project (alias for imperal init)."""
+    return init.callback(name, template)
+
+
+@sdk_cli.command(name="validate")
+@click.argument("path", default=".")
+@click.option("--fix", is_flag=True, default=False, help="Automatically fix missing boilerplate in imperal.json")
+def sdk_validate(path: str, fix: bool = False):
+    """Validate extension with optional --fix for manifest boilerplate."""
+    return validate.callback(path, fix)
+
+
 @cli.command()
 @click.argument("name")
 @click.option("--template", type=click.Choice(["chat", "tool"]), default="chat", help="Extension template")
@@ -324,8 +346,21 @@ def build(path: str):
 
 @cli.command()
 @click.argument("path", default=".")
-def validate(path: str):
+@click.option("--fix", is_flag=True, default=False, help="Automatically fix missing boilerplate in imperal.json")
+def validate(path: str, fix: bool = False):
     """Validate extension against the current SDK federal rules (V1-V24+V31)."""
+    if fix:
+        from imperal_sdk.cli.linter import ManifestLinter
+        manifest_file = os.path.join(path, "imperal.json")
+        if os.path.exists(manifest_file):
+            errors, warnings, modified = ManifestLinter.lint_file(manifest_file, fix=True)
+            for w in warnings:
+                click.echo(f"  {w}")
+            if modified:
+                click.echo("✓ imperal.json was updated with missing schema boilerplate.")
+        else:
+            click.echo(f"Warning: no imperal.json found at {manifest_file}", err=True)
+
     original_dir = os.getcwd()
     try:
         os.chdir(path)

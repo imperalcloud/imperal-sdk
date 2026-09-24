@@ -56,6 +56,34 @@ class ActionResult(Generic[T]):
     action_receipt: str | None = None
 
     @staticmethod
+    def morph(
+        state: Any,
+        data: T | dict | None = None,
+        summary: str = "",
+        *,
+        refresh_panels: list[str] | None = None,
+        undo: Any | None = None,
+        diff: dict[str, Any] | None = None,
+        action_receipt: str | None = None,
+    ) -> ActionResult:
+        """Create an ActionResult carrying a Liquid Intent MorphingState.
+
+        The ICNLI surface projector adapts the MorphingState to the active surface
+        (terminal TUI, panel interactive cards, or mobile Telegram action cards).
+        """
+        summ = summary or getattr(state, "summary", "") or "Intent state updated."
+        return ActionResult(
+            status="success",
+            data=data or {},
+            summary=summ,
+            ui=state,
+            refresh_panels=refresh_panels,
+            undo=undo,
+            diff=diff,
+            action_receipt=action_receipt,
+        )
+
+    @staticmethod
     def success(
         data: T | dict,
         summary: str,

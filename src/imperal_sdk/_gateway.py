@@ -104,7 +104,8 @@ class GatewayClient:
                     params: dict | None = None,
                     json: dict | list | None = None,
                     timeout: float = DEFAULT_TIMEOUT,
-                    resource: str = "") -> Any:
+                    resource: str = "",
+                    transport: Any | None = None) -> Any:
         """One authenticated gateway call. Returns parsed JSON.
 
         Raises :class:`NotFoundError` on 404, :class:`AuthError` on 401/403,
@@ -119,6 +120,12 @@ class GatewayClient:
 
         url = f"{self._gateway_url}{path}"
         op = f"{method} {path}"
+
+        if transport is not None:
+            return await transport.request(
+                method, url, headers=self._headers(),
+                params=params, json_data=json, timeout=timeout, op=op,
+            )
 
         async def _once():
             async with shared_http(timeout=timeout) as client:

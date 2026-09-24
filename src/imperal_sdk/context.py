@@ -187,6 +187,19 @@ class Context:
     # endpoints.
     _tool_type: str = "tool"
     _call_token: str = ""
+
+    @property
+    def surface(self) -> str:
+        """The active client surface: 'terminal', 'panel', 'telegram', or 'ambient'.
+
+        Enables extensions to adapt their behavior and Liquid UI dynamically
+        on the fly based on the user's operational situation and active modality.
+        """
+        return (
+            self._metadata.get("surface")
+            or self._metadata.get("caller_surface")
+            or "panel"
+        )
     # Extension instance (for ctx.cache -> cache_model reverse lookup).
     # Populated by the kernel when constructing the Context; ``None`` in
     # minimal mock contexts.

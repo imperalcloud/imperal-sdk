@@ -2,6 +2,27 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 5.16.0 — 2026-09-25
+
+### Added
+- **Liquid Dynamic UI & Multi-Surface Adaptive Morphing (`imperal_sdk.ui.liquid`)**:
+  - `MorphingState`: Declarative semantic state of user intention, cognitive context (`CognitiveContext`), urgency, risk level, and available affordances (`Affordance`).
+  - Native surface projectors for `terminal` (numbered TUI shortcuts), `panel` (rich intent cards), `telegram` (compact mobile action cards), and `ambient`/voice.
+  - `ActionResult.morph(state, ...)` factory for on-the-fly state transitions across modalities.
+- **Situational Awareness & Surface Detection (`ctx.surface`)**:
+  - `Context.surface` property dynamically reporting the active user modality (`terminal`, `panel`, `telegram`, `ambient`) so extensions adapt logic on the fly.
+- **Imperal Core Primitives (`imperal_sdk.core`) — Zero-Dependency Foundation**:
+  - Pure stdlib primitives: `CancellationToken`, `StreamEmitter`, pure JSON Schema Draft-7 `SchemaValidator`, and lightweight `ICNLIComponent` constructors.
+- **Transparent Sync/Async Parity**:
+  - Automatic threadpool offload (`asyncio.to_thread`) for synchronous tool and signal handlers in `Extension.call_tool` / `call_signal`.
+- **Runtime-Agnostic Transport Isolation (`imperal_sdk.transport`)**:
+  - `GatewayTransport` protocol with `DefaultHttpTransport` (resilient connection pool, auto-healing on loop recreation) and `OfflineTransport` for hermetic testing.
+- **Autonomous Local Mocking Kit (`imperal_sdk.testing.autonomous_mock`)**:
+  - Offline zero-network mocks: `MockBilling`, `MockRBAC`, `MockAI`, and `MockStore` for lightning-fast hermetic E2E tests.
+- **Developer Experience (DX) CLI & Smart Manifest Linter**:
+  - `imperal sdk init <path>` command to scaffold standard compliant extensions.
+  - `imperal sdk validate <path> --fix` with `ManifestLinter` that auto-corrects schemas, category tags, search providers, and security defaults.
+
 ## 5.15.1 — 2026-09-07
 
 ### Fixed

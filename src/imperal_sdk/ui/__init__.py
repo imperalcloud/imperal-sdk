@@ -30,6 +30,7 @@ from .input_components import (
 )
 from .graph import Graph
 from .canvas import Canvas, CanvasNode, CanvasEdge
+from .liquid import MorphingState, Affordance, CognitiveContext
 from .actions import Call, Navigate, Send, Open, TrayResponse
 from .signals import Signal, UISignal
 from .theme import theme, AgencyTheme, ColorPair
@@ -54,6 +55,8 @@ __all__ = [
     "Checkbox", "RadioGroup",
     # Graph (Cytoscape-backed) & Spatial Canvas
     "Graph", "Canvas", "CanvasNode", "CanvasEdge",
+    # Liquid & Morphing Intent UI
+    "MorphingState", "Affordance", "CognitiveContext",
     # Actions
     "Call", "Navigate", "Send", "Open", "TrayResponse",
     "Signal", "UISignal",
