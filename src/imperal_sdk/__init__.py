@@ -1,7 +1,7 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from typing import TYPE_CHECKING
 
-__version__ = "5.16.0"
+__version__ = "6.0.0"
 
 # 5.2.2 (2026-06-11): the package root resolves its public surface lazily
 # (PEP 562). The eager imports pulled the HTTP transport (Context / client
@@ -16,6 +16,7 @@ __version__ = "5.16.0"
 # name -> defining module (resolved on first attribute access)
 _LAZY_ATTRS = {
     # Core
+    "App": "imperal_sdk.app",
     "Extension": "imperal_sdk.extension",
     "ToolDef": "imperal_sdk.extension",
     "SignalDef": "imperal_sdk.extension",
@@ -114,6 +115,7 @@ _LAZY_ATTRS = {
 # the generic fallback in __getattr__ preserves that surface).
 
 if TYPE_CHECKING:  # pragma: no cover — IDE / type-checker surface only
+    from imperal_sdk.app import App
     from imperal_sdk.extension import (
         Extension, ToolDef, SignalDef, ScheduleDef,
         LifecycleHook, HealthCheckDef, WebhookDef, EventHandlerDef, ExposedMethod, TrayDef,
@@ -180,7 +182,7 @@ def __dir__():
 
 __all__ = [
     # Core
-    "Extension", "ToolDef", "SignalDef", "ScheduleDef",
+    "App", "Extension", "ToolDef", "SignalDef", "ScheduleDef",
     "Pipe", "ExtensionPipe", "PipeStep",
     "LifecycleHook", "HealthCheckDef", "WebhookDef", "EventHandlerDef", "ExposedMethod", "TrayDef",
     "Context", "ImperalAuth", "AuthError",

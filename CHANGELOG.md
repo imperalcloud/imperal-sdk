@@ -2,6 +2,15 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.0.0 — 2026-09-26
+
+### Added
+- **ICNLI Quantum SDK v6.0 — The Universal Zero-Boilerplate Application Engine (`imperal_sdk.App`)**:
+  - `App(app_id, name, ...)`: High-level micro-footprint application builder, fully backward-compatible with `Extension`.
+  - `@app.tool(...)`: Zero-manifest tool decorator with automatic Type-to-Schema extraction from Python signatures, annotations, and docstrings.
+  - **Auto-IR (UI-as-Data) Engine (`imperal_sdk.auto_ui`)**: Automatic projection of Python return values (metric dicts, tables, lists) into reactive Declarative IR components without writing custom frontend templates.
+  - **Ambient Context Injection**: Seamless non-leaking injection of `ctx: Context` without polluting LLM function calling schemas.
+
 ## 5.16.0 — 2026-09-25
 
 ### Added
