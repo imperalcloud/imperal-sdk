@@ -63,3 +63,6 @@ __all__ = [
     # Theme
     "theme", "AgencyTheme", "ColorPair",
 ]
+
+from imperal_sdk.ui.stage import Stage
+__all__.append("Stage")
