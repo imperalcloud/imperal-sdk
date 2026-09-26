@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.0.1 — 2026-09-26
+
+### Added & Fixed
+- **Python 3.6 to 3.14+ Universal Compatibility**:
+  - `pyproject.toml`: lowered `requires-python` specification from `>=3.11` to `>=3.6`.
+  - Added Trove classifiers for Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14.
+  - Refactored `imperal_sdk.app` and `imperal_sdk.auto_ui` to clean Python 3.6-compliant syntax (removed `from __future__ import annotations`, replaced f-strings in core paths with `.format()`, ensured typing introspection fallbacks for Python 3.6 runtimes).
+  - Perfect compatibility with legacy MCP environments running Python 3.6+.
+
+## 6.0.0 — 2026-09-26
+
+### Added
+- **ICNLI Quantum SDK v6.0 — The Universal Zero-Boilerplate Application Engine (`imperal_sdk.App`)**:
+  - `App(app_id, name, ...)`: High-level micro-footprint application builder, fully backward-compatible with `Extension`.
+  - `@app.tool(...)`: Zero-manifest tool decorator with automatic Type-to-Schema extraction from Python signatures, annotations, and docstrings.
+  - **Auto-IR (UI-as-Data) Engine (`imperal_sdk.auto_ui`)**: Automatic projection of Python return values (metric dicts, tables, lists) into reactive Declarative IR components without writing custom frontend templates.
+  - **Ambient Context Injection**: Seamless non-leaking injection of `ctx: Context` without polluting LLM function calling schemas.
+
 ## 6.0.0 — 2026-09-26
 
 ### Added

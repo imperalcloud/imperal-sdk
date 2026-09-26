@@ -1,7 +1,7 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from typing import TYPE_CHECKING
 
-__version__ = "6.0.0"
+__version__ = "6.0.1"
 
 # 5.2.2 (2026-06-11): the package root resolves its public surface lazily
 # (PEP 562). The eager imports pulled the HTTP transport (Context / client
@@ -155,6 +155,15 @@ if TYPE_CHECKING:  # pragma: no cover — IDE / type-checker surface only
         SecretValueTooLarge, SecretDeclarationConflict,
     )
 
+
+
+import sys as _sys
+if _sys.version_info < (3, 7):
+    class _PEP562Module(_sys.modules[__name__].__class__):
+        def __getattr__(self, name):
+            return __getattr__(name)
+
+    _sys.modules[__name__].__class__ = _PEP562Module
 
 def __getattr__(name: str):
     import importlib

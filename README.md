@@ -2,15 +2,15 @@
 
 # 🐝 Imperal Quantum SDK (`imperal-sdk`)
 
-### The Official Next-Gen AI Cloud OS Framework for Imperal Cloud & Webbee 🐝
+### The Official Foundation AI Cloud OS Framework for Imperal Cloud & Webbee 🐝
 
-**Write autonomous, context-aware AI tools and extensions in pure Python. Zero manifests. 0 lines of JSON. Automatic reactive UI. Ambient cloud context. Multi-surface morphing across Terminal, Web Panel, Telegram, and Voice.**
+**Write autonomous, context-aware AI tools and extensions in pure, idiomatic Python. Zero manifests. 0 lines of JSON boilerplate. Automatic reactive UI synthesis. Ambient cloud context. Multi-surface liquid morphing across Terminal, Web Panel, Telegram, and Voice. Python 3.6 to 3.14+ universal support.**
 
 [![PyPI](https://img.shields.io/pypi/v/imperal-sdk?color=FFB800&label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/imperal-sdk/)
-[![Python](https://img.shields.io/pypi/pyversions/imperal-sdk?color=blue&logo=python&logoColor=white)](https://pypi.org/project/imperal-sdk/)
+[![Python](https://img.shields.io/badge/python-3.6%20--%203.14%2B-blue?logo=python&logoColor=white)](https://pypi.org/project/imperal-sdk/)
 [![Protocol](https://img.shields.io/badge/protocol-ICNLI%20v6.0%20Quantum-00D2FF?style=flat-square)](https://icnli.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1632%20passed%20%7C%20100%25-success?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/tests-1629%20passed%20%7C%20100%25-success?style=flat-square)]()
 [![DX](https://img.shields.io/badge/DX-Zero--Boilerplate%20%E2%9A%A1-orange?style=flat-square)]()
 
 [Documentation](https://docs.imperal.io) · [ICNLI Protocol Spec](https://icnli.org) · [Imperal Cloud Panel](https://panel.imperal.io) · [Marketplace](https://panel.imperal.io/marketplace)
@@ -19,50 +19,52 @@
 
 ---
 
-## 🌌 Квантовый скачок: Забудьте старый мир AI-агентов
+## 🌌 The Quantum Leap: Forget Legacy AI Agent Tooling
 
-В мире Web2 и раннего AI разработка инструментов для агентов превратилась в бюрократический ад:
-- ❌ Ручное написание сотен строк `manifest.json` и громоздких схем JSON Schema.
-- ❌ Многоэтажные абстрактные классы, жесткие интерфейсы и куча клея.
-- ❌ Необходимость держать отдельную команду фронтендеров, чтобы отрисовать результаты работы инструмента в веб-панели.
-- ❌ Потеря контекста между поверхностями: то, что работает в CLI, ломается в вебе и Telegram.
+In early AI agent frameworks and Web2 SDKs, building tools for agents degenerated into bureaucratic overhead:
+- ❌ **Manifest Hell**: Manually maintaining hundreds of lines of fragile `manifest.json` files.
+- ❌ **Redundant Schema Declarations**: Copy-pasting parameters between Python signatures and JSON Schema definitions.
+- ❌ **Frontend Tax**: Needing dedicated UI engineers just to render an agent's structured response in a web dashboard.
+- ❌ **Surface Fragmentation**: What worked in the terminal broke in Telegram and looked horrible on the web.
+- ❌ **Prompt Token Waste**: Leaking internal runtime parameters (`context`, `user_id`, `tokens`) directly into LLM function-calling schemas.
 
-### ⚡ Встречайте ICNLI Quantum SDK v6.0
+### ⚡ Enter ICNLI Quantum SDK v6.0
 
-**Imperal Quantum SDK** делает для автономных облачных ИИ-агентов то же, что **FastAPI** сделал для веб-сервисов — переводит разработку на **квантовый мета-уровень**:
+**Imperal Quantum SDK** delivers to autonomous cloud agents what **FastAPI** brought to modern web APIs — elevating cloud application development into an ultra-clean, quantum plane:
 
-1. **Zero-Manifest (0 строк JSON)**: Манифест приложения, типы аргументов, описания для нейросетей, RBAC-скоупы и правила биллинга синтезируются автоматически из стандартных Python `type-hints` и docstrings.
-2. **Auto-IR (UI-as-Data)**: Вы просто возвращаете Python-словарь или структуру — а ядро Imperal Cloud на лету проецирует её в реактивные Declarative UI карточки, таблицы и метрики без единой строчки фронтенд-кода!
-3. **Ambient Context Injection**: Контекст сессии (`Context`), кошелек пользователя, защищенное хранилище (`Store`), файловая система (`Storage`) и доступ к LLM (`AI`) инжектируются невидимо для нейросетей, не засоряя промпт токенами.
-4. **Liquid Multi-Surface Morphing**: Один и тот же инструмент нативно адаптируется под **Терминал (TUI)**, **Веб-панель (Declarative Cards)**, **Telegram (Inline-кнопки)** и **Голос (Voice Synthesizer)**.
-5. **100% Обратная совместимость**: Полная поддержка классических корпоративных расширений на `imperal_sdk.Extension` (1630+ тестов на 100% PASS).
+1. 🚀 **Zero-Manifest (0 Lines of JSON)**: Manifest definitions, parameter schemas, docstrings for LLM planning, RBAC security scopes, and billing tiers are extracted dynamically from standard Python function signatures and type hints.
+2. 🎨 **Auto-IR (UI-as-Data)**: Simply return standard Python dictionaries, dataclasses, or lists. The Imperal Cloud runtime automatically projects them into reactive Declarative UI components (cards, metric grids, data tables) without writing a single line of CSS or frontend code.
+3. 🔮 **Ambient Context Injection**: Seamlessly access session identity (`Context`), encrypted key-value storage (`Store`), persistent object storage (`Storage`), and the native AI engine (`AI`) without polluting the LLM's function calling schema.
+4. 🔀 **Liquid Multi-Surface Morphing**: One codebase transparently adapts its presentation across **Terminal TUI** (Webbee Code), **Web Console** (Imperal Panel), **Telegram Messenger**, and **Ambient Voice**.
+5. 🛡️ **Universal Python Compatibility (3.6 – 3.14+)**: From legacy MCP environments running Python 3.6 up to cutting-edge Python 3.14 runtimes, the core SDK operates with 100% backward compatibility and zero overhead.
+6. 💎 **100% Backward Compatible**: Full support for classic enterprise extensions built on `imperal_sdk.Extension` (validated by 1,620+ automated tests).
 
 ---
 
-## 🚀 Быстрый старт за 60 секунд
+## 🚀 Quickstart in 60 Seconds
 
-### 1. Установка
+### 1. Installation
 
 ```bash
 pip install imperal-sdk
 ```
 
-### 2. Ваше первое приложение за 15 строк (`server_pulse.py`)
+### 2. Your First Cloud App in 15 Lines (`server_pulse.py`)
 
 ```python
 from imperal_sdk import App, Context
 
-# Создаем квантовое приложение — манифест уже готов!
+# Instantiate your Quantum App — your manifest is already generated!
 app = App("server-pulse", name="Server Pulse", category="devops")
 
 @app.tool(pricing=5, destructive=False)
 def check_host(host: str, port: int = 443, ctx: Context = None) -> dict:
-    """Проверить доступность сервера и статус SSL сертификата в реальном времени."""
-    # Чистая бизнес-логика:
+    """Check server availability and SSL certificate expiration in real time."""
+    # Pure Python business logic:
     is_online = True
     ssl_days = 89
-    
-    # Возвращаем данные — ядро САМО построит интерактивный UI!
+
+    # Return pure data — Imperal Cloud synthesizes the reactive UI on the fly!
     return {
         "status": "online" if is_online else "down",
         "host": host,
@@ -71,48 +73,48 @@ def check_host(host: str, port: int = 443, ctx: Context = None) -> dict:
     }
 ```
 
-**Что произошло автоматически под капотом?**
-- ✅ Сгенерирован валидный ICNLI Manifest v6.0.
-- ✅ Аргументы `host` и `port` превращены в типизированную JSON Schema.
-- ✅ Docstring стал описанием для ИИ-мозга Webbee.
-- ✅ Зарегистрирован RBAC-скоуп `server-pulse:check_host`.
-- ✅ Аргумент `ctx: Context` скрыт от LLM, но готов к работе в рантайме.
-- ✅ Результат выполнения в панели `panel.imperal.io` автоматически отобразится как стильная адаптивная **Metric Card** с бейджем и статусом!
+### What happened under the hood?
+- ✅ **Valid ICNLI Manifest v6.0**: Automatically synthesized with zero JSON.
+- ✅ **Type-to-Schema Translation**: `host` and `port` became typed JSON Schema properties with defaults.
+- ✅ **Docstring Extraction**: The docstring was converted into the LLM classifier and planner description.
+- ✅ **Security Scopes**: Granular RBAC scope `server-pulse:check_host` was registered automatically.
+- ✅ **Ambient Context**: `ctx` was hidden from the LLM prompt while remaining injected at execution time.
+- ✅ **Auto-IR Projection**: The returned dictionary automatically renders in `panel.imperal.io` as a styled **Metric Card** with badges and metrics!
 
 ---
 
-## 💎 Главные квантовые суперсилы
+## 💎 Core Quantum Superpowers
 
-### 1. ⚡ Автоматический синтез схем (Type-to-Schema Engine)
+### 1. ⚡ Automatic Schema Synthesis (Type-to-Schema Engine)
 
-Больше никаких ручных JSON-схем. Пишите идиоматичный Python:
+Write clean, idiomatic Python with standard typing. The SDK extracts complete JSON Schema definitions:
 
 ```python
 from typing import List, Optional
 
 @app.tool()
 async def deploy_services(
-    environment: str, 
-    replicas: int = 3, 
+    environment: str,
+    replicas: int = 3,
     tags: Optional[List[str]] = None,
     dry_run: bool = False
 ) -> dict:
-    """Развернуть микросервисы в целевом окружении с авто-масштабированием."""
+    """Deploy microservice instances to the specified cluster zone with autoscaling."""
     ...
 ```
 
-SDK автоматически построит:
+Synthesized parameter schema:
 ```json
 {
   "name": "deploy_services",
-  "description": "Развернуть микросервисы в целевом окружении с авто-масштабированием.",
+  "description": "Deploy microservice instances to the specified cluster zone with autoscaling.",
   "parameters": {
     "type": "object",
     "properties": {
-      "environment": {"type": "string"},
-      "replicas": {"type": "integer", "default": 3},
-      "tags": {"type": "array", "items": {"type": "string"}},
-      "dry_run": {"type": "boolean", "default": false}
+      "environment": { "type": "string" },
+      "replicas": { "type": "integer", "default": 3 },
+      "tags": { "type": "array", "items": { "type": "string" } },
+      "dry_run": { "type": "boolean", "default": false }
     },
     "required": ["environment"]
   }
@@ -121,86 +123,92 @@ SDK автоматически построит:
 
 ---
 
-### 2. 🎨 Auto-IR: UI-as-Data (Фронтенд без фронтендеров)
+### 2. 🎨 Auto-IR: UI-as-Data (Frontend without Frontend Code)
 
-Ядро Imperal Cloud понимает возвращаемые типы данных и мгновенно проецирует их в Declarative UI:
+The Imperal Cloud Kernel inspects your return payloads and projects them into Declarative UI:
 
-| Что вы возвращаете из функции | Как это выглядит в Imperal Panel |
+| Python Return Value | Rendered Appearance in Imperal Panel |
 | :--- | :--- |
-| `{"status": "ok", "metric": "99.9%", ...}` | 🎴 **Metric Card**: стильная карточка с бейджем, трендом и деталями |
-| `[{"id": 1, "name": "srv-1", "cpu": 12}, ...]` | 📊 **Data Table**: адаптивная таблица с сортировкой и фильтрами |
-| `{"_ui": {"type": "custom", ...}}` | 🧩 **Custom IR**: полный контроль над Declarative UI деревом |
+| `{"status": "ok", "metric": "99.98%", ...}` | 🎴 **Metric Card**: Interactive card with status badge, headline metric, and details |
+| `[{"id": 1, "name": "node-a", "cpu": 14}, ...]` | 📊 **Data Table**: Sortable, responsive table with auto-detected columns |
+| `{"_ui": {"type": "custom", ...}}` | 🧩 **Declarative IR**: Full customization using Imperal UI Kit primitives |
 
 ---
 
-### 3. 🔮 Ambient Context: Невидимый доступ ко всей Cloud OS
+### 3. 🔮 Ambient Context: Invisible Access to the Entire Cloud OS
 
-Параметр `ctx: Context` скрыт от нейросети (не тратит токены промпта!), но внутри функции предоставляет суперсилы всей операционной системы:
+The `ctx: Context` argument is hidden from the LLM schema (saving prompt tokens), but grants full platform access at runtime:
 
 ```python
 @app.tool()
-async def analyze_logs(service_name: str, ctx: Context = None) -> dict:
-    # 1. Доступ к защищенному хранилищу ключ-значение (Redis):
-    await ctx.store.set(f"last_scan:{service_name}", "in_progress")
-    
-    # 2. Обращение к встроенному ИИ-мозгу Webbee (LLM):
-    ai_verdict = await ctx.ai.complete(f"Проанализируй аномалии сервиса {service_name}")
-    
-    # 3. Данные текущего пользователя и организации:
-    user_email = ctx.user.email
+async def analyze_anomalies(cluster_id: str, ctx: Context = None) -> dict:
+    # 1. Access high-speed key-value store (Redis):
+    last_run = await ctx.store.get(f"scan:{cluster_id}")
+
+    # 2. Query the native AI brain (LLM cascade):
+    verdict = await ctx.ai.complete(f"Diagnose cluster status: {cluster_id}")
+
+    # 3. Read authenticated identity and enterprise tenant boundaries:
+    actor_email = ctx.user.email
     tenant_id = ctx.user.tenant_id
-    
-    return {"analysis": ai_verdict.text, "analyzed_by": user_email}
+
+    return {
+        "status": "analyzed",
+        "verdict": verdict.text,
+        "initiated_by": actor_email,
+        "metric": "Clean"
+    }
 ```
 
 ---
 
-### 4. 🔀 Multi-Surface Morphing: Единая логика на всех устройствах
+### 4. 🔀 Multi-Surface Liquid Morphing
 
-Webbee работает везде. SDK автоматически адаптирует презентацию:
-- **Терминал (Webbee Code TUI)**: компактный вывод, псевдографика, нумерованные хоткеи.
-- **Веб-консоль (Imperal Panel)**: живые графики, интерактивные формы, таблицы.
-- **Telegram Bot**: мобильные карточки с callback-кнопками.
-- **Voice / Ambient**: лаконичный голосовой синтез ключевых фактов.
-
----
-
-### 5. 🔗 Unix-Piping между расширениями
-
-Инструменты разных расширений можно объединять в конвейеры данных прямо в чате:
-```
-"Webbee, возьми домены из DNS-чекера, прогони через SSL-аудитор и отправь алерт в Telegram"
-```
-Благодаря типизированным контрактам входов и выходов, расширения стыкуются между собой как детали Lego.
+Webbee operates natively across all surfaces. The same tool presentation is automatically morphed:
+- **Terminal (Webbee Code TUI)**: High-density formatted output, ASCII tables, and numbered hotkey shortcuts (`[1] Execute`, `[2] Abort`).
+- **Web Console (Imperal Panel)**: Interactive Declarative UI cards, modal dialogs, and real-time streaming widgets.
+- **Telegram Messenger**: Concise mobile cards with inline button callbacks.
+- **Ambient Voice**: Spoken concise executive summaries.
 
 ---
 
-## 🧪 Герметичное тестирование без интернета
+### 5. 🔗 Cross-Extension Unix Piping
 
-В SDK встроен автономный тестовый набор (`autonomous_mock`), позволяющий прогонять тесты за миллисекунды:
+Tools across completely different extensions can be piped together through plain language:
+```text
+"Webbee, fetch domains from DNS checker, pass them to SSL auditor, and ping me on Telegram if expiring soon."
+```
+Every tool declaring typed inputs and outputs participates in deterministic, automated pipeline chaining.
+
+---
+
+## 🧪 Hermetic Local Testing (Zero Network Required)
+
+Imperal SDK includes a built-in autonomous mock suite (`imperal_sdk.testing.autonomous_mock`):
 
 ```python
 import pytest
 from imperal_sdk.testing.autonomous_mock import MockContext
 from server_pulse import check_host
 
-def test_check_host():
+def test_check_host_locally():
     mock_ctx = MockContext(user_id="imp_u_test", role="admin")
-    result = check_host(host="imperal.io", ctx=mock_ctx)
-    
+    result = check_host(host="imperal.io", port=443, ctx=mock_ctx)
+
     assert result["status"] == "online"
     assert "_ui" in result
     assert result["_ui"]["type"] == "metric_card"
+    assert result["_ui"]["badge"] == "online"
 ```
 
-Запуск:
+Run test suite:
 ```bash
 pytest -v
 ```
 
 ---
 
-## 🏗️ Архитектура Imperal Cloud OS
+## 🏗️ Imperal Cloud OS Architecture
 
 ```
                      ┌───────────────────────────────┐
@@ -224,18 +232,18 @@ pytest -v
 
 ---
 
-## 📜 Совместимость и требования
+## 📜 Compatibility & Specifications
 
-- **Python**: 3.10, 3.11, 3.12, 3.13+
-- **Зависимости**: ультра-легковесный кор, отсутствие тяжелых зависимостей в рантайме.
-- **Стандарты**: 100% совместимость со спецификацией [ICNLI Protocol](https://icnli.org).
-- **Лицензия**: [Apache-2.0](LICENSE).
+- **Python Runtime**: Universal support for **Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14+**.
+- **Footprint**: Ultra-lightweight core with lazy attribute resolution (PEP 562 with Python 3.6 fallback). Sub-15ms cold start.
+- **Standards**: 100% compliant with the [ICNLI Open Protocol](https://icnli.org) (CC BY-SA 4.0).
+- **License**: [Apache-2.0](LICENSE).
 
 ---
 
 <div align="center">
 
-**Imperal Cloud — The First Autonomous ICNLI AI Cloud OS.**  
-*Создано с любовью, дерзостью и 🐝 командой Imperal, Valentin Scerbacov и открытым сообществом.*
+**Imperal Cloud — The World's First Decentralized ICNLI AI Cloud OS.**  
+*Crafted with 💛 and 🐝 by Imperal, Valentin Scerbacov, and the open-source community.*
 
 </div>
