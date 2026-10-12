@@ -1,7 +1,7 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from typing import TYPE_CHECKING
 
-__version__ = "6.0.1"
+__version__ = "6.0.2"
 
 # 5.2.2 (2026-06-11): the package root resolves its public surface lazily
 # (PEP 562). The eager imports pulled the HTTP transport (Context / client
@@ -48,6 +48,19 @@ _LAZY_ATTRS = {
     # hand-roll a token_refresh.py; four divergent copies are how an expired
     # Google Analytics token turned into "please reconnect" (2026-08-21).
     "fresh_token": "imperal_sdk.oauth_tokens",
+    # GNC Marathon Resilience & Tenant Vault Working RAM (ICNLI V17)
+    "TenantVaultRAM": "imperal_sdk.vault_ram_client",
+    "TargetEntity": "imperal_sdk.vault_ram_client",
+    "WorkingRAMSnapshot": "imperal_sdk.vault_ram_client",
+    "GNCLyapunovGuard": "imperal_sdk.gnc_guard",
+    "GNCEnergyState": "imperal_sdk.gnc_guard",
+    "BOMExtractor": "imperal_sdk.bom_extractor",
+    "BOMEntity": "imperal_sdk.bom_extractor",
+    "BOMReport": "imperal_sdk.bom_extractor",
+    "AdversarialOracle": "imperal_sdk.adversarial_oracle",
+    "OracleAuditResult": "imperal_sdk.adversarial_oracle",
+    "CrossSurfaceLiveBus": "imperal_sdk.cross_surface_bus",
+    "MarathonLiveEvent": "imperal_sdk.cross_surface_bus",
     "with_fresh_token": "imperal_sdk.oauth_tokens",
     "needs_refresh": "imperal_sdk.oauth_tokens",
     "TokenRefreshError": "imperal_sdk.oauth_tokens",
