@@ -9,7 +9,7 @@ def test_stage_initialization():
         title="Cluster Telemetry",
         content=ui.Stat(label="Health", value="100%", color="green"),
         hotkeys={"1": "rebalance", "q": "quit"},
-        receipt=lambda res: f"ceph.rebalanced: {res["freed"]} freed ✓",
+        receipt=lambda res: f"ceph.rebalanced: {res['freed']} freed ✓",
         command="ceph.cluster"
     )
 
@@ -26,7 +26,7 @@ def test_stage_receipt_generation():
     stage = Stage(
         id="proxy-redirect",
         title="Redirect Rules",
-        receipt=lambda res: f"proxy.redirect: {res["from"]} -> {res["to"]} [42ms] ✓"
+        receipt=lambda res: f"proxy.redirect: {res['from']} -> {res['to']} [42ms] ✓"
     )
     receipt_str = stage.generate_receipt({"from": "/blackfriday", "to": "/pricing"})
     assert receipt_str == "proxy.redirect: /blackfriday -> /pricing [42ms] ✓"
