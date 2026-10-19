@@ -51,3 +51,27 @@ def test_nested_def_inside_class_still_discovered_after_name_exclusion():
     assert {"Gamma", "method"} <= names
     assert "other" in fi.refs        # the call inside the method body is still a ref
     assert "method" not in fi.refs   # but the method's own name is not
+
+
+def test_build_index_stays_inside_the_root(tmp_path):
+    import os
+    from imperal_sdk.code_index import build_index
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "a.py").write_text("def a():\n    return 1\n")
+    outside = tmp_path / "secret.py"
+    outside.write_text("def leaked():\n    pass\n")
+    os.symlink(outside, root / "link.py")
+    idx = build_index(str(root), ["a.py", "../secret.py", str(outside), "link.py"])
+    assert set(idx.files) == {"a.py"}
+
+
+def test_ts_schema_regex_is_bounded():
+    import time
+    from imperal_sdk.code_index import _TS_SCHEMA
+    text = "interface X extends " + "a" * 200000
+    t0 = time.monotonic()
+    _TS_SCHEMA.findall(text)
+    assert time.monotonic() - t0 < 2.0
+    m = _TS_SCHEMA.search("export interface User { id: string; name?: string }")
+    assert m and m.group(1) == "User" and "id" in m.group(2)

@@ -220,7 +220,7 @@ _TS_ENDPOINT = re.compile(
 )
 _TS_SCHEMA = re.compile(
     r"(?ms)\b(?:export\s+)?(?:interface|type|class)\s+([A-Za-z_$][\w$]*)"
-    r"(?:\s+extends[^\{=]+)?\s*(?:\{|=\s*\{)(.*?)\}"
+    r"(?:\s+extends[^\{=]{1,500})?\s*(?:\{|=\s*\{)([^}]{0,20000})\}"
 )
 _TS_FIELD = re.compile(r"(?m)^\s*([A-Za-z_$][\w$]*)\s*\??\s*:")
 
@@ -417,9 +417,15 @@ def parse_file(path: str, text: str) -> FileIndex | None:
 
 def build_index(root: str, files: list[str]) -> ProjectIndex:
     idx = ProjectIndex()
+    base = os.path.realpath(root)
     for rel in files:
+        path = os.path.join(base, rel)
+        real = os.path.realpath(path)
+        # stay inside the root: no absolute or ``..`` escapes, no symlink leaving it
+        if os.path.isabs(rel) or os.path.islink(path) or os.path.commonpath([base, real]) != base:
+            continue
         try:
-            with open(os.path.join(root, rel), "r", encoding="utf-8") as f:
+            with open(real, "r", encoding="utf-8") as f:
                 text = f.read()
         except (OSError, UnicodeDecodeError):
             continue

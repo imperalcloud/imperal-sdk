@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.1.1 — 2026-10-20
+
+### Fixed
+- `code_index.build_index` stays inside its root: absolute paths, `..` escapes and symlinks
+  leaving the root are skipped.
+- `code_index` TypeScript schema matching is bounded (no catastrophic backtracking on large
+  files without a closing brace).
+
 ## 6.1.0 — 2026-10-20
 
 ### Added
