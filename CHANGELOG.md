@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.1.0 — 2026-10-20
+
+### Added
+- **`imperal_sdk.code_index`** — the code index extractor (one code file -> its symbols,
+  imports, references, endpoints and schemas), moved here unchanged from the Webbee Code client
+  (`webbee/intel/models.py`, `contracts.py`, `indexer.py`) so the client and the Imperal kernel
+  share one extractor. Parsing needs the new optional extra `code-index` (tree-sitter).
+
 ## 6.0.1 — 2026-09-26
 
 ### Added & Fixed
