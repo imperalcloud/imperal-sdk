@@ -2,6 +2,22 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.0 — 2026-10-20
+
+### Added
+- **One sync for every source** (code graph phases 2-7): `sync_source(plan, apply, meta, listing, read)`
+  — the vault plans what changed, only those files are read, normalised, hashed, extracted and sent
+  in size-bounded batches (`apply_batches`); an unchanged repo refreshes its copy with a meta-only apply.
+- The SFTP walk shared by the gateway broker and the client: `sftp_repo_root`, `sftp_list_tree`
+  (`.gitignore`, secrets, dependency dirs and symlinks leaving the root skipped; Windows SFTP paths),
+  `sftp_read_many`, `sftp_read_meta` — reads only, no exec channel, nothing written.
+- `git_identity(meta)`: remote, branch and commit from `.git/HEAD`, `config`, loose refs and
+  packed-refs bytes (no git binary).
+- Chunks and vectors moved from the Webbee Code client: `Chunk`, `chunk_text`, `chunk_file`,
+  `chunk_index`, `chunk_blob`, `chunks_for`, `embed`, `embed_query`, `load_backend`
+  (model2vec `potion-base-8M`, else fastembed).
+- New optional extra `code-index-embed` (model2vec, numpy).
+
 ## 6.2.0 — 2026-10-20
 
 ### Added

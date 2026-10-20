@@ -69,6 +69,11 @@ code-index = [
     'tree-sitter-typescript>=0.23; sys_platform != "darwin" or platform_machine != "x86_64" or python_version < "3.13"',
     'tree-sitter-javascript>=0.23; sys_platform != "darwin" or platform_machine != "x86_64" or python_version < "3.13"',
 ]
+# imperal_sdk.code_index.embed / embed_query: the code index's vectors (model2vec, pure numpy).
+code-index-embed = [
+    'model2vec>=0.8.2; sys_platform != "darwin" or platform_machine != "x86_64" or python_version < "3.13"',
+    'numpy>=2; sys_platform != "darwin" or platform_machine != "x86_64" or python_version < "3.13"',
+]
 
 [project.scripts]
 imperal = "imperal_sdk.cli.main:cli"

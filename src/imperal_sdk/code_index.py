@@ -8,6 +8,7 @@ tree-sitter is imported lazily: install the ``code-index`` extra to parse code.
 from __future__ import annotations
 
 import ast
+import base64
 import hashlib
 import os
 import re
@@ -1344,3 +1345,585 @@ def build_index(root: str, files: list[str]) -> ProjectIndex:
         if fi is not None:
             idx.files[rel] = fi
     return idx
+
+
+# ---- repo identity read from git's own files (no git binary, no exec: plain bytes read over SFTP) ----
+
+_HEAD_REF = re.compile(r"ref:\s*refs/heads/(\S+)")
+_SHA = re.compile(r"^[0-9a-f]{40}$")
+_USERINFO = re.compile(r"^([a-z][a-z0-9+.-]*://)[^/@]*@", re.I)
+
+
+def _meta_text(meta: dict, key: str) -> str:
+    v = (meta or {}).get(key)
+    if isinstance(v, (bytes, bytearray)):
+        return bytes(v).decode("utf-8", "replace")
+    return str(v or "")
+
+
+def git_identity(meta: dict) -> dict:
+    """``{"remote", "branch", "commit"}`` from a repo's ``.git/HEAD``, ``.git/config``, its loose ref and
+    ``.git/packed-refs`` (``meta`` = ``{".git/HEAD": bytes, ...}``) -- the origin URL without any
+    credentials it carries; "" for what the files do not say."""
+    head = _meta_text(meta, ".git/HEAD").strip()
+    branch, commit = "", ""
+    m = _HEAD_REF.match(head)
+    if m:
+        branch = m.group(1)
+        commit = _meta_text(meta, f".git/refs/heads/{branch}").strip()
+        if not _SHA.match(commit):
+            commit = ""
+            for line in _meta_text(meta, ".git/packed-refs").splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 2 and parts[1] == f"refs/heads/{branch}" and _SHA.match(parts[0]):
+                    commit = parts[0]
+                    break
+    elif _SHA.match(head):
+        commit = head
+    remote, first, section = "", "", ""
+    for line in _meta_text(meta, ".git/config").splitlines():
+        s = line.strip()
+        if s.startswith("["):
+            section = s.replace(" ", "").lower()
+        elif section.startswith("[remote") and s.lower().startswith("url"):
+            url = s.split("=", 1)[1].strip() if "=" in s else ""
+            first = first or url
+            if section == '[remote"origin"]':
+                remote = url
+    remote = _USERINFO.sub(r"\1", remote or first)
+    return {"remote": remote, "branch": branch, "commit": commit}
+
+
+# ---- chunks and their vectors (moved from webbee/intel/chunker.py and embed.py) ----
+
+_CHUNK_MAX_LINES = 60      # a symbol longer than this is split into windows
+_WINDOW_LINES = 60
+_WINDOW_OVERLAP = 10
+
+
+@dataclass(frozen=True)
+class Chunk:
+    id: str
+    symbol: str            # symbol name, or "" for a windowed/gap chunk
+    kind: str              # "function" | "class" | "chunk"
+    path: str
+    start_line: int
+    end_line: int
+    text: str
+    content_hash: str
+
+
+def _chunk_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
+
+
+def _mk(path: str, symbol: str, kind: str, s: int, e: int, lines: list) -> Chunk:
+    """One chunk. The id is unique across a file's chunks: path + line span + kind + symbol (a window
+    of a long symbol can land on exactly the span of a nested one; kind alone is not enough either)."""
+    text = "\n".join(lines[s - 1:e])
+    return Chunk(id=f"{path}#{s}-{e}:{kind}:{symbol}", symbol=symbol, kind=kind, path=path,
+                 start_line=s, end_line=e, text=text, content_hash=_chunk_hash(text))
+
+
+def _windows(path: str, symbol: str, s: int, e: int, lines: list) -> list:
+    out, cur = [], s
+    while cur <= e:
+        end = min(cur + _WINDOW_LINES - 1, e)
+        out.append(_mk(path, symbol, "chunk", cur, end, lines))
+        if end >= e:
+            break
+        cur = end - _WINDOW_OVERLAP + 1
+    return out
+
+
+def chunk_text(path: str, text: str, spans: list) -> list:
+    """The chunks of one file's text: each symbol span ``(name, kind, start, end)`` whole (windowed
+    when longer than 60 lines) and the lines no symbol covers in windows."""
+    lines = str(text or "").split("\n")
+    n = len(lines)
+    out: list = []
+    covered = [False] * (n + 2)
+    for name, kind, s0, e0 in sorted(spans or [], key=lambda x: x[2]):
+        s, e = max(1, int(s0)), min(n, int(e0))
+        if e < s:
+            continue
+        if e - s + 1 > _CHUNK_MAX_LINES:
+            out.extend(_windows(path, name, s, e, lines))
+        else:
+            out.append(_mk(path, name, kind, s, e, lines))
+        for ln in range(s, e + 1):
+            covered[ln] = True
+    ln = 1
+    while ln <= n:
+        if covered[ln] or not lines[ln - 1].strip():
+            ln += 1
+            continue
+        gs = ln
+        while ln <= n and not covered[ln]:
+            ln += 1
+        out.extend(_windows(path, "", gs, ln - 1, lines))
+    return out
+
+
+def chunk_file(root: str, fi: FileIndex) -> list:
+    """The client index's chunks of one file (read from ``root``)."""
+    try:
+        with open(os.path.join(root, fi.path), "r", encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError):
+        return []
+    return chunk_text(fi.path, text, [(s.name, s.kind, s.start_line, s.end_line) for s in fi.symbols])
+
+
+def chunk_index(root: str, index: ProjectIndex) -> list:
+    out: list = []
+    for fi in index.files.values():
+        out.extend(chunk_file(root, fi))
+    return out
+
+
+def chunk_blob(facts: "BlobFacts | dict | None", text: str) -> list:
+    """The chunks of one file version for the vault (phase 4): ``[{def_qualname, start_line, end_line,
+    text}]`` -- its top definitions whole (windowed when long) and the uncovered lines in windows. The
+    source embeds ``text`` and sends ``{blob, def_qualname, start_line, end_line, vector}``."""
+    defs = facts.defs if isinstance(facts, BlobFacts) else [Def(**d) for d in (facts or {}).get("defs") or []]
+    top = [d for d in defs if "." not in d.qualname or d.kind in ("method",)]
+    chunks = chunk_text("", text, [(d.qualname, d.kind, d.start_line, d.end_line) for d in top])
+    return [{"def_qualname": c.symbol, "start_line": c.start_line, "end_line": c.end_line, "text": c.text}
+            for c in chunks if c.text.strip()]
+
+
+_MODEL2VEC_MODEL = "minishlab/potion-base-8M"     # 256-dim, pure-numpy static
+_FASTEMBED_MODEL = "BAAI/bge-small-en-v1.5"        # 384-dim, ONNX
+
+
+class Model2VecBackend:
+    def __init__(self, model) -> None:
+        self._m = model
+        self.model_id = f"model2vec:{_MODEL2VEC_MODEL}"
+        self.dim = int(model.dim) if hasattr(model, "dim") else int(model.encode(["x"]).shape[1])
+
+    def embed(self, texts: list):
+        import numpy as np
+        return np.asarray(self._m.encode(list(texts)), dtype=np.float32)
+
+    def embed_query(self, text: str):
+        import numpy as np
+        return np.asarray(self._m.encode([text]), dtype=np.float32)[0]
+
+
+class FastEmbedBackend:
+    def __init__(self, model) -> None:
+        self._m = model
+        self.model_id = f"fastembed:{_FASTEMBED_MODEL}"
+        self.dim = int(next(iter(model.embed(["x"]))).shape[0])
+
+    def embed(self, texts: list):
+        import numpy as np
+        return np.asarray(list(self._m.embed(list(texts))), dtype=np.float32)
+
+    def embed_query(self, text: str):
+        import numpy as np
+        return np.asarray(next(iter(self._m.query_embed([text]))), dtype=np.float32)
+
+
+def _try_model2vec():
+    try:
+        from model2vec import StaticModel
+        return Model2VecBackend(StaticModel.from_pretrained(_MODEL2VEC_MODEL))
+    except Exception:
+        return None
+
+
+def _fastembed_unsupported() -> bool:
+    import platform
+    import sys
+    # PyPI-verified: onnxruntime has no wheel satisfying cp314 AND macOS-x86_64.
+    return (sys.version_info >= (3, 14)
+            and sys.platform == "darwin" and platform.machine() in ("x86_64", "i386"))
+
+
+def _try_fastembed():
+    if _fastembed_unsupported():
+        return None
+    try:
+        from fastembed import TextEmbedding
+        return FastEmbedBackend(TextEmbedding(model_name=_FASTEMBED_MODEL))
+    except Exception:
+        return None
+
+
+def load_backend():
+    """model2vec (pure-numpy, installs everywhere) preferred; fastembed opt-in; None -> no vectors
+    (search answers by BM25 and says ``semantic: off``)."""
+    return _try_model2vec() or _try_fastembed()
+
+
+_BACKEND: list = []
+
+
+def _backend():
+    if not _BACKEND:
+        _BACKEND.append(load_backend())
+    return _BACKEND[0]
+
+
+def embed(texts: list) -> list:
+    """Each text's vector as float32 bytes (the ``code-index-embed`` extra); [] when no embedder."""
+    b = _backend()
+    if b is None or not texts:
+        return []
+    return [row.tobytes() for row in b.embed(list(texts))]
+
+
+def embed_query(text: str) -> bytes:
+    """A search query's vector as float32 bytes; b"" when no embedder."""
+    b = _backend()
+    return b.embed_query(str(text or "")).tobytes() if b is not None else b""
+
+
+# ---- every source's sync (code graph spec §4.2-4.4): one algorithm, whoever delivers the bytes ----
+# The kernel (a panel connection, through the gateway broker) and the client (the user's own SSH, the
+# local workspace) run the SAME sync: the vault plans against a listing, only changed paths are read,
+# normalised and hashed, only blobs the repo does not hold are extracted (and their chunks embedded),
+# and the apply goes in size-bounded parts -- the last one stitches the links.
+
+APPLY_BATCH_BYTES = 8_000_000
+READ_BATCH = 200
+
+
+def apply_batches(files: list, blobs: list, chunks: list, limit: int = APPLY_BATCH_BYTES) -> list:
+    """One sync's apply split by size (a big first sync never goes as one HTTP body): each part carries
+    its blobs, the files that point at them and their chunks; files of blobs the repo already holds go
+    first. ``[{files, blobs, chunks}]`` -- the last part stitches."""
+    parts: list = [{"files": [], "blobs": [], "chunks": []}]
+    where: dict = {}
+    size = 0
+    for b in blobs:
+        n = len(str(b.get("text") or "").encode("utf-8"))
+        if parts[-1]["blobs"] and size + n > limit:
+            parts.append({"files": [], "blobs": [], "chunks": []})
+            size = 0
+        parts[-1]["blobs"].append(b)
+        where[b["hash"]] = len(parts) - 1
+        size += n
+    for f in files:
+        parts[where.get(f["blob"], 0)]["files"].append(f)
+    for c in chunks:
+        parts[where.get(c.get("blob"), 0)]["chunks"].append(c)
+    return parts
+
+
+def chunks_for(blob: str, facts, text: str) -> list:
+    """A blob's chunks with their vectors (base64 float32) for the vault -- every source sends its own
+    chunks, the vault never embeds; [] without the embedder."""
+    try:
+        chunks = chunk_blob(facts, text)
+        vecs = embed([c["text"] for c in chunks]) if chunks else []
+    except Exception:
+        return []
+    if len(vecs) != len(chunks):
+        return []
+    return [{"blob": blob, "def_qualname": c["def_qualname"], "start_line": c["start_line"],
+             "end_line": c["end_line"], "vector": base64.b64encode(v).decode("ascii")} for c, v in zip(chunks, vecs)]
+
+
+async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chunks: bool = True) -> dict:
+    """One sync of one repo from any source. ``plan(listing, meta)`` and ``apply(**payload)`` are the
+    vault's (async; direct or through the gateway), ``read(paths) -> {path: bytes}`` the source's
+    batched reader. Over-cap and unreadable files are skipped and named in ``partial_reason``. Returns
+    ``{repo_key?, listed, changed, read_bytes, new_blobs, extract_ms, files, removed, links_added,
+    links_removed, unresolved, applied, partial_reason}``."""
+    import time as _time
+    meta = dict(meta or {})
+    meta["extractor_version"] = EXTRACTOR_VERSION
+    meta.setdefault("listed_at", _time.time())
+    partial: list = []
+    items: list = []
+    for it in listing or []:
+        p = str((it or {}).get("path") or "")
+        if not p or not indexable(p):
+            continue
+        if int(it.get("size") or 0) > MAX_FILE_BYTES:
+            partial.append(f"{p} over 1 MB")
+            continue
+        items.append({"path": p, "size": int(it.get("size") or 0), "mtime": float(it.get("mtime") or 0.0)})
+    if len(items) > MAX_REPO_FILES:
+        partial.append(f"{len(items) - MAX_REPO_FILES} files over the {MAX_REPO_FILES}-file cap")
+        items = items[:MAX_REPO_FILES]
+    if meta.get("partial_listing"):
+        partial.append(str(meta.pop("partial_listing")))
+    stat = {i["path"]: i for i in items}
+    planned = await plan(items, meta) or {}
+    changed = [p for p in planned.get("changed") or [] if p in stat]
+    have = set(planned.get("have_blobs") or [])
+    files: list = []
+    blobs: list = []
+    configs: list = []
+    chunks: list = []
+    sent: set = set()
+    read_bytes = 0
+    extract_ms = 0.0
+    for i in range(0, len(changed), READ_BATCH):
+        batch = changed[i:i + READ_BATCH]
+        try:
+            got = await read(batch) or {}
+        except Exception as exc:
+            partial.append(f"{len(batch)} files unreadable ({type(exc).__name__})")
+            continue
+        unread = [p for p in batch if p not in got]
+        if unread:
+            partial.append(f"unreadable: {', '.join(unread[:5])}" + (f" +{len(unread) - 5}" if len(unread) > 5 else ""))
+        for p, raw in got.items():
+            if p not in stat:
+                continue
+            data = raw if isinstance(raw, (bytes, bytearray)) else str(raw or "").encode("utf-8")
+            read_bytes += len(data)
+            if len(data) > MAX_FILE_BYTES:
+                partial.append(f"{p} over 1 MB")
+                continue
+            text = normalise_text(bytes(data))
+            if text is None:
+                continue                          # binary: not code
+            if indexable(p) == "config":
+                configs.append({"path": p, "text": text, "size": stat[p]["size"], "mtime": stat[p]["mtime"]})
+                continue
+            h = blob_hash(text)
+            files.append({"path": p, "blob": h, "size": stat[p]["size"], "mtime": stat[p]["mtime"]})
+            if h in have or h in sent:
+                continue
+            sent.add(h)
+            e0 = _time.monotonic()
+            facts = scope_facts(p, text)
+            body = facts.to_dict() if facts is not None else {"lang": "", "lines": text.count("\n") + 1}
+            extract_ms += (_time.monotonic() - e0) * 1000
+            blobs.append({"hash": h, "lang": body.get("lang") or "", "text": text, "facts": body})
+            if embed_chunks:
+                chunks += chunks_for(h, facts, text)
+    meta["partial_reason"] = ("; ".join(dict.fromkeys(partial)))[:1000] or None
+    removed = list(planned.get("removed") or [])
+    counts: dict = {}
+    if files or blobs or removed or configs:
+        parts = apply_batches(files, blobs, chunks)
+        for i, part in enumerate(parts):
+            last = i == len(parts) - 1
+            pmeta = dict(meta, **({"relink": "all"} if len(parts) > 1 else {})) if last else dict(meta, defer_links=True)
+            got = await apply(files=part["files"], blobs=part["blobs"], removed=removed if last else [],
+                              configs=configs if last else [], chunks=part["chunks"], meta=pmeta) or {}
+            for k, v in got.items():
+                counts[k] = (counts.get(k, 0) + v if isinstance(v, int) and not isinstance(v, bool)
+                             and k not in ("links", "links_removed", "unresolved") else v)
+    else:
+        # nothing changed: the listing still proved the copy current -- a meta-only apply refreshes the
+        # repo's synced_at (else every question after the staleness window would list the repo again)
+        await apply(files=[], blobs=[], removed=[], configs=[], chunks=[], meta=meta)
+    return {"repo_key": planned.get("repo_key") or counts.get("repo_key") or "", "listed": len(items),
+            "changed": len(changed), "read_bytes": read_bytes, "new_blobs": len(blobs),
+            "extract_ms": int(extract_ms), "files": counts.get("files", 0), "removed": counts.get("removed", 0),
+            "links_added": counts.get("links", 0), "links_removed": counts.get("links_removed", 0),
+            "unresolved": counts.get("unresolved", 0), "applied": bool(counts),
+            "partial_reason": meta["partial_reason"]}
+
+
+# ---- a repo read over SFTP (no exec channel, nothing written), for every SSH source ----
+# ``sftp`` is any SFTP client with ``readdir(path)`` (entries with ``filename`` and ``attrs.type /
+# size / mtime``) and ``open(path, "rb")`` -- asyncssh's, or a client's own adapter.
+
+_SFTP_DIR, _SFTP_LINK = 2, 3          # SFTP protocol file types (FILEXFER_TYPE_DIRECTORY / _SYMLINK)
+_WINDOWS_ROOT = re.compile(r"^/?[A-Za-z]:(?:/|$)")
+_REPO_MARKERS = (".git",)
+_MANIFESTS = ("pyproject.toml", "package.json")
+
+
+def sftp_os(root: str) -> str:
+    """``windows`` when SFTP reports the root in drive form (``/C:/...``), else ``posix``."""
+    return "windows" if _WINDOWS_ROOT.match(str(root or "").replace("\\", "/")) else "posix"
+
+
+def _inside(root: str, rel: str) -> str | None:
+    import posixpath
+    r = str(rel or "").replace("\\", "/")
+    if not r or r.startswith("/") or _WINDOWS_ROOT.match(r):
+        return None
+    full = posixpath.normpath(posixpath.join(root, r))
+    base = posixpath.normpath(root)
+    return full if full == base or full.startswith(base.rstrip("/") + "/") else None
+
+
+def gitignore_rules(text: str, base: str) -> list:
+    """``[(pattern, dir_only, anchored, base)]`` of a .gitignore (negations left out: a re-included path
+    stays out -- the index errs on reading less)."""
+    out = []
+    for line in str(text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        dir_only = line.endswith("/")
+        pat = line.rstrip("/")
+        out.append((pat.lstrip("/"), dir_only, "/" in pat, base))
+    return out
+
+
+def gitignored(rules: list, rel: str, is_dir: bool) -> bool:
+    import fnmatch
+    import posixpath
+    for pat, dir_only, anchored, base in rules:
+        if dir_only and not is_dir:
+            continue
+        if base and not (rel == base or rel.startswith(base + "/")):
+            continue
+        sub = rel[len(base) + 1:] if base else rel
+        if (anchored and fnmatch.fnmatch(sub, pat)) or (not anchored and fnmatch.fnmatch(posixpath.basename(sub), pat)):
+            return True
+    return False
+
+
+async def _sftp_bytes(sftp, path: str, cap: int) -> bytes | None:
+    async with sftp.open(path, "rb") as f:
+        data = await f.read(cap + 1)
+    data = data.encode("utf-8") if isinstance(data, str) else bytes(data)
+    return None if len(data) > cap else data
+
+
+async def sftp_repo_root(sftp, path: str) -> str:
+    """The repo a remote path belongs to (spec §4.3): the nearest directory at or above it holding
+    ``.git``, else the nearest holding a manifest, else the path's own directory."""
+    import posixpath
+    p = posixpath.normpath(str(path or ".").replace("\\", "/"))
+    try:
+        names = {e.filename for e in await sftp.readdir(p)}
+        start = p
+    except Exception:
+        start, names = posixpath.dirname(p) or "/", None
+    manifest, cur = "", start
+    for _ in range(16):
+        if names is None or cur != start:
+            try:
+                names = {e.filename for e in await sftp.readdir(cur)}
+            except Exception:
+                names = set()
+        if names & set(_REPO_MARKERS):
+            return cur
+        if not manifest and names & set(_MANIFESTS):
+            manifest = cur
+        parent = posixpath.dirname(cur.rstrip("/")) or "/"
+        if parent == cur:
+            break
+        cur, names = parent, None
+    return manifest or start
+
+
+async def sftp_list_tree(sftp, root: str, max_files: int = MAX_REPO_FILES) -> dict:
+    """Every indexable file under ``root`` with its size and mtime: .gitignore files honoured, dotted /
+    dependency / build trees and virtualenvs skipped, symlinks never followed (no loop, nothing outside
+    the root). ``{"items": [{path, size, mtime, kind}], "partial": str, "os"}``."""
+    import posixpath
+    items: list = []
+    partial = ""
+    rules: list = []
+    stack = [""]
+    while stack:
+        rel_dir = stack.pop()
+        here = posixpath.join(root, rel_dir) if rel_dir else root
+        try:
+            entries = await sftp.readdir(here)
+        except Exception:
+            partial = partial or f"unreadable directory: {rel_dir or '.'}"
+            continue
+        names = {e.filename for e in entries}
+        if rel_dir and "pyvenv.cfg" in names:
+            continue                                  # a virtualenv, whatever it is named
+        if ".gitignore" in names:
+            try:
+                data = await _sftp_bytes(sftp, posixpath.join(here, ".gitignore"), 262144)
+                rules += gitignore_rules((data or b"").decode("utf-8", "replace"), rel_dir)
+            except Exception:
+                pass
+        for e in sorted(entries, key=lambda x: x.filename):
+            name = e.filename
+            if name in (".", ".."):
+                continue
+            rel = f"{rel_dir}/{name}" if rel_dir else name
+            kind = getattr(e.attrs, "type", None)
+            if kind == _SFTP_LINK:
+                continue
+            if kind == _SFTP_DIR:
+                if name.startswith(".") or name in SKIP_DIRS or name.startswith("Program Files") \
+                        or gitignored(rules, rel, True):
+                    continue
+                stack.append(rel)
+                continue
+            what = indexable(rel)
+            if not what or gitignored(rules, rel, False):
+                continue
+            if len(items) >= max_files:
+                partial = f"over {max_files} files"
+                stack = []
+                break
+            items.append({"path": rel, "size": int(getattr(e.attrs, "size", 0) or 0),
+                          "mtime": float(getattr(e.attrs, "mtime", 0) or 0), "kind": what})
+    return {"items": items, "partial": partial, "os": sftp_os(root)}
+
+
+async def sftp_read_many(sftp, root: str, paths: list, max_bytes: int = MAX_FILE_BYTES,
+                         batch_bytes: int = 8_388_608) -> dict:
+    """The files' bytes, each at most ``max_bytes``, the batch at most ``batch_bytes`` -- what does not fit
+    is named in ``rest``; a file over the cap, not indexable, outside the root or unreadable is named in
+    ``skipped``. ``{"files": {rel: bytes}, "skipped", "rest", "os"}``."""
+    files: dict = {}
+    skipped: list = []
+    rest: list = []
+    used = 0
+    for rel in paths or []:
+        full = _inside(root, str(rel))
+        if full is None or not indexable(str(rel)):
+            skipped.append(rel)
+            continue
+        if used >= batch_bytes:
+            rest.append(rel)
+            continue
+        try:
+            data = await _sftp_bytes(sftp, full, max_bytes)
+        except Exception:
+            skipped.append(rel)
+            continue
+        if data is None:
+            skipped.append(rel)
+            continue
+        files[rel] = data
+        used += len(data)
+    return {"files": files, "skipped": skipped, "rest": rest, "os": sftp_os(root)}
+
+
+async def sftp_read_meta(sftp, root: str) -> dict:
+    """What identifies the repo and resolves its imports: ``.git/HEAD`` / ``config`` / ``packed-refs``
+    and the ref HEAD names, ``/etc/machine-id``, the resolution configs at the root -- never ``setup.py``
+    (code to execute) and never anything else. ``{"files": {path: bytes}, "os"}``."""
+    import posixpath
+    files: dict = {}
+
+    async def grab(rel: str, full: str) -> bytes | None:
+        try:
+            data = await _sftp_bytes(sftp, full, 262144)
+        except Exception:
+            return None
+        if data is not None:
+            files[rel] = data
+        return data
+    head = await grab(".git/HEAD", posixpath.join(root, ".git/HEAD"))
+    for rel in (".git/config", ".git/packed-refs"):
+        await grab(rel, posixpath.join(root, rel))
+    m = re.match(rb"ref:\s*(refs/\S+)", head or b"")
+    if m:
+        ref = m.group(1).decode("utf-8", "replace")
+        if _inside(posixpath.join(root, ".git"), ref):
+            await grab(f".git/{ref}", posixpath.join(root, ".git", ref))
+    await grab("/etc/machine-id", "/etc/machine-id")
+    try:
+        names = [e.filename for e in await sftp.readdir(root)]
+    except Exception:
+        names = []
+    for name in names:
+        if indexable(name) == "config":
+            await grab(name, posixpath.join(root, name))
+    return {"files": files, "os": sftp_os(root)}
