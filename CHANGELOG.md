@@ -2,6 +2,20 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.2.0 — 2026-10-20
+
+### Added
+- **`imperal_sdk.code_index` scope facts** (code graph phase 1): `scope_facts(path, text)` -> `BlobFacts`
+  — a file's definitions (`Def`), import bindings with aliases (`Binding`), reference chains (`Ref`)
+  and string keys (`StringKey`), from that file alone, for the Tenant Vault's code graph.
+- String keys: activities, workflows, signals, queries, events, queues, HTTP routes (`route_key`:
+  method + path, placeholders as `{}`) and schemas (`schema`: a model provides its name, an endpoint's
+  handler uses the schemas it references), each as `provides` / `uses`.
+- File rules shared by every source: `indexable` (code / config / never), `SECRET_PATTERNS`,
+  `SKIP_DIRS`, `CONFIG_NAMES`, `normalise_text`, `blob_hash`, `canonical_path` (keeps the real case;
+  any spelling of a path matches case-blind), `EXTRACTOR_VERSION`.
+- One language table: `LANG_BY_EXT` (`.tsx` -> TSX), `language`, `DEF_NODES`.
+
 ## 6.1.1 — 2026-10-20
 
 ### Fixed
