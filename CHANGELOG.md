@@ -2,6 +2,12 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.3 — 2026-10-20
+
+### Fixed
+- `apply_batches` sizes each part as it is sent (the blob's text and facts, its chunks' vectors) against
+  `APPLY_BATCH_BYTES` = 4 MB, half the vault's request cap: a first sync of a large repo no longer gets 413.
+
 ## 6.3.2 — 2026-10-20
 
 ### Security

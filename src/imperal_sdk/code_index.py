@@ -1610,7 +1610,7 @@ def embed_query(text: str) -> bytes:
 # normalised and hashed, only blobs the repo does not hold are extracted (and their chunks embedded),
 # and the apply goes in size-bounded parts -- the last one stitches the links.
 
-APPLY_BATCH_BYTES = 8_000_000
+APPLY_BATCH_BYTES = 4_000_000      # one apply body as sent (JSON) -- half the vault's 8 MiB request cap
 READ_BATCH = 200
 
 
@@ -1618,11 +1618,17 @@ def apply_batches(files: list, blobs: list, chunks: list, limit: int = APPLY_BAT
     """One sync's apply split by size (a big first sync never goes as one HTTP body): each part carries
     its blobs, the files that point at them and their chunks; files of blobs the repo already holds go
     first. ``[{files, blobs, chunks}]`` -- the last part stitches."""
+    import json as _json
     parts: list = [{"files": [], "blobs": [], "chunks": []}]
     where: dict = {}
     size = 0
+    by_blob: dict = {}
+    for c in chunks:
+        by_blob.setdefault(c.get("blob"), []).append(c)
     for b in blobs:
-        n = len(str(b.get("text") or "").encode("utf-8"))
+        # the size as sent: the blob with its text and facts, and its chunks with their vectors
+        n = len(_json.dumps(b, default=str).encode("utf-8")) + sum(
+            len(_json.dumps(c, default=str).encode("utf-8")) for c in by_blob.get(b["hash"], ()))
         if parts[-1]["blobs"] and size + n > limit:
             parts.append({"files": [], "blobs": [], "chunks": []})
             size = 0

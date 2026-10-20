@@ -393,3 +393,19 @@ def test_a_remote_never_carries_credentials_however_it_is_written():
     assert clean_remote("bob:secret@host:r.git") == "host:r.git"
     assert clean_remote("https://[::1]:9/r") == "https://[::1]:9/r" and clean_remote("http://h:bad/r") == ""
     assert clean_remote("") == "" and clean_remote("a b") == ""
+
+
+def test_every_apply_part_fits_the_vault_body_cap_as_sent():
+    """Live 2026-10-20: a first sync of the kernel repo hit the vault's 8 MiB body cap (413) -- the parts
+    were sized by file text alone while each blob also carries its facts and its chunks' vectors."""
+    import json
+    from imperal_sdk import code_index as ci
+    blobs = [{"hash": f"h{i}", "text": "x" * 200_000,
+              "facts": {"defs": [{"name": f"d{j}", "qualname": f"q{j}" * 20} for j in range(4000)]}} for i in range(40)]
+    files = [{"path": f"f{i}.py", "blob": f"h{i}"} for i in range(40)]
+    chunks = [{"blob": f"h{i}", "vector": "A" * 2000, "start_line": k} for i in range(40) for k in range(50)]
+    parts = ci.apply_batches(files, blobs, chunks)
+    assert len(parts) > 1 and sum(len(p["blobs"]) for p in parts) == 40
+    for p in parts:
+        assert len(json.dumps(p).encode("utf-8")) <= ci.APPLY_BATCH_BYTES + 64_000
+    assert ci.APPLY_BATCH_BYTES <= 4_200_000
