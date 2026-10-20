@@ -1673,6 +1673,11 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
     meta = dict(meta or {})
     meta["extractor_version"] = EXTRACTOR_VERSION
     meta.setdefault("listed_at", _time.time())
+    # a source with an embedder says so: the vault then asks, once, for the versions it holds without vectors (a
+    # repo synced by a source without one stayed "semantic: off" forever -- a held version is never sent again)
+    embed_chunks = bool(embed_chunks) and _backend() is not None
+    if embed_chunks:
+        meta["embeds"] = True
     partial: list = []
     items: list = []
     for it in listing or []:

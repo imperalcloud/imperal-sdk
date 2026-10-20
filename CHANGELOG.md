@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.6 — 2026-10-21
+
+### Fixed
+- Code index: a source with an embedder says so (`meta.embeds`), so the vault asks it once for the versions it
+  holds without vectors. A repo first synced by a source without an embedder stayed `semantic: off` forever --
+  a held version was never sent again.
+
 ## 6.3.5 — 2026-10-20
 
 ### Changed

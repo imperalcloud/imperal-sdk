@@ -443,3 +443,28 @@ def test_a_file_whose_facts_do_not_fit_an_apply_is_kept_as_text_and_said(monkeyp
     assert "defs" not in bundle["facts"] and bundle["facts"]["lines"] > 1000
     assert any(b["facts"].get("defs") for b in sent.values() if b["text"] != big)
     assert "bundle.py kept as text only" in out["partial_reason"]
+
+
+def test_a_source_with_an_embedder_says_so_to_the_vault_and_one_without_never_does(monkeypatch):
+    """6.3.6 (frame audit 2026-10-21: every repo said "semantic: off"): ``meta.embeds`` lets the vault ask an
+    embedding source, once, for the versions it holds without vectors."""
+    import asyncio
+    from imperal_sdk import code_index as ci
+    seen = []
+
+    async def plan(items, meta):
+        seen.append(dict(meta))
+        return {"changed": [], "removed": [], "have_blobs": []}
+
+    async def apply(**payload):
+        return {}
+
+    async def read(paths):
+        return {}
+    listing = [{"path": "a.py", "size": 3, "mtime": 1.0}]
+    monkeypatch.setattr(ci, "_backend", lambda: object())
+    asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, listing, read))
+    asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, listing, read, embed_chunks=False))
+    monkeypatch.setattr(ci, "_backend", lambda: None)
+    asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, listing, read))
+    assert [m.get("embeds") for m in seen] == [True, None, None]
