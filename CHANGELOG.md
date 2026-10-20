@@ -2,6 +2,11 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.5 — 2026-10-20
+
+### Changed
+- Package authors: Valentin Scerbacov (valentin@imperal.io) and Imperal, Inc.
+
 ## 6.3.4 — 2026-10-20
 
 ### Changed

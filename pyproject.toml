@@ -9,7 +9,7 @@ description = "SDK for building Imperal Cloud extensions"
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
-    { name = "Valentin Scerbacov" },
+    { name = "Valentin Scerbacov", email = "valentin@imperal.io" },
     { name = "Imperal, Inc." },
 ]
 requires-python = ">=3.6"
