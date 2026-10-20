@@ -1778,6 +1778,20 @@ def gitignored(rules: list, rel: str, is_dir: bool) -> bool:
     return False
 
 
+async def _sftp_contained(sftp, root: str, full: str) -> bool:
+    """``full`` is a regular path under ``root`` once the server resolves it: the file itself is no
+    symlink and no linked directory on its way leads outside the root."""
+    try:
+        if _sftp_is_link(await sftp.lstat(full)):
+            return False
+        real, base = await sftp.realpath(full), (await sftp.realpath(root)).rstrip("/")
+    except (AttributeError, NotImplementedError):
+        return True                         # a reader without these calls cannot follow links either
+    except Exception:
+        return False
+    return real == base or real.startswith(base + "/") or (not base and real.startswith("/"))
+
+
 async def _sftp_bytes(sftp, path: str, cap: int) -> bytes | None:
     async with sftp.open(path, "rb") as f:
         data = await f.read(cap + 1)
@@ -1882,6 +1896,9 @@ async def sftp_read_many(sftp, root: str, paths: list, max_bytes: int = MAX_FILE
         if used >= batch_bytes:
             rest.append(rel)
             continue
+        if not await _sftp_contained(sftp, root, full):
+            skipped.append(rel)
+            continue
         try:
             data = await _sftp_bytes(sftp, full, max_bytes)
         except Exception:
@@ -1903,6 +1920,9 @@ async def sftp_read_meta(sftp, root: str) -> dict:
     files: dict = {}
 
     async def grab(rel: str, full: str) -> bytes | None:
+        # a symlink is never followed: a link named like a config or a git file could point anywhere
+        if full != "/etc/machine-id" and not await _sftp_contained(sftp, root, full):
+            return None
         try:
             data = await _sftp_bytes(sftp, full, 262144)
         except Exception:
@@ -1913,6 +1933,9 @@ async def sftp_read_meta(sftp, root: str) -> dict:
     head = await grab(".git/HEAD", posixpath.join(root, ".git/HEAD"))
     for rel in (".git/config", ".git/packed-refs"):
         await grab(rel, posixpath.join(root, rel))
+    if ".git/config" in files:      # only the origin URL leaves the server, never the raw config (credentials)
+        remote = git_identity({".git/config": files[".git/config"]})["remote"]
+        files[".git/config"] = (f'[remote "origin"]\n\turl = {remote}\n' if remote else "").encode("utf-8")
     m = re.match(rb"ref:\s*(refs/\S+)", head or b"")
     if m:
         ref = m.group(1).decode("utf-8", "replace")
@@ -1927,3 +1950,12 @@ async def sftp_read_meta(sftp, root: str) -> dict:
         if indexable(name) == "config":
             await grab(name, posixpath.join(root, name))
     return {"files": files, "os": sftp_os(root)}
+
+
+def _sftp_is_link(attrs) -> bool:
+    """An SFTP entry is a symlink (the v4+ ``type`` field, else the mode bits of ``permissions``)."""
+    import stat as _stat
+    if getattr(attrs, "type", None) == _SFTP_LINK:
+        return True
+    perm = getattr(attrs, "permissions", None)
+    return isinstance(perm, int) and _stat.S_ISLNK(perm)

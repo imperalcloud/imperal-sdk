@@ -214,14 +214,12 @@ def test_embed_without_a_backend_is_empty_and_a_vector_round_trips(monkeypatch):
     monkeypatch.setattr(ci, "_BACKEND", [None])
     assert ci.embed(["x"]) == [] and ci.embed_query("x") == b""
 
-    class Fake:
+    class Fake:            # float32 rows with tobytes(), as numpy's are -- the stdlib array is enough here
         def embed(self, texts):
-            import numpy as np
-            return np.asarray([[1.0, 2.0, 3.0] for _ in texts], dtype=np.float32)
+            return [array.array("f", [1.0, 2.0, 3.0]) for _ in texts]
 
         def embed_query(self, text):
-            import numpy as np
-            return np.asarray([0.5, 0.25, 0.0], dtype=np.float32)
+            return array.array("f", [0.5, 0.25, 0.0])
     monkeypatch.setattr(ci, "_BACKEND", [Fake()])
     v = array.array("f")
     v.frombytes(ci.embed(["a"])[0])
@@ -327,3 +325,60 @@ def test_an_unchanged_sync_refreshes_the_copy_with_a_meta_only_apply():
     out = asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, [{"path": "a.py", "size": 3, "mtime": 1.0}], read))
     assert not reads and not out["applied"]
     assert len(applies) == 1 and applies[0]["files"] == [] and applies[0]["blobs"] == [] and applies[0]["meta"]["listed_at"]
+
+
+def test_sftp_reads_never_follow_a_link_and_never_ship_git_credentials():
+    """Security review of 6.3.0: a symlinked config / git file or a linked directory leading out of the
+    root is never read; only the origin URL (no credentials) leaves the server from .git/config."""
+    import asyncio
+    from imperal_sdk import code_index as ci
+
+    class A:
+        def __init__(self, link):
+            self.type = 3 if link else 1
+
+    files = {"/r/.git/HEAD": b"ref: refs/heads/main\n",
+             "/r/.git/config": b'[core]\n\tbare = false\n[remote "origin"]\n\turl = https://bob:s3cret@git.x/r.git\n',
+             "/r/pyproject.toml": b"[project]\n", "/r/tsconfig.json": b"{}", "/r/app/x.py": b"x = 1\n",
+             "/r/out/passwd": b"root:x:0:0\n"}
+    links = {"/r/tsconfig.json"}
+    real = {"/r/out/passwd": "/etc/passwd"}
+
+    class F:
+        def __init__(self, data):
+            self.data = data
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def read(self, n=-1):
+            return self.data
+
+    class E:
+        def __init__(self, name):
+            self.filename = name
+            self.attrs = A(False)
+
+    class S:
+        async def readdir(self, p):
+            return [E("pyproject.toml"), E("tsconfig.json"), E(".git"), E("app")]
+
+        async def lstat(self, p):
+            return A(p in links)
+
+        async def realpath(self, p):
+            return real.get(p, p)
+
+        def open(self, p, mode="rb"):
+            if p not in files:
+                raise OSError(p)
+            return F(files[p])
+    meta = asyncio.run(ci.sftp_read_meta(S(), "/r"))
+    assert "tsconfig.json" not in meta["files"] and "pyproject.toml" in meta["files"]
+    assert b"s3cret" not in meta["files"][".git/config"]
+    assert ci.git_identity(meta["files"])["remote"] == "https://git.x/r.git"
+    many = asyncio.run(ci.sftp_read_many(S(), "/r", ["app/x.py", "out/passwd", "tsconfig.json"]))
+    assert many["files"] == {"app/x.py": b"x = 1\n"} and set(many["skipped"]) == {"out/passwd", "tsconfig.json"}

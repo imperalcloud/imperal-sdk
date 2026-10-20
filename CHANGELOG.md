@@ -2,7 +2,15 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-## 6.3.0 — 2026-10-20
+## 6.3.1 — 2026-10-20
+
+### Security
+- The SFTP reads never follow a link: `sftp_read_many` and `sftp_read_meta` skip a symlinked file and a
+  path whose server-resolved location leaves the root (a linked directory); a symlinked `.git` or config
+  is not read.
+- `sftp_read_meta` no longer ships the raw `.git/config`: only the origin URL, without credentials.
+
+## 6.3.0 — 2026-10-20 (tagged, not published: its CI failed -- everything below ships in 6.3.1)
 
 ### Added
 - **One sync for every source** (code graph phases 2-7): `sync_source(plan, apply, meta, listing, read)`
