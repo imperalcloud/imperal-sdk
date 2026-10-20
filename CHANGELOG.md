@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.4 — 2026-10-20
+
+### Changed
+- Cloud OS limits for the code index: a file up to 10 MB (`MAX_FILE_BYTES`); an apply part up to 10 MB as sent
+  and at most 20 file versions (`APPLY_BATCH_FILES`); a file bigger than one part travels alone.
+- A huge generated file whose facts would not fit one apply is stored as text only and named in
+  `partial_reason` -- a sync never fails on it.
+
 ## 6.3.3 — 2026-10-20
 
 ### Fixed

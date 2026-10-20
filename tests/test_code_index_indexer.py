@@ -95,7 +95,7 @@ def test_one_table_and_the_old_private_names_stay_aliases():
     assert indexer.DEF_NODES["typescript"]["type_alias_declaration"] == "type"
     assert indexer.DEF_NODES["typescript"]["enum_declaration"] == "class"
     assert indexer._DEF_NODES is indexer.DEF_NODES and indexer._get_language is indexer.language
-    assert indexer.EXTRACTOR_VERSION == "2" and indexer.MAX_FILE_BYTES == 1_048_576
+    assert indexer.EXTRACTOR_VERSION == "2" and indexer.MAX_FILE_BYTES == 10 * 1024 * 1024
     assert indexer.MAX_REPO_FILES == 20_000
 
 
@@ -252,7 +252,7 @@ def test_sync_source_reads_only_changed_and_batches_the_apply(tmp_path):
     assert ".env" not in [i["path"] for i in plans[0][0]] and "same.py" not in reads[0]
     assert len(applies) == 1 and len(applies[0]["blobs"]) == 1 and len(applies[0]["files"]) == 2   # one blob, two files
     assert applies[0]["removed"] == ["gone.py"] and applies[0]["configs"][0]["path"] == "pyproject.toml"
-    assert "lost.py" in out["partial_reason"] and "big.py over 1 MB" in out["partial_reason"]
+    assert "lost.py" in out["partial_reason"] and "big.py over 10 MB" in out["partial_reason"]
     parts = ci.apply_batches([{"path": "a", "blob": "h1"}, {"path": "b", "blob": "h2"}],
                              [{"hash": "h1", "text": "x" * 10}, {"hash": "h2", "text": "y" * 10}], [], limit=15)
     assert [len(p["blobs"]) for p in parts] == [1, 1] and parts[1]["files"][0]["path"] == "b"
@@ -408,4 +408,38 @@ def test_every_apply_part_fits_the_vault_body_cap_as_sent():
     assert len(parts) > 1 and sum(len(p["blobs"]) for p in parts) == 40
     for p in parts:
         assert len(json.dumps(p).encode("utf-8")) <= ci.APPLY_BATCH_BYTES + 64_000
-    assert ci.APPLY_BATCH_BYTES <= 4_200_000
+        assert len(p["blobs"]) <= ci.APPLY_BATCH_FILES == 20
+    assert ci.APPLY_BATCH_BYTES <= 10_000_000 < 16 * 1024 * 1024          # under the vault / nginx sync bound
+    small = ci.apply_batches([{"path": f"s{i}", "blob": f"s{i}"} for i in range(45)],
+                             [{"hash": f"s{i}", "text": "x"} for i in range(45)], [])
+    assert [len(p["blobs"]) for p in small] == [20, 20, 5]
+
+
+def test_a_file_whose_facts_do_not_fit_an_apply_is_kept_as_text_and_said(monkeypatch):
+    """Cloud OS limits: a file up to 10 MB is indexed; a huge generated one whose facts would not fit one
+    apply is stored as text only -- never a failed sync."""
+    import asyncio
+    from imperal_sdk import code_index as ci
+    assert ci.MAX_FILE_BYTES == 10 * 1024 * 1024
+    monkeypatch.setattr(ci, "APPLY_BATCH_BYTES", 20_000)
+    applies = []
+
+    async def plan(items, meta):
+        return {"changed": [i["path"] for i in items], "removed": [], "have_blobs": []}
+
+    async def apply(**payload):
+        applies.append(payload)
+        return {"files": len(payload["files"])}
+
+    big = "".join(f"def f{i}(a):\n    return g{i}(a)\n" for i in range(800))
+    files = {"small.py": "def a():\n    return 1\n", "bundle.py": big}
+
+    async def read(paths):
+        return {p: files[p].encode() for p in paths}
+    out = asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, [{"path": p, "size": len(t), "mtime": 1.0}
+                                                                    for p, t in files.items()], read, embed_chunks=False))
+    sent = {b["hash"]: b for a in applies for b in a["blobs"]}
+    bundle = next(b for b in sent.values() if b["text"] == big)
+    assert "defs" not in bundle["facts"] and bundle["facts"]["lines"] > 1000
+    assert any(b["facts"].get("defs") for b in sent.values() if b["text"] != big)
+    assert "bundle.py kept as text only" in out["partial_reason"]

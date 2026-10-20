@@ -642,7 +642,7 @@ def _lang_for(path: str) -> str:
 # ---- what any source may index (spec 4.2: one list, enforced by every source, refused by the vault) ----
 
 EXTRACTOR_VERSION = "2"
-MAX_FILE_BYTES = 1_048_576
+MAX_FILE_BYTES = 10 * 1024 * 1024     # one file in the code index (Cloud OS: shared vault, many users)
 MAX_REPO_FILES = 20_000
 INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 # the resolution configs (read and stored parsed); setup.py is code to execute -- never read
@@ -1610,15 +1610,24 @@ def embed_query(text: str) -> bytes:
 # normalised and hashed, only blobs the repo does not hold are extracted (and their chunks embedded),
 # and the apply goes in size-bounded parts -- the last one stitches the links.
 
-APPLY_BATCH_BYTES = 4_000_000      # one apply body as sent (JSON) -- half the vault's 8 MiB request cap
+APPLY_BATCH_BYTES = 10_000_000     # one apply body as sent (JSON); the vault and nginx take 32 MiB on sync/apply --
+#                                    a part holds one file alone when that file is bigger (up to MAX_FILE_BYTES as text)
+APPLY_BATCH_FILES = 20             # and at most this many new file versions per apply
 READ_BATCH = 200
 
 
-def apply_batches(files: list, blobs: list, chunks: list, limit: int = APPLY_BATCH_BYTES) -> list:
+def _sent_size(blob: dict, chunks) -> int:
+    """A blob's size as an apply sends it: the blob with its text and facts, and its chunks with their vectors."""
+    import json as _json
+    return len(_json.dumps(blob, default=str).encode("utf-8")) + sum(
+        len(_json.dumps(c, default=str).encode("utf-8")) for c in chunks or ())
+
+
+def apply_batches(files: list, blobs: list, chunks: list, limit: int = APPLY_BATCH_BYTES,
+                  max_blobs: int = APPLY_BATCH_FILES) -> list:
     """One sync's apply split by size (a big first sync never goes as one HTTP body): each part carries
     its blobs, the files that point at them and their chunks; files of blobs the repo already holds go
     first. ``[{files, blobs, chunks}]`` -- the last part stitches."""
-    import json as _json
     parts: list = [{"files": [], "blobs": [], "chunks": []}]
     where: dict = {}
     size = 0
@@ -1626,10 +1635,8 @@ def apply_batches(files: list, blobs: list, chunks: list, limit: int = APPLY_BAT
     for c in chunks:
         by_blob.setdefault(c.get("blob"), []).append(c)
     for b in blobs:
-        # the size as sent: the blob with its text and facts, and its chunks with their vectors
-        n = len(_json.dumps(b, default=str).encode("utf-8")) + sum(
-            len(_json.dumps(c, default=str).encode("utf-8")) for c in by_blob.get(b["hash"], ()))
-        if parts[-1]["blobs"] and size + n > limit:
+        n = _sent_size(b, by_blob.get(b["hash"], ()))
+        if parts[-1]["blobs"] and (size + n > limit or len(parts[-1]["blobs"]) >= max_blobs):
             parts.append({"files": [], "blobs": [], "chunks": []})
             size = 0
         parts[-1]["blobs"].append(b)
@@ -1673,7 +1680,7 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
         if not p or not indexable(p):
             continue
         if int(it.get("size") or 0) > MAX_FILE_BYTES:
-            partial.append(f"{p} over 1 MB")
+            partial.append(f"{p} over {MAX_FILE_BYTES // 1048576} MB")
             continue
         items.append({"path": p, "size": int(it.get("size") or 0), "mtime": float(it.get("mtime") or 0.0)})
     if len(items) > MAX_REPO_FILES:
@@ -1708,7 +1715,7 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
             data = raw if isinstance(raw, (bytes, bytearray)) else str(raw or "").encode("utf-8")
             read_bytes += len(data)
             if len(data) > MAX_FILE_BYTES:
-                partial.append(f"{p} over 1 MB")
+                partial.append(f"{p} over {MAX_FILE_BYTES // 1048576} MB")
                 continue
             text = normalise_text(bytes(data))
             if text is None:
@@ -1725,9 +1732,14 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
             facts = scope_facts(p, text)
             body = facts.to_dict() if facts is not None else {"lang": "", "lines": text.count("\n") + 1}
             extract_ms += (_time.monotonic() - e0) * 1000
+            mine = chunks_for(h, facts, text) if embed_chunks else []
+            if _sent_size({"hash": h, "text": text, "facts": body}, mine) > APPLY_BATCH_BYTES:
+                # a huge generated file (a bundle, a dump): its facts would not fit one apply -- kept as text,
+                # never parsed into the graph, and said
+                body, mine = {"lang": body.get("lang") or "", "lines": text.count("\n") + 1}, []
+                partial.append(f"{p} kept as text only (too large to parse)")
             blobs.append({"hash": h, "lang": body.get("lang") or "", "text": text, "facts": body})
-            if embed_chunks:
-                chunks += chunks_for(h, facts, text)
+            chunks += mine
     meta["partial_reason"] = ("; ".join(dict.fromkeys(partial)))[:1000] or None
     removed = list(planned.get("removed") or [])
     counts: dict = {}
