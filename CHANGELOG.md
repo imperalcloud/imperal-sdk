@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.2 — 2026-10-20
+
+### Security
+- `clean_remote` (new, public): a git remote is cleaned by parsing it — a URL rebuilt from scheme, host,
+  port and path (userinfo split on its last `@`, query and fragment dropped), a `user:secret` dropped from
+  an scp-like remote, `""` for what does not parse. `git_identity` and `sftp_read_meta` use it (6.3.1's
+  regex could leave part of a password behind).
+
 ## 6.3.1 — 2026-10-20
 
 ### Security

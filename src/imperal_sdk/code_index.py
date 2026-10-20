@@ -1351,7 +1351,29 @@ def build_index(root: str, files: list[str]) -> ProjectIndex:
 
 _HEAD_REF = re.compile(r"ref:\s*refs/heads/(\S+)")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
-_USERINFO = re.compile(r"^([a-z][a-z0-9+.-]*://)[^/@]*@", re.I)
+def clean_remote(url) -> str:
+    """A git remote without any credentials: a URL is rebuilt from scheme, host, port and path (the userinfo
+    split on its LAST ``@`` and dropped, query and fragment dropped); an scp-like ``user@host:path`` keeps a
+    plain user and drops a ``user:secret``; a value that does not parse is ``""``. Shared word for word
+    by the vault (``stores/repos.clean_remote``)."""
+    from urllib.parse import urlsplit, urlunsplit
+    u = str(url or "").strip().strip('"').strip("'").strip()
+    if not u or any(c.isspace() for c in u):
+        return ""
+    if "://" in u:
+        try:
+            parts = urlsplit(u)
+            host, port = parts.hostname or "", parts.port
+        except ValueError:
+            return ""
+        if not parts.scheme or (not host and parts.scheme != "file"):
+            return ""
+        netloc = (f"[{host}]" if ":" in host else host) + (f":{port}" if port else "")
+        return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+    user, at, rest = u.rpartition("@")
+    if at and ":" in user:
+        return rest                 # "user:secret@host:path": the secret never leaves
+    return u
 
 
 def _meta_text(meta: dict, key: str) -> str:
@@ -1390,7 +1412,7 @@ def git_identity(meta: dict) -> dict:
             first = first or url
             if section == '[remote"origin"]':
                 remote = url
-    remote = _USERINFO.sub(r"\1", remote or first)
+    remote = clean_remote(remote or first)
     return {"remote": remote, "branch": branch, "commit": commit}
 
 

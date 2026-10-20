@@ -382,3 +382,14 @@ def test_sftp_reads_never_follow_a_link_and_never_ship_git_credentials():
     assert ci.git_identity(meta["files"])["remote"] == "https://git.x/r.git"
     many = asyncio.run(ci.sftp_read_many(S(), "/r", ["app/x.py", "out/passwd", "tsconfig.json"]))
     assert many["files"] == {"app/x.py": b"x = 1\n"} and set(many["skipped"]) == {"out/passwd", "tsconfig.json"}
+
+
+def test_a_remote_never_carries_credentials_however_it_is_written():
+    from imperal_sdk.code_index import clean_remote
+    assert clean_remote("https://u:p@ss@host.x/r.git") == "https://host.x/r.git"
+    assert clean_remote('"https://bob:tok@git.x:8443/r.git?x=1#f"') == "https://git.x:8443/r.git"
+    assert clean_remote("ssh://git@host/r.git") == "ssh://host/r.git"
+    assert clean_remote("git@github.com:org/r.git") == "git@github.com:org/r.git"
+    assert clean_remote("bob:secret@host:r.git") == "host:r.git"
+    assert clean_remote("https://[::1]:9/r") == "https://[::1]:9/r" and clean_remote("http://h:bad/r") == ""
+    assert clean_remote("") == "" and clean_remote("a b") == ""
