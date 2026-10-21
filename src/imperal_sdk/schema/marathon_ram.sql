@@ -1,6 +1,6 @@
 -- ============================================================================
 -- IMPERAL CLOUD OS — TENANT VAULT WORKING RAM (COGNITIVE BLACKBOARD)
--- RFC: ICNLI V17 / GNC Marathon Resilience Engine
+-- RFC: ICNLI V17
 -- ============================================================================
 
 -- 1. Target System Entities (BOM: screens, routes, models, services)

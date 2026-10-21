@@ -1,5 +1,5 @@
 """
-Pre-Flight BOM Extractor (RFC: ICNLI V17 / GNC Marathon Resilience Engine)
+Pre-Flight BOM Extractor 
 
 Scans target codebases (NodeJS: Express/Fastify/Koa/Next.js/HTML, Python: Flask/FastAPI/Django)
 to extract a ground-truth Bill-of-Materials (BOM) before coding starts:

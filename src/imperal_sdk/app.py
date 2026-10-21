@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2026 Imperal, Inc.
 # Licensed under the Apache-2.0 License.
-"""ICNLI Quantum SDK v6.0 — The Universal Zero-Boilerplate Application Engine.
+"""Imperal SDK App: an extension with no boilerplate.
 
 Empowers developers to build next-generation AI Cloud OS applications with:
 1. Zero-Manifest: 100% automatic type-to-schema extraction from Python signatures.
@@ -25,7 +25,7 @@ from imperal_sdk.context import Context
 from imperal_sdk.types.identity import UserContext, TenantContext
 from imperal_sdk.auto_ui import project_to_declarative_ir
 
-DEFAULT_QUANTUM_ICON = (
+DEFAULT_APP_ICON = (
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
     'stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-atom">'
     '<circle cx="12" cy="12" r="1"/>'
@@ -33,6 +33,7 @@ DEFAULT_QUANTUM_ICON = (
     '<path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z"/>'
     '</svg>'
 )
+DEFAULT_QUANTUM_ICON = DEFAULT_APP_ICON  # old name
 
 
 def _python_type_to_json_schema(py_type):
@@ -75,7 +76,7 @@ def create_ambient_context(user_id="ambient_user"):
 
 
 class App(Extension):
-    """High-level ICNLI Quantum Application.
+    """High-level Imperal SDK application.
     
     Zero-manifest, auto-schema, ambient-context, auto-IR enabled container.
     Inherits from `Extension` for 100% backward compatibility with all
@@ -99,7 +100,7 @@ class App(Extension):
         if len(desc) < 40:
             desc = "{} Fully compliant with the ICNLI Agentic OS specification.".format(desc)
 
-        effective_icon = icon or DEFAULT_QUANTUM_ICON
+        effective_icon = icon or DEFAULT_APP_ICON
 
         super(App, self).__init__(
             app_id=app_id,

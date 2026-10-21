@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.7 — 2026-10-21
+
+### Changed
+- Plain names: `DwellGuard` / `DwellGuardStep` (module `imperal_sdk.dwell_guard`) -- the dwell guard says what it
+  checks (nesting depth, steps on one entity without coverage gain, a growing gap) and its alarms say what to do.
+  `GNCLyapunovGuard` / `GNCEnergyState` (`imperal_sdk.gnc_guard`) stay as old names of the same classes.
+- `DEFAULT_APP_ICON` (old name `DEFAULT_QUANTUM_ICON` kept); docstrings no longer say "ICNLI Quantum SDK".
+
 ## 6.3.6 — 2026-10-21
 
 ### Fixed

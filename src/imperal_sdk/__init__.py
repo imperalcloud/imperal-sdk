@@ -1,7 +1,7 @@
 """Imperal Cloud SDK — build extensions for the Imperal platform."""
 from typing import TYPE_CHECKING
 
-__version__ = "6.3.6"
+__version__ = "6.3.7"
 
 # 5.2.2 (2026-06-11): the package root resolves its public surface lazily
 # (PEP 562). The eager imports pulled the HTTP transport (Context / client
@@ -48,12 +48,14 @@ _LAZY_ATTRS = {
     # hand-roll a token_refresh.py; four divergent copies are how an expired
     # Google Analytics token turned into "please reconnect" (2026-08-21).
     "fresh_token": "imperal_sdk.oauth_tokens",
-    # GNC Marathon Resilience & Tenant Vault Working RAM (ICNLI V17)
+    # Marathon dwell guard & Tenant Vault Working RAM
     "TenantVaultRAM": "imperal_sdk.vault_ram_client",
     "TargetEntity": "imperal_sdk.vault_ram_client",
     "WorkingRAMSnapshot": "imperal_sdk.vault_ram_client",
-    "GNCLyapunovGuard": "imperal_sdk.gnc_guard",
-    "GNCEnergyState": "imperal_sdk.gnc_guard",
+    "DwellGuard": "imperal_sdk.dwell_guard",
+    "DwellGuardStep": "imperal_sdk.dwell_guard",
+    "GNCLyapunovGuard": "imperal_sdk.gnc_guard",   # old name of DwellGuard
+    "GNCEnergyState": "imperal_sdk.gnc_guard",     # old name of DwellGuardStep
     "BOMExtractor": "imperal_sdk.bom_extractor",
     "BOMEntity": "imperal_sdk.bom_extractor",
     "BOMReport": "imperal_sdk.bom_extractor",

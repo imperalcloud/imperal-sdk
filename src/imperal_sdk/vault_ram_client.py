@@ -1,5 +1,5 @@
 """
-Tenant Vault Working RAM Client (RFC: ICNLI V17 / GNC Marathon Resilience Engine)
+Tenant Vault Working RAM Client 
 
 Provides sub-3ms working memory access for autonomous marathons.
 Separates LLM Reasoning Core (CPU/ALU) from Persistent State Store (Working RAM).
