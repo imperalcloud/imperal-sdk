@@ -468,3 +468,63 @@ def test_a_source_with_an_embedder_says_so_to_the_vault_and_one_without_never_do
     monkeypatch.setattr(ci, "_backend", lambda: None)
     asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, listing, read))
     assert [m.get("embeds") for m in seen] == [True, None, None]
+
+
+def test_sftp_listing_and_reads_run_in_parallel_with_the_same_result():
+    """live 2026-11-03 (Mac -> whm-jump): one SFTP request at a time listed 1 572 files in 47 s and read 200 in 206 s;
+    in flight together the same listing took 6.7 s and the reads 10.1 s. The result is the walk's, rules included."""
+    import asyncio
+    import time
+    from types import SimpleNamespace as NS
+
+    from imperal_sdk import code_index as ci
+
+    def ent(name, kind, size=10):
+        return NS(filename=name, attrs=NS(type=kind, size=size, mtime=1.0))
+    tree = {"/r": [ent(".gitignore", 1), ent("pkg", ci._SFTP_DIR), ent("gen", ci._SFTP_DIR), ent("top.py", 1)],
+            "/r/pkg": [ent(f"m{i}.py", 1) for i in range(60)] + [ent("sub", ci._SFTP_DIR), ent(".gitignore", 1)],
+            "/r/pkg/sub": [ent("keep.py", 1), ent("skip_me.py", 1)],
+            "/r/gen": [ent("out.py", 1)]}
+    files = {"/r/.gitignore": b"gen/\n", "/r/pkg/.gitignore": b"sub/skip_me.py\n",
+             **{f"/r/pkg/m{i}.py": b"x = 1\n" for i in range(60)}, "/r/top.py": b"y = 2\n"}
+    live = {"now": 0, "peak": 0}
+
+    class F:
+        def __init__(self, data):
+            self.data = data
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def read(self, n=-1):
+            live["now"] += 1
+            live["peak"] = max(live["peak"], live["now"])
+            await asyncio.sleep(0.02)
+            live["now"] -= 1
+            return self.data
+
+    class S:
+        async def readdir(self, p):
+            await asyncio.sleep(0.02)
+            return tree[p]
+
+        async def realpath(self, p):
+            return p
+
+        def open(self, p, mode="rb"):
+            if p not in files:
+                raise OSError(p)
+            return F(files[p])
+    got = asyncio.run(ci.sftp_list_tree(S(), "/r"))
+    paths = [i["path"] for i in got["items"]]
+    assert paths == sorted(paths) and "top.py" in paths and "pkg/sub/keep.py" in paths and len(paths) == 62
+    assert "gen/out.py" not in paths and "pkg/sub/skip_me.py" not in paths       # parent rules reach the children
+    t0 = time.monotonic()
+    many = asyncio.run(ci.sftp_read_many(S(), "/r", [p for p in paths if p.startswith("pkg/m")]))
+    assert len(many["files"]) == 60 and not many["skipped"] and not many["rest"]
+    assert live["peak"] > 1 and time.monotonic() - t0 < 60 * 0.02            # overlapped, not one by one
+    capped = asyncio.run(ci.sftp_read_many(S(), "/r", [p for p in paths if p.startswith("pkg/m")], batch_bytes=10))
+    assert capped["files"] and capped["rest"] and len(capped["files"]) + len(capped["rest"]) == 60

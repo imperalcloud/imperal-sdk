@@ -746,6 +746,100 @@ def indexable(rel_path: str) -> str | None:
     return "code" if os.path.splitext(low)[1] in INDEXABLE_EXT else None
 
 
+# ---- resolution configs: the ONE reader (the vault's stores/repos.py carries a literal copy) ----
+
+def strip_jsonc(text: str) -> str:
+    """JSON with comments (tsconfig, jsconfig) as plain JSON: ``//`` and ``/* */`` comments and trailing
+    commas removed OUTSIDE strings only. ``"@/*"`` or ``"**/*.ts"`` is text, never a comment (live 2026-11-03:
+    a regex stripper read imperal.io's tsconfig from ``"@/*"`` to ``"**/*.ts"`` as one comment, the JSON
+    broke, ``paths`` was lost and every ``@/`` import fell out of the vault graph)."""
+    n = len(text)
+
+    def skip(i: int) -> int:
+        """The index past whitespace and comments from ``i`` (outside strings)."""
+        while i < n:
+            if text[i] in " \t\r\n":
+                i += 1
+            elif text.startswith("//", i):
+                j = text.find("\n", i)
+                i = n if j < 0 else j
+            elif text.startswith("/*", i):
+                j = text.find("*/", i + 2)
+                i = n if j < 0 else j + 2
+            else:
+                break
+        return i
+
+    out: list = []
+    i = 0
+    while i < n:
+        c = text[i]
+        if c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif text.startswith("//", i) or text.startswith("/*", i):
+            i = skip(i)
+            out.append(" ")
+        elif c == "," and skip(i + 1) < n and text[skip(i + 1)] in "}]":
+            i += 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def parse_jsonc(text: str) -> dict:
+    """A JSON-with-comments object, or ``{}`` when it is not one."""
+    import json
+    try:
+        data = json.loads(strip_jsonc(text))
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def parse_config(path: str, text: str) -> tuple:
+    """``(kind, data)`` of a resolution config: tsconfig / jsconfig (JSON with comments), pyproject.toml,
+    setup.cfg, package.json. What the linker needs, nothing else."""
+    import posixpath
+    name = posixpath.basename(_slashes(path)).lower()
+    if name == "pyproject.toml":
+        try:
+            import tomllib
+            data = tomllib.loads(text)
+        except Exception:
+            data = {}
+        st = (data.get("tool") or {}).get("setuptools") or {}
+        find = (st.get("packages") or {}).get("find") if isinstance(st.get("packages"), dict) else None
+        return "pyproject", {"where": list((find or {}).get("where") or []),
+                             "package_dir": dict(st.get("package-dir") or {}),
+                             "name": str((data.get("project") or {}).get("name") or "")}
+    if name == "setup.cfg":
+        import configparser
+        cp = configparser.ConfigParser()
+        try:
+            cp.read_string(text)
+            raw = cp.get("options", "package_dir", fallback="")
+        except Exception:
+            raw = ""
+        pdir = {}
+        for line in raw.replace(";", "\n").splitlines():
+            k, sep, v = line.partition("=")
+            if sep:
+                pdir[k.strip()] = v.strip()
+        return "setup_cfg", {"package_dir": pdir}
+    data = parse_jsonc(text)
+    if name == "package.json":
+        return "package_json", {"name": str(data.get("name") or ""), "main": str(data.get("main") or "")}
+    co = data.get("compilerOptions") or {}
+    return ("jsconfig" if name == "jsconfig.json" else "tsconfig"), {
+        "baseUrl": str(co.get("baseUrl") or ""),
+        "paths": {str(k): [str(x) for x in v or []] for k, v in (co.get("paths") or {}).items() if isinstance(v, list)}}
+
+
 # ---- the scope graph of one file (spec 4.6.1): defs, bindings with aliases, reference chains ----
 
 _CHAIN_PARTS = 6
@@ -1872,55 +1966,94 @@ async def sftp_repo_root(sftp, path: str) -> str:
     return manifest or start
 
 
+# SFTP requests in flight on one connection. Live 2026-11-03 (Mac -> whm-jump, /home/ipw-repo): one request at a
+# time listed 1 572 files in 47 s and read 200 files in 206 s (~4 round trips a file) -- a first sync of the kernel
+# repo would have taken half an hour. asyncssh pipelines requests on one channel; 32 keeps a slow link full without
+# flooding a small server's sftp-server.
+SFTP_PARALLEL = 32
+
+
+async def _gather_bounded(coros, limit: int = SFTP_PARALLEL) -> list:
+    import asyncio
+    gate = asyncio.Semaphore(limit)
+
+    async def one(c):
+        async with gate:
+            return await c
+    return await asyncio.gather(*(one(c) for c in coros))
+
+
 async def sftp_list_tree(sftp, root: str, max_files: int = MAX_REPO_FILES) -> dict:
     """Every indexable file under ``root`` with its size and mtime: .gitignore files honoured, dotted /
     dependency / build trees and virtualenvs skipped, symlinks never followed (no loop, nothing outside
-    the root). ``{"items": [{path, size, mtime, kind}], "partial": str, "os"}``."""
+    the root). ``{"items": [{path, size, mtime, kind}], "partial": str, "os"}``. Walked level by level:
+    every directory of a level (and its .gitignore) is read at once; a directory's rules are known
+    before its children are filtered, as in a one-by-one walk."""
     import posixpath
     items: list = []
     partial = ""
     rules: list = []
-    stack = [""]
-    while stack:
-        rel_dir = stack.pop()
+    level = [""]
+
+    async def listed(rel_dir: str):
         here = posixpath.join(root, rel_dir) if rel_dir else root
         try:
-            entries = await sftp.readdir(here)
+            return rel_dir, here, await sftp.readdir(here)
         except Exception:
-            partial = partial or f"unreadable directory: {rel_dir or '.'}"
-            continue
-        names = {e.filename for e in entries}
-        if rel_dir and "pyvenv.cfg" in names:
-            continue                                  # a virtualenv, whatever it is named
-        if ".gitignore" in names:
-            try:
-                data = await _sftp_bytes(sftp, posixpath.join(here, ".gitignore"), 262144)
-                rules += gitignore_rules((data or b"").decode("utf-8", "replace"), rel_dir)
-            except Exception:
-                pass
-        for e in sorted(entries, key=lambda x: x.filename):
-            name = e.filename
-            if name in (".", ".."):
+            return rel_dir, here, None
+
+    async def ignore_file(here: str):
+        try:
+            return await _sftp_bytes(sftp, posixpath.join(here, ".gitignore"), 262144)
+        except Exception:
+            return None
+
+    while level and not (partial and partial.startswith("over ")):
+        dirs = sorted(await _gather_bounded([listed(d) for d in level]), key=lambda x: x[0])
+        readable = []
+        for rel_dir, here, entries in dirs:
+            if entries is None:
+                partial = partial or f"unreadable directory: {rel_dir or '.'}"
                 continue
-            rel = f"{rel_dir}/{name}" if rel_dir else name
-            kind = getattr(e.attrs, "type", None)
-            if kind == _SFTP_LINK:
-                continue
-            if kind == _SFTP_DIR:
-                if name.startswith(".") or name in SKIP_DIRS or name.startswith("Program Files") \
-                        or gitignored(rules, rel, True):
+            names = {e.filename for e in entries}
+            if rel_dir and "pyvenv.cfg" in names:
+                continue                              # a virtualenv, whatever it is named
+            readable.append((rel_dir, here, entries, ".gitignore" in names))
+        ignores = await _gather_bounded([ignore_file(here) for _r, here, _e, has in readable if has])
+        it = iter(ignores)
+        for rel_dir, _here, _entries, has in readable:
+            if has:
+                data = next(it)
+                if data is not None:
+                    rules += gitignore_rules(data.decode("utf-8", "replace"), rel_dir)
+        level = []
+        for rel_dir, _here, entries, _has in readable:
+            for e in sorted(entries, key=lambda x: x.filename):
+                name = e.filename
+                if name in (".", ".."):
                     continue
-                stack.append(rel)
-                continue
-            what = indexable(rel)
-            if not what or gitignored(rules, rel, False):
-                continue
-            if len(items) >= max_files:
-                partial = f"over {max_files} files"
-                stack = []
+                rel = f"{rel_dir}/{name}" if rel_dir else name
+                kind = getattr(e.attrs, "type", None)
+                if kind == _SFTP_LINK:
+                    continue
+                if kind == _SFTP_DIR:
+                    if name.startswith(".") or name in SKIP_DIRS or name.startswith("Program Files") \
+                            or gitignored(rules, rel, True):
+                        continue
+                    level.append(rel)
+                    continue
+                what = indexable(rel)
+                if not what or gitignored(rules, rel, False):
+                    continue
+                if len(items) >= max_files:
+                    partial = f"over {max_files} files"
+                    level = []
+                    break
+                items.append({"path": rel, "size": int(getattr(e.attrs, "size", 0) or 0),
+                              "mtime": float(getattr(e.attrs, "mtime", 0) or 0), "kind": what})
+            if partial.startswith("over "):
                 break
-            items.append({"path": rel, "size": int(getattr(e.attrs, "size", 0) or 0),
-                          "mtime": float(getattr(e.attrs, "mtime", 0) or 0), "kind": what})
+    items.sort(key=lambda i: i["path"])
     return {"items": items, "partial": partial, "os": sftp_os(root)}
 
 
@@ -1933,27 +2066,34 @@ async def sftp_read_many(sftp, root: str, paths: list, max_bytes: int = MAX_FILE
     skipped: list = []
     rest: list = []
     used = 0
+    todo: list = []
     for rel in paths or []:
         full = _inside(root, str(rel))
         if full is None or not indexable(str(rel)):
             skipped.append(rel)
-            continue
-        if used >= batch_bytes:
-            rest.append(rel)
-            continue
+        else:
+            todo.append((rel, full))
+
+    async def one(rel, full):
         if not await _sftp_contained(sftp, root, full):
-            skipped.append(rel)
-            continue
+            return rel, None
         try:
-            data = await _sftp_bytes(sftp, full, max_bytes)
+            return rel, await _sftp_bytes(sftp, full, max_bytes)
         except Exception:
-            skipped.append(rel)
-            continue
-        if data is None:
-            skipped.append(rel)
-            continue
-        files[rel] = data
-        used += len(data)
+            return rel, None
+
+    # read SFTP_PARALLEL files at once, a slice at a time: the batch cap is checked between slices (a batch may
+    # end one slice over it, as a one-by-one read could end one file over it)
+    for i in range(0, len(todo), SFTP_PARALLEL):
+        if used >= batch_bytes:
+            rest += [rel for rel, _full in todo[i:]]
+            break
+        for rel, data in await _gather_bounded([one(rel, full) for rel, full in todo[i:i + SFTP_PARALLEL]]):
+            if data is None:
+                skipped.append(rel)
+            else:
+                files[rel] = data
+                used += len(data)
     return {"files": files, "skipped": skipped, "rest": rest, "os": sftp_os(root)}
 
 
