@@ -2,6 +2,18 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.3.8 — 2026-11-04
+
+### Fixed
+- `code_index`: one string-aware reader of resolution configs (`strip_jsonc`, `parse_jsonc`, `parse_config`).
+  Comments and trailing commas are removed outside strings only -- a regex stripper read `"@/*"` in a Next.js
+  `tsconfig.json` as a comment opener, lost `paths`, and every `@/` import fell out of the graph. The Tenant Vault
+  carries a literal copy (a test compares the source).
+- `sftp_list_tree` / `sftp_read_many` keep up to `SFTP_PARALLEL` (32) requests in flight on one connection: listing
+  walks level by level, reads go in slices. Live (Mac -> a US server, 1 572 files): listing 47 s -> 6.7 s, 200
+  files read 206 s -> 10.1 s. Results are the same (paths sorted; .gitignore rules still reach a directory's
+  children before they are filtered).
+
 ## 6.3.7 — 2026-10-21
 
 ### Changed
