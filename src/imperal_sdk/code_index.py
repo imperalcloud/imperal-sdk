@@ -59,6 +59,8 @@ class Def:
     end_line: int
     signature: str = ""
     exported: bool = False
+    doc: str = ""        # its docstring or the comment above it, first paragraph (``DOC_CHARS``) -- what it does,
+                         # in the index without its body (owner 2026-11-04: the vault holds the index, never the code)
 
 
 @dataclass(frozen=True)
@@ -96,9 +98,12 @@ class BlobFacts:
     bindings: list[Binding] = field(default_factory=list)
     refs: list[Ref] = field(default_factory=list)
     strings: list[StringKey] = field(default_factory=list)
+    doc: str = ""        # the file's own description: a module docstring or its header comment (``FILE_DOC_CHARS``)
+    names: list[str] = field(default_factory=list)   # every distinct identifier and identifier-like string in the
+                         # file (``NAMES_PER_FILE``): "is this name in the code" without the code (owner 2026-11-04)
 
     def to_dict(self) -> dict:
-        return {"lang": self.lang, "lines": self.lines,
+        return {"lang": self.lang, "lines": self.lines, "doc": self.doc, "names": list(self.names),
                 "defs": [asdict(d) for d in self.defs], "bindings": [asdict(b) for b in self.bindings],
                 "refs": [asdict(r) for r in self.refs], "strings": [asdict(s) for s in self.strings]}
 
@@ -108,7 +113,8 @@ class BlobFacts:
                    defs=[Def(**x) for x in d.get("defs") or []],
                    bindings=[Binding(**x) for x in d.get("bindings") or []],
                    refs=[Ref(**x) for x in d.get("refs") or []],
-                   strings=[StringKey(**x) for x in d.get("strings") or []])
+                   strings=[StringKey(**x) for x in d.get("strings") or []], doc=str(d.get("doc") or ""),
+                   names=[str(x) for x in d.get("names") or []])
 
 
 # ---- contracts (from webbee/intel/contracts.py) ----
@@ -671,7 +677,10 @@ def _lang_for(path: str) -> str:
 
 # ---- what any source may index (spec 4.2: one list, enforced by every source, refused by the vault) ----
 
-EXTRACTOR_VERSION = "2"
+# 3 (2026-11-04): a blob is sent without its text -- facts with descriptions (``Def.doc``, ``BlobFacts.doc``), its
+# line hashes and size; a config as its parsed keys. The vault asks every version of an older extractor again, so the
+# text it held is replaced by the index (owner 2026-11-04: the vault holds the index, never the code)
+EXTRACTOR_VERSION = "3"
 MAX_FILE_BYTES = 10 * 1024 * 1024     # one file in the code index (Cloud OS: shared vault, many users)
 MAX_REPO_FILES = 20_000
 INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
@@ -1361,6 +1370,240 @@ def _ts_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported: bool
         _ts_walk(sc, c, scope, ctx, local, False, named_exports)
 
 
+# ---- the index without the code: descriptions, line hashes, config keys (owner 2026-11-04) ----
+
+DOC_CHARS = 300             # one definition's description
+FILE_DOC_CHARS = 500        # the file's description
+_COMMENT_MARKS = ("///", "//!", "//", "#", "--", ";;")
+_LICENSE_WORDS = ("copyright", "licensed under", "license", "spdx-license", "all rights reserved")
+
+
+def _doc_text(parts: list, cap: int) -> str:
+    """The first paragraph of a description, whitespace collapsed, at most ``cap`` characters."""
+    para: list = []
+    for ln in parts:
+        if not ln.strip():
+            if para:
+                break
+            continue
+        para.append(ln.strip())
+    out = " ".join(" ".join(para).split())
+    return out if len(out) <= cap else out[:cap - 3].rstrip() + "..."
+
+
+def _comment_above(lines: list, idx: int, cap: int = DOC_CHARS) -> str:
+    """The comment block right above line ``idx`` (0-based), decorators and annotations stepped over."""
+    i = idx - 1
+    while i >= 0 and lines[i].strip().startswith("@"):
+        i -= 1
+    if i < 0:
+        return ""
+    if lines[i].strip().endswith("*/"):
+        j = i
+        while j >= 0 and "/*" not in lines[j]:
+            j -= 1
+        if j < 0:
+            return ""
+        body = []
+        for ln in lines[j:i + 1]:
+            t = ln.strip()
+            for mark in ("/**", "/*!", "/*", "*/"):
+                t = t.replace(mark, "")
+            body.append(t.lstrip("*").strip())
+        return _doc_text(body, cap)
+    block: list = []
+    while i >= 0:
+        t = lines[i].strip()
+        mark = next((m for m in _COMMENT_MARKS if t.startswith(m)), None)
+        if mark is None or t.startswith("#!"):
+            break
+        block.insert(0, t[len(mark):].strip())
+        i -= 1
+    return _doc_text(block, cap)
+
+
+def _string_doc(lines: list, k: int, cap: int) -> str:
+    """A Python docstring starting at line ``k`` (0-based), or ""."""
+    if k >= len(lines):
+        return ""
+    t = lines[k].strip()
+    while t[:1].lower() in ("r", "u", "b", "f") and t[1:2] in ("'", '"'):
+        t = t[1:]
+    for q in ('"""', "'''", '"', "'"):
+        if t.startswith(q):
+            rest = t[len(q):]
+            if q in rest:
+                return _doc_text([rest.split(q, 1)[0]], cap)
+            if len(q) == 1:
+                return ""
+            body = [rest]
+            for ln in lines[k + 1:k + 200]:
+                if q in ln:
+                    body.append(ln.split(q, 1)[0])
+                    break
+                body.append(ln)
+            return _doc_text(body, cap)
+    return ""
+
+
+def _py_def_doc(lines: list, idx: int) -> str:
+    j = idx
+    while j < min(len(lines), idx + 30) and not lines[j].split("#", 1)[0].rstrip().endswith(":"):
+        j += 1
+    k = j + 1
+    while k < len(lines) and not lines[k].strip():
+        k += 1
+    return _string_doc(lines, k, DOC_CHARS)
+
+
+def _file_doc(lang: str, lines: list) -> str:
+    """A module docstring, else the first comment block at the top that is not a license header."""
+    k = 0
+    while k < len(lines) and (not lines[k].strip() or lines[k].startswith("#!") or "coding" in lines[k][:30]
+                              and lines[k].lstrip().startswith("#")):
+        k += 1
+    if lang == "python":
+        # comments before the docstring (a license header) are stepped over
+        m = k
+        while m < len(lines) and (not lines[m].strip() or lines[m].lstrip().startswith("#")):
+            m += 1
+        got = _string_doc(lines, m, FILE_DOC_CHARS)
+        if got:
+            return got
+    blocks: list = []
+    cur: list = []
+    for ln in lines[k:k + 80]:
+        t = ln.strip()
+        if not t:                          # a blank line closes a block: one followed by code belongs to that code
+            if cur:
+                blocks.append(cur)
+                cur = []
+            continue
+        mark = next((mk for mk in _COMMENT_MARKS if t.startswith(mk)), None)
+        if t.startswith(("/*", "*", "*/")) or mark:
+            for mk in ("/**", "/*!", "/*", "*/"):
+                t = t.replace(mk, "")
+            t = t.lstrip("*").strip() if not mark else t[len(mark):].strip()
+            if t:
+                cur.append(t)              # an empty comment line (``*/``, ``//``) stays inside its block
+            continue
+        cur = []                           # glued to the code below it: that code's description, not the file's
+        break
+    if cur:
+        blocks.append(cur)
+    for b in blocks:
+        joined = " ".join(b).lower()
+        if not any(w in joined for w in _LICENSE_WORDS):
+            return _doc_text(b, FILE_DOC_CHARS)
+    return ""
+
+
+def _with_docs(lang: str, text: str, defs: list) -> tuple:
+    """``(defs with their descriptions, the file's description)``."""
+    lines = str(text).split("\n")
+    out = []
+    for d in defs:
+        idx = max(0, int(d.start_line) - 1)
+        doc = _py_def_doc(lines, idx) if lang == "python" and d.kind in ("function", "method", "class") else ""
+        doc = doc or _comment_above(lines, idx)
+        out.append(Def(d.name, d.qualname, d.kind, d.start_line, d.end_line, d.signature, d.exported, doc))
+    return out, _file_doc(lang, lines)
+
+
+NAMES_PER_FILE = 5000      # distinct names one file adds to the index
+NAME_MAX_CHARS = 80
+_NAME_SHAPE = re.compile(r"^[A-Za-z_$][\w$.\-]{0,79}$")      # an identifier, a dotted key, a kebab key (mechanical)
+
+
+def _names_of(tree, src: bytes) -> list:
+    """Every distinct identifier of a parse tree (any grammar's ``*identifier`` / ``name`` / ``constant`` leaves) and
+    every string literal shaped like a name (a dict key, a route name, a flag) -- sorted, at most ``NAMES_PER_FILE``."""
+    seen: set = set()
+    cur = tree.walk()
+    stack_done = False
+    while not stack_done:
+        node = cur.node
+        t = node.type
+        if node.child_count == 0 or t in ("string_content", "string_fragment"):
+            if t.endswith("identifier") or t in ("name", "constant", "word") or t in ("string_content",
+                                                                                    "string_fragment"):
+                txt = src[node.start_byte:node.end_byte].decode("utf-8", "replace")
+                if len(txt) <= NAME_MAX_CHARS and _NAME_SHAPE.match(txt):
+                    seen.add(txt)
+            elif t == "string" and node.end_byte - node.start_byte <= NAME_MAX_CHARS + 2:
+                txt = src[node.start_byte:node.end_byte].decode("utf-8", "replace").strip("\"'`")
+                if _NAME_SHAPE.match(txt):
+                    seen.add(txt)
+        if cur.goto_first_child():
+            continue
+        while not cur.goto_next_sibling():
+            if not cur.goto_parent():
+                stack_done = True
+                break
+    return sorted(seen)[:NAMES_PER_FILE]
+
+
+def _norm_line(line: str) -> str:
+    return " ".join(str(line).split())
+
+
+def line_hash(line: str) -> str:
+    """One line's hash as the index keeps it (whitespace collapsed; 8 hex): a quoted line is checked against a
+    file's ``line_hashes`` without the file's text."""
+    s = _norm_line(line)
+    return hashlib.blake2b(s.encode("utf-8", "replace"), digest_size=4).hexdigest() if s else "-" * 8
+
+
+def line_hashes(text: str) -> str:
+    """Every line's ``line_hash``, concatenated (8 characters per line, ``--------`` for a blank one)."""
+    return "".join(line_hash(ln) for ln in str(text).split("\n"))
+
+
+def parse_config(path: str, text: str) -> tuple:
+    """``(kind, data)`` of a resolution config -- only the keys module resolution needs (tsconfig / jsconfig
+    ``baseUrl`` + ``paths``; ``package.json`` name + main; ``pyproject.toml`` package dirs + name; ``setup.cfg``
+    package_dir). Parsed here so the vault gets the keys, never the file (the vault parsed the text until 2026-11-04;
+    the same rules)."""
+    name = os.path.basename(str(path).replace("\\", "/")).lower()
+    if name == "pyproject.toml":
+        data: dict = {}
+        try:
+            try:
+                import tomllib as _toml
+            except ImportError:            # Python < 3.11
+                import tomli as _toml      # type: ignore
+            data = _toml.loads(text)
+        except Exception:
+            data = {}
+        tool = data.get("tool") or {}
+        st = tool.get("setuptools") or {}
+        find = (st.get("packages") or {}).get("find") if isinstance(st.get("packages"), dict) else None
+        return "pyproject", {"where": [str(x) for x in (find or {}).get("where") or []],
+                             "package_dir": {str(k): str(v) for k, v in dict(st.get("package-dir") or {}).items()},
+                             "name": str((data.get("project") or {}).get("name") or "")}
+    if name == "setup.cfg":
+        import configparser
+        cp = configparser.ConfigParser()
+        try:
+            cp.read_string(text)
+            raw = cp.get("options", "package_dir", fallback="")
+        except Exception:
+            raw = ""
+        pdir = {}
+        for line in raw.replace(";", "\n").splitlines():
+            k, sep, v = line.partition("=")
+            if sep:
+                pdir[k.strip()] = v.strip()
+        return "setup_cfg", {"package_dir": pdir}
+    data = parse_jsonc(text)
+    if name == "package.json":
+        return "package_json", {"name": str(data.get("name") or ""), "main": str(data.get("main") or "")}
+    co = data.get("compilerOptions") or {}
+    return ("jsconfig" if name == "jsconfig.json" else "tsconfig"), {
+        "baseUrl": str(co.get("baseUrl") or ""),
+        "paths": {str(k): [str(x) for x in v or []] for k, v in (co.get("paths") or {}).items() if isinstance(v, list)}}
+
+
 def scope_facts(path: str, text: str) -> BlobFacts | None:
     """The file's scope graph (its defs, bindings with aliases, reference chains) and string keys,
     from this file alone. None when it is not code the parser knows (or the parser is absent)."""
@@ -1386,8 +1629,10 @@ def scope_facts(path: str, text: str) -> BlobFacts | None:
                 sc.defs = [Def(d.name, d.qualname, d.kind, d.start_line, d.end_line, d.signature, True)
                            if (d.qualname in named and "." not in d.qualname) else d for d in sc.defs]
         defs = sorted(sc.defs, key=lambda d: (d.start_line, d.qualname))
+        strings = string_keys(lang, tree, str(text), defs, path)
+        defs, file_doc = _with_docs(lang, str(text), defs)
         facts = BlobFacts(lang=lang, lines=str(text).count("\n") + 1, defs=defs, bindings=sc.bindings,
-                          refs=sc.refs, strings=string_keys(lang, tree, str(text), defs, path))
+                          refs=sc.refs, strings=strings, doc=file_doc, names=_names_of(tree, src))
         return facts
     except Exception:
         return None
@@ -1777,7 +2022,7 @@ READ_BATCH = 200
 
 
 def _sent_size(blob: dict, chunks) -> int:
-    """A blob's size as an apply sends it: the blob with its text and facts, and its chunks with their vectors."""
+    """A blob's size as an apply sends it: the blob's facts and line hashes, and its chunks with their vectors."""
     import json as _json
     return len(_json.dumps(blob, default=str).encode("utf-8")) + sum(
         len(_json.dumps(c, default=str).encode("utf-8")) for c in chunks or ())
@@ -1886,7 +2131,10 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
             if text is None:
                 continue                          # binary: not code
             if indexable(p) == "config":
-                configs.append({"path": p, "text": text, "size": stat[p]["size"], "mtime": stat[p]["mtime"]})
+                # its resolution keys, never the file (owner 2026-11-04: the vault holds the index, never the code)
+                ckind, cdata = parse_config(p, text)
+                configs.append({"path": p, "kind": ckind, "data": cdata, "size": stat[p]["size"],
+                                "mtime": stat[p]["mtime"]})
                 continue
             h = blob_hash(text)
             files.append({"path": p, "blob": h, "size": stat[p]["size"], "mtime": stat[p]["mtime"]})
@@ -1898,12 +2146,17 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
             body = facts.to_dict() if facts is not None else {"lang": "", "lines": text.count("\n") + 1}
             extract_ms += (_time.monotonic() - e0) * 1000
             mine = chunks_for(h, facts, text) if embed_chunks else []
-            if _sent_size({"hash": h, "text": text, "facts": body}, mine) > APPLY_BATCH_BYTES:
-                # a huge generated file (a bundle, a dump): its facts would not fit one apply -- kept as text,
-                # never parsed into the graph, and said
-                body, mine = {"lang": body.get("lang") or "", "lines": text.count("\n") + 1}, []
-                partial.append(f"{p} kept as text only (too large to parse)")
-            blobs.append({"hash": h, "lang": body.get("lang") or "", "text": text, "facts": body})
+            # the index of this version, never its text: facts (with descriptions), size, line hashes (a quoted line
+            # is checked against them), vectors computed here (owner 2026-11-04)
+            entry = {"hash": h, "lang": body.get("lang") or "", "facts": body, "lines": text.count("\n") + 1,
+                     "bytes": len(text.encode("utf-8")), "line_hashes": line_hashes(text)}
+            if _sent_size(entry, mine) > APPLY_BATCH_BYTES:
+                # a huge generated file (a bundle, a dump): its facts would not fit one apply -- kept as its size
+                # and line count only, never parsed into the graph, and said
+                entry.update(facts={"lang": body.get("lang") or "", "lines": entry["lines"]}, line_hashes="")
+                mine = []
+                partial.append(f"{p} kept as its size only (too large to index)")
+            blobs.append(entry)
             chunks += mine
     meta["partial_reason"] = ("; ".join(dict.fromkeys(partial)))[:1000] or None
     removed = list(planned.get("removed") or [])

@@ -95,7 +95,7 @@ def test_one_table_and_the_old_private_names_stay_aliases():
     assert indexer.DEF_NODES["typescript"]["type_alias_declaration"] == "type"
     assert indexer.DEF_NODES["typescript"]["enum_declaration"] == "class"
     assert indexer._DEF_NODES is indexer.DEF_NODES and indexer._get_language is indexer.language
-    assert indexer.EXTRACTOR_VERSION == "2" and indexer.MAX_FILE_BYTES == 10 * 1024 * 1024
+    assert indexer.EXTRACTOR_VERSION == "3" and indexer.MAX_FILE_BYTES == 10 * 1024 * 1024
     assert indexer.MAX_REPO_FILES == 20_000
 
 
@@ -252,6 +252,10 @@ def test_sync_source_reads_only_changed_and_batches_the_apply(tmp_path):
     assert ".env" not in [i["path"] for i in plans[0][0]] and "same.py" not in reads[0]
     assert len(applies) == 1 and len(applies[0]["blobs"]) == 1 and len(applies[0]["files"]) == 2   # one blob, two files
     assert applies[0]["removed"] == ["gone.py"] and applies[0]["configs"][0]["path"] == "pyproject.toml"
+    # the index, never the code (owner 2026-11-04): no text in a blob or a config, the config's keys parsed here
+    assert "text" not in applies[0]["blobs"][0] and "text" not in applies[0]["configs"][0]
+    assert applies[0]["configs"][0]["kind"] == "pyproject" and applies[0]["configs"][0]["data"]["name"] == "x"
+    assert applies[0]["blobs"][0]["lines"] == 3 and len(applies[0]["blobs"][0]["line_hashes"]) == 3 * 8
     assert "lost.py" in out["partial_reason"] and "big.py over 10 MB" in out["partial_reason"]
     parts = ci.apply_batches([{"path": "a", "blob": "h1"}, {"path": "b", "blob": "h2"}],
                              [{"hash": "h1", "text": "x" * 10}, {"hash": "h2", "text": "y" * 10}], [], limit=15)
@@ -415,9 +419,9 @@ def test_every_apply_part_fits_the_vault_body_cap_as_sent():
     assert [len(p["blobs"]) for p in small] == [20, 20, 5]
 
 
-def test_a_file_whose_facts_do_not_fit_an_apply_is_kept_as_text_and_said(monkeypatch):
+def test_a_file_whose_facts_do_not_fit_an_apply_is_kept_as_its_size_and_said(monkeypatch):
     """Cloud OS limits: a file up to 10 MB is indexed; a huge generated one whose facts would not fit one
-    apply is stored as text only -- never a failed sync."""
+    apply is kept as its size and line count only -- never a failed sync, never its text."""
     import asyncio
     from imperal_sdk import code_index as ci
     assert ci.MAX_FILE_BYTES == 10 * 1024 * 1024
@@ -439,10 +443,10 @@ def test_a_file_whose_facts_do_not_fit_an_apply_is_kept_as_text_and_said(monkeyp
     out = asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, [{"path": p, "size": len(t), "mtime": 1.0}
                                                                     for p, t in files.items()], read, embed_chunks=False))
     sent = {b["hash"]: b for a in applies for b in a["blobs"]}
-    bundle = next(b for b in sent.values() if b["text"] == big)
-    assert "defs" not in bundle["facts"] and bundle["facts"]["lines"] > 1000
-    assert any(b["facts"].get("defs") for b in sent.values() if b["text"] != big)
-    assert "bundle.py kept as text only" in out["partial_reason"]
+    bundle = next(b for b in sent.values() if b["lines"] > 1000)
+    assert "defs" not in bundle["facts"] and bundle["line_hashes"] == "" and "text" not in bundle
+    assert any(b["facts"].get("defs") for b in sent.values() if b["lines"] < 1000)
+    assert "bundle.py kept as its size only" in out["partial_reason"]
 
 
 def test_a_source_with_an_embedder_says_so_to_the_vault_and_one_without_never_does(monkeypatch):
@@ -528,3 +532,24 @@ def test_sftp_listing_and_reads_run_in_parallel_with_the_same_result():
     assert live["peak"] > 1 and time.monotonic() - t0 < 60 * 0.02            # overlapped, not one by one
     capped = asyncio.run(ci.sftp_read_many(S(), "/r", [p for p in paths if p.startswith("pkg/m")], batch_bytes=10))
     assert capped["files"] and capped["rest"] and len(capped["files"]) + len(capped["rest"]) == 60
+
+
+def test_the_index_describes_what_the_code_does_without_its_body():
+    """Owner 2026-11-04: the vault holds the index -- signatures and descriptions, never a body."""
+    import pytest
+    from imperal_sdk import code_index as ci
+    if ci.language("python") is None:
+        pytest.skip("no python grammar")
+    src = ('# Copyright 2026 Imperal\n"""Billing: settles invoices.\n\nMore."""\n\n@cached\ndef settle(x):\n'
+           '    """Settle one invoice."""\n    return x\n\n# The rate in percent.\nRATE = 3\n')
+    f = ci.scope_facts("billing.py", src)
+    docs = {d.qualname: d.doc for d in f.defs}
+    assert f.doc == "Billing: settles invoices." and docs["settle"] == "Settle one invoice."
+    assert docs["RATE"] == "The rate in percent." and ci.BlobFacts.from_dict(f.to_dict()).doc == f.doc
+
+
+def test_a_quoted_line_is_checked_by_its_hash():
+    from imperal_sdk import code_index as ci
+    text = "def a():\n    return   1\n\n"
+    hs = ci.line_hashes(text)
+    assert len(hs) == 4 * 8 and hs[8:16] == ci.line_hash("return 1") and hs[16:24] == "-" * 8

@@ -19,6 +19,15 @@ All notable changes to `imperal-sdk` are documented here.
 - Documents are chunked over their view's text, so search by meaning reaches what a contract or a report says.
 - Dockerfile, Makefile, Gemfile, Jenkinsfile and other build files are code.
 
+### Changed
+- **The code map is an index, never the code** (owner 2026-11-04): `sync_source` sends each file version as its facts,
+  line count, size and line hashes - never its text; a resolution config as its parsed keys (`parse_config`), never
+  the file. `EXTRACTOR_VERSION` 3: the vault asks every older version again, so the text it held is replaced.
+- The index describes what the code does without its body: `Def.doc` (a docstring or the comment above a
+  definition, first paragraph), `BlobFacts.doc` (a module docstring or the file's header comment, license headers
+  skipped) and `BlobFacts.names` (every distinct identifier and name-shaped string of the file).
+- `line_hash` / `line_hashes`: a quoted line is checked against a file's hashes.
+
 ### Security
 - `build_index` never reads a never-read path, whoever passes it. The never-read list ignores case and trailing dots
   (`.SSH`, `id_rsa.`) and checks where a link leads.
