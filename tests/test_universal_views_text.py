@@ -48,3 +48,22 @@ def test_an_xml_entity_bomb_is_never_expanded():
             b"<l>&b;&b;&b;</l>")
     v = view_of("x.xml", bomb)
     assert v.skipped and "aaaa" not in v.text
+
+
+def test_a_doctype_in_utf16_is_refused_too():
+    doc = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE x [<!ENTITY a "bbbb">]><x>&a;</x>'.encode("utf-16")
+    assert view_of("u.xml", doc).skipped
+
+
+def test_yaml_aliases_never_multiply_the_view():
+    import time
+
+    import pytest
+    pytest.importorskip("yaml")
+    layers = ["a: &a [x, x, x, x, x, x, x, x, x, x]"]
+    for i in range(1, 9):
+        prev = chr(ord("a") + i - 1)
+        layers.append(f"{chr(ord('a') + i)}: &{chr(ord('a') + i)} [*{prev}, *{prev}, *{prev}, *{prev}, *{prev}, *{prev}, *{prev}, *{prev}, *{prev}, *{prev}]")
+    t0 = time.monotonic()
+    v = view_of("bomb.yaml", "\n".join(layers).encode())
+    assert time.monotonic() - t0 < 5 and len(v.text) < 2_100_000 and "(same as" in v.text

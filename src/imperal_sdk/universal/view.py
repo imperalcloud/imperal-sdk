@@ -66,15 +66,23 @@ class UnsafeXML(ValueError):
 
 
 def parse_xml(raw: bytes):
-    """An ElementTree root from untrusted XML: ``defusedxml`` when installed, else the stdlib parser after refusing
-    any DOCTYPE (raises ``UnsafeXML``)."""
+    """An ElementTree root from untrusted XML: ``defusedxml`` when installed; else an expat pass that stops at the
+    first DOCTYPE or entity declaration -- before anything expands, in whatever encoding the document declares --
+    and only then the stdlib parser (raises ``UnsafeXML``)."""
     try:
         import defusedxml.ElementTree as safe_et
         return safe_et.fromstring(raw)
     except ImportError:
         pass
-    if b"<!DOCTYPE" in raw[:65536].upper() or b"<!ENTITY" in raw.upper():
-        raise UnsafeXML("XML with a DOCTYPE is not read")
+    from xml.parsers import expat
+
+    def refuse(*_a):
+        raise UnsafeXML("XML with a DOCTYPE or an entity declaration is not read")
+    check = expat.ParserCreate()
+    check.StartDoctypeDeclHandler = refuse
+    check.EntityDeclHandler = refuse
+    check.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
+    check.Parse(raw, True)
     import xml.etree.ElementTree as ET
     return ET.fromstring(raw)
 
@@ -124,4 +132,4 @@ def view_of(rel_path: str, raw: bytes) -> View | None:
 
 
 # the readers register themselves (imported last: they use the types above)
-from imperal_sdk.universal import textual  # noqa: E402,F401
+from imperal_sdk.universal import office, textual  # noqa: E402,F401

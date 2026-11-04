@@ -8,7 +8,8 @@ import io
 import json
 from html.parser import HTMLParser
 
-from imperal_sdk.universal.view import UnsafeXML, View, close_sections, decode, line_count, parse_xml, register
+from imperal_sdk.universal.view import (MAX_VIEW_CHARS, UnsafeXML, View, close_sections, decode, line_count,
+                                        parse_xml, register)
 
 TREE_DEPTH = 3            # keys of JSON / YAML / TOML / XML named in the outline down to this depth
 CSV_MAX_ROWS = 200_000
@@ -189,10 +190,17 @@ def _table(rel: str, raw: bytes) -> View:
     return View("data", out, close_sections([head], line_count(out)))
 
 
+TREE_MAX_LINES = 200_000   # a rendered tree stops here (YAML aliases can multiply a small file without bound)
+
+
 def _render_tree(data) -> tuple[str, list[tuple[str, str, int, int]]]:
-    """A nested value as indented ``key: value`` lines; every mapping key down to ``TREE_DEPTH`` is a head."""
+    """A nested value as indented ``key: value`` lines; every mapping key down to ``TREE_DEPTH`` is a head. A
+    container met again (a YAML alias) is shown as a reference, never walked twice; the rendering stops at
+    ``TREE_MAX_LINES`` lines or ``MAX_VIEW_CHARS`` characters (security review 2026-11-04)."""
     lines: list[str] = []
     heads: list[tuple[str, str, int, int]] = []
+    seen: dict[int, str] = {}
+    size = [0]
 
     def scalar(v) -> bool:
         return not isinstance(v, (dict, list)) or not v
@@ -200,25 +208,38 @@ def _render_tree(data) -> tuple[str, list[tuple[str, str, int, int]]]:
     def show(v) -> str:
         return json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else str(v)
 
-    def walk(obj, path: str, depth: int):
+    def emit(line: str) -> bool:
+        if len(lines) >= TREE_MAX_LINES or size[0] >= MAX_VIEW_CHARS:
+            return False
+        lines.append(line[:2000])
+        size[0] += len(lines[-1]) + 1
+        return True
+
+    def walk(obj, path: str, depth: int) -> bool:
         pad = "  " * depth
+        if isinstance(obj, (dict, list)) and obj:
+            if id(obj) in seen:
+                return emit(f"{pad}(same as {seen[id(obj)] or 'the top'})")
+            seen[id(obj)] = path
         if isinstance(obj, dict):
             for k, v in obj.items():
                 name = f"{path}.{k}" if path else str(k)
-                lines.append(f"{pad}{k}: {show(v)}" if scalar(v) else f"{pad}{k}:")
+                if not emit(f"{pad}{k}: {show(v)}" if scalar(v) else f"{pad}{k}:"):
+                    return False
                 if depth < TREE_DEPTH:
                     heads.append((name, "key", depth + 1, len(lines)))
-                if not scalar(v):
-                    walk(v, name, depth + 1)
+                if not scalar(v) and not walk(v, name, depth + 1):
+                    return False
         elif isinstance(obj, list):
             for item in obj:
                 if scalar(item):
-                    lines.append(f"{pad}- {show(item)}")
-                else:
-                    lines.append(f"{pad}-")
-                    walk(item, path, depth + 1)
+                    if not emit(f"{pad}- {show(item)}"):
+                        return False
+                elif not emit(f"{pad}-") or not walk(item, path, depth + 1):
+                    return False
         else:
-            lines.append(f"{pad}{show(obj)}")
+            return emit(f"{pad}{show(obj)}")
+        return True
     walk(data, "", 0)
     return "\n".join(lines), heads
 
