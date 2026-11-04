@@ -1628,7 +1628,14 @@ def chunk_text(path: str, text: str, spans: list) -> list:
 
 
 def chunk_file(root: str, fi: FileIndex) -> list:
-    """The client index's chunks of one file (read from ``root``)."""
+    """The client index's chunks of one file (read from ``root``): a document, sheet, message or other non-code file
+    is chunked over its view's text -- the same lines its sections point at (universal index)."""
+    if getattr(fi, "kind", "code") not in ("code", "config"):
+        from imperal_sdk.universal.index import read_view
+        view = read_view(root, fi.path)
+        if view is None or view.skipped or not view.text:
+            return []
+        return chunk_text(fi.path, view.text, [(s.name, s.kind, s.start_line, s.end_line) for s in fi.symbols])
     try:
         with open(os.path.join(root, fi.path), "r", encoding="utf-8") as f:
             text = f.read()

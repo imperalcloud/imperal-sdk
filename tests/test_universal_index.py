@@ -47,3 +47,11 @@ def test_a_file_over_its_kind_cap_is_skipped_unread(tmp_path, monkeypatch):
 def test_parse_view_carries_sections_and_links():
     fi = parse_view("n.md", view_of("n.md", b"# Q3\n[ledger](ledger.xlsx)\n"))
     assert fi.kind == "document" and fi.symbols[0].name == "Q3" and fi.symbols[0].kind == "section"
+
+
+def test_a_document_is_chunked_over_its_view(tmp_path):
+    from imperal_sdk.code_index import chunk_file
+    (tmp_path / "c.docx").write_bytes(_docx())
+    fi = build_index(str(tmp_path), ["c.docx"]).files["c.docx"]
+    chunks = chunk_file(str(tmp_path), fi)
+    assert chunks and any("30 days." in c.text for c in chunks)
