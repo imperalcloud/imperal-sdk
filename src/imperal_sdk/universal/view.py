@@ -132,4 +132,4 @@ def view_of(rel_path: str, raw: bytes) -> View | None:
 
 
 # the readers register themselves (imported last: they use the types above)
-from imperal_sdk.universal import office, textual  # noqa: E402,F401
+from imperal_sdk.universal import image, legacy, mail, office, pdf, textual  # noqa: E402,F401
