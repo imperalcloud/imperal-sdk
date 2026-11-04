@@ -9,7 +9,7 @@
 [![PyPI](https://img.shields.io/pypi/v/imperal-sdk?color=FFB800&label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/imperal-sdk/)
 [![Python](https://img.shields.io/badge/python-3.6%20--%203.14%2B-blue?logo=python&logoColor=white)](https://pypi.org/project/imperal-sdk/)
 [![Protocol](https://img.shields.io/badge/protocol-ICNLI%20v6.0%20Quantum-00D2FF?style=flat-square)](https://icnli.org)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg?style=flat-square)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-1629%20passed%20%7C%20100%25-success?style=flat-square)]()
 [![DX](https://img.shields.io/badge/DX-Zero--Boilerplate%20%E2%9A%A1-orange?style=flat-square)]()
 
@@ -237,7 +237,7 @@ pytest -v
 - **Python Runtime**: Universal support for **Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14+**.
 - **Footprint**: Ultra-lightweight core with lazy attribute resolution (PEP 562 with Python 3.6 fallback). Sub-15ms cold start.
 - **Standards**: 100% compliant with the [ICNLI Open Protocol](https://icnli.org) (CC BY-SA 4.0).
-- **License**: [Apache-2.0](LICENSE).
+- **License**: [AGPL-3.0](LICENSE).
 
 ---
 

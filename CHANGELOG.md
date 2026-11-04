@@ -20,6 +20,8 @@ All notable changes to `imperal-sdk` are documented here.
 - Dockerfile, Makefile, Gemfile, Jenkinsfile and other build files are code.
 
 ### Changed
+- **License: AGPL-3.0** (`AGPL-3.0-only`, the kernel's license) from this release on; earlier releases stay under
+  Apache-2.0. `LICENSE` holds the full GNU AGPL v3 text; every source header says AGPL-3.0.
 - **The code map is an index, never the code** (owner 2026-11-04): `sync_source` sends each file version as its facts,
   line count, size and line hashes - never its text; a resolution config as its parsed keys (`parse_config`), never
   the file. `EXTRACTOR_VERSION` 3: the vault asks every older version again, so the text it held is replaced.

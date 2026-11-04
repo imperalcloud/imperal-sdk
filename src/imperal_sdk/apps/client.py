@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """``ctx.apps`` — installed apps, their settings, and marketplace moderation.
 
 Two extensions were hand-rolling this family: admin (moderation queue,

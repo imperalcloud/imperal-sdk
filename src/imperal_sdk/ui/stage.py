@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2026 Imperal, Inc.
-# Licensed under the Apache License, Version 2.0.
+# Licensed under the AGPL-3.0 License.
 """ICNLI Fluid Terminal Canvas — Ephemeral Stage Primitive (v6.1.0).
 
 Represents an ephemeral, interactive UI stage rendered dynamically

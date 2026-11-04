@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Contract tests: every declarative step verb has a JSON Schema + validate_step."""
 from imperal_sdk.ir.actions import ACTION_SCHEMAS, validate_step
 

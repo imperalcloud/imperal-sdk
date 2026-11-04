@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Concrete HTTP cache client backing ``ctx.cache``.
 
 Talks to the Auth Gateway ``/v1/internal/extcache/{app_id}/{user_id}/{model}/{key_hash}``

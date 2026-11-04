@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """POST /v1/internal/notify wire payload — extension_id attribution
 (Notification Preferences v1, spec section 5). Mirrors the respx style of
 ``test_sdk_matches_kernel_contract.py`` (asyncio_mode=auto — plain

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Curated, non-introspectable catalog flags (policy, not signatures).
 
 These flags cannot be derived from introspection alone — they express

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """The gateway-backed namespaces added in 5.12.0.
 
 WHAT IS WORTH TESTING HERE. These clients hold almost no logic — the value

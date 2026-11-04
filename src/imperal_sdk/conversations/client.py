@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """``ctx.conversations`` — the Thoughts Room, from inside an extension.
 
 The room holds every conversation a user has with Webbee, across panel,

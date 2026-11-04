@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """T15: UserContext.imperal_id / tenant_id must be non-empty (min_length=1).
 agency_id stays nullable with NO min_length constraint (B2B known-gap).
 """

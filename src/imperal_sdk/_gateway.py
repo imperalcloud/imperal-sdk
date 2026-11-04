@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """One way to call the Auth Gateway from an SDK client.
 
 WHY THIS EXISTS. Before 5.12.0 every namespace that needed a gateway route

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc.
-# Licensed under the Apache-2.0 License.
+# Licensed under the AGPL-3.0 License.
 """File Mage L3 — file_sinks manifest contract + @ext.file_sink + V35."""
 import pytest
 

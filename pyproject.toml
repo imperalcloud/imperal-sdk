@@ -7,7 +7,8 @@ name = "imperal-sdk"
 dynamic = ["version"]
 description = "SDK for building Imperal Cloud extensions"
 readme = "README.md"
-license = "Apache-2.0"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
 authors = [
     { name = "Valentin Scerbacov", email = "valentin@imperal.io" },
     { name = "Imperal, Inc." },

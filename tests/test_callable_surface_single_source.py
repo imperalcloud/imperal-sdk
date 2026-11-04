@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Federal: I-CALLABLE-SURFACE-SINGLE-SOURCE (2026-08-21).
 
 Live report: deploying WordPress Hub returned "5 of 259 functions synced".

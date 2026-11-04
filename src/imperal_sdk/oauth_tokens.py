@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Shared OAuth token refresh -- the ONE implementation every connector uses.
 
 Why this module exists (2026-08-21, Google Analytics reconnect report)

@@ -1,6 +1,6 @@
 # tests/contract/test_reference_no_leak.py
 """
-Seal gate (L0 success #4): the open Apache-2.0 SDK catalog must not expose
+Seal gate (L0 success #4): the open AGPL-3.0 SDK catalog must not expose
 engine-internal tokens in any publicly-visible field (name, description,
 parameters, etc.).
 

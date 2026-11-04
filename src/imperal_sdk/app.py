@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2026 Imperal, Inc.
-# Licensed under the Apache-2.0 License.
+# Licensed under the AGPL-3.0 License.
 """Imperal SDK App: an extension with no boilerplate.
 
 Empowers developers to build next-generation AI Cloud OS applications with:

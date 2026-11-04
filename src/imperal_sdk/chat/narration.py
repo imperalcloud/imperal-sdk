@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Imperal, Inc., Valentin Scerbacov, and contributors
-# Licensed under the Apache-2.0 License. See LICENSE file for details.
+# Licensed under the AGPL-3.0 License. See LICENSE file for details.
 """Federal-Grade Chat Integrity — emit_narration tool contract (P2 Task 18).
 
 Structural foundation for Component 1 (Narration Contract Hybrid). The kernel
