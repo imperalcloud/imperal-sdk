@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.4.0 — 2026-11-04
+
+### Added
+- `imperal_sdk.universal`: every file kind a person works with, read into the code index (universal index phase 2).
+  - `kinds.kind_of(path)` -> `code | config | document | data | mail | image`, and `never_read(path)`: secrets by
+    name, keychains, `.gnupg`, browser profiles, VPN profiles, wallets, cloud/tool credential files -- never opened.
+  - `view.view_of(path, raw)` -> `View(text, sections, links, meta, skipped)`: Markdown, reStructuredText, HTML,
+    RTF, CSV/TSV, JSON, YAML, TOML, XML; DOCX, XLSX, PPTX, ODT, ODS, ODP; PDF (pages + bookmarks); legacy DOC/XLS/PPT
+    (a system converter when present, else OLE text runs); EML / MBOX; image metadata (Exif). A file that cannot be
+    read says why; untrusted XML never expands entities; Office files stay inside a document-wide budget.
+  - `index.read_view(root, path)` (caps by kind, iCloud placeholders never read) and `parse_view(path, view)`.
+- Code in 20+ languages (Kotlin, Java, Swift, Go, Rust, C/C++, C#, PHP, Ruby, Dart, Scala, Lua, Bash, ...) through
+  `tree-sitter-language-pack`. New extra `universal-index` (`tree-sitter-language-pack`, `pypdf`, `olefile`).
+- `FileIndex.kind`. `build_index` reads every kind; code and resolution configs keep their exact path.
+
+### Unchanged
+- `code_index.indexable` -- what may reach the vault -- is the same: code and resolution configs only.
+
 ## 6.3.8 — 2026-11-04
 
 ### Fixed
