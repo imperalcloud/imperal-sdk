@@ -70,3 +70,46 @@ def test_a_link_in_the_path_into_a_secret_store_is_never_followed(tmp_path):
     os.symlink(tmp_path / ".gnupg", tmp_path / "docs")
     assert build_index(str(tmp_path), ["docs/notes.md"]).files == {}
     assert read_view(str(tmp_path), "docs/notes.md") is None
+
+
+def test_a_root_that_is_itself_a_secret_store_is_never_read(tmp_path):
+    """Final review 2026-11-04: a unit rooted at ``~/secrets`` or ``~/.aws`` names its files without the store's own
+    name -- the real absolute path decides."""
+    from imperal_sdk.universal.kinds import kind_of, never_read_at
+    for store in ("secrets", ".aws", "Library/Keychains"):
+        root = tmp_path / store
+        root.mkdir(parents=True)
+        (root / "notes.md").write_text("# private\n")
+        (root / "keys.py").write_text("KEY = 1\n")
+        assert never_read_at(str(root), "notes.md")
+        assert kind_of("notes.md", root=str(root)) is None
+        assert build_index(str(root), ["notes.md", "keys.py"]).files == {}
+        assert read_view(str(root), "notes.md") is None
+    (tmp_path / "work").mkdir()
+    (tmp_path / "work" / "notes.md").write_text("# fine\n")
+    assert not never_read_at(str(tmp_path / "work"), "notes.md")
+
+
+def test_a_fifo_never_opens(tmp_path):
+    """Reading a FIFO waits forever: the build would hang on it."""
+    os.mkfifo(tmp_path / "pipe.md")
+    os.mkfifo(tmp_path / "pipe.py")
+    assert read_view(str(tmp_path), "pipe.md").skipped == "not a regular file"
+    assert build_index(str(tmp_path), ["pipe.md", "pipe.py"]).files == {}
+
+
+def test_code_over_its_cap_is_never_parsed(tmp_path):
+    """Final review 2026-11-04: a 200 MB .sql dump took 8 GB in the parser -- code over its cap is never read."""
+    from imperal_sdk.universal.index import RAW_CAP
+    (tmp_path / "dump.sql").write_text("SELECT 1;\n" * (RAW_CAP["code"] // 10 + 1))
+    (tmp_path / "small.sql").write_text("SELECT 1;\n")
+    assert set(build_index(str(tmp_path), ["dump.sql", "small.sql"]).files) == {"small.sql"}
+
+
+def test_windows_cloud_files_are_placeholders():
+    """OneDrive and other cloud files on Windows: reading one downloads it."""
+    from types import SimpleNamespace
+    from imperal_sdk.universal.index import is_placeholder
+    for attrs in (0x1000, 0x40000, 0x400000):
+        assert is_placeholder("a.docx", SimpleNamespace(st_flags=0, st_file_attributes=attrs))
+    assert not is_placeholder("a.docx", SimpleNamespace(st_flags=0, st_file_attributes=0x20))

@@ -75,10 +75,24 @@ def never_read(rel_path: str) -> bool:
     return False
 
 
-def kind_of(rel_path: str) -> str | None:
-    """``code | config | document | data | mail | image``, or None (never read, a dependency / build / cache
-    tree, a dotted directory, or no kind the index reads)."""
+def never_read_at(root: str, rel_path: str) -> bool:
+    """``never_read`` for a file under ``root``, judged by its name under the root AND by its real absolute path: a
+    root that is itself a secret store (a unit ``~/secrets``, ``~/Library/Keychains`` opened as the workspace) and a
+    link that leads into one are caught -- the name under the root alone misses both (final review 2026-11-04)."""
     if never_read(rel_path):
+        return True
+    try:
+        real = os.path.realpath(os.path.join(os.path.realpath(root), rel_path))
+    except (OSError, ValueError):
+        return True
+    return never_read(real)
+
+
+def kind_of(rel_path: str, root: str | None = None) -> str | None:
+    """``code | config | document | data | mail | image``, or None (never read, a dependency / build / cache
+    tree, a dotted directory, or no kind the index reads). With ``root`` the never-read check also takes the
+    file's real absolute path (``never_read_at``)."""
+    if never_read_at(root, rel_path) if root else never_read(rel_path):
         return None
     parts = _parts(rel_path)
     in_icloud = "/".join(parts).startswith(_ICLOUD)

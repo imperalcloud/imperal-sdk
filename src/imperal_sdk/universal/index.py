@@ -4,21 +4,36 @@ from __future__ import annotations
 
 import hashlib
 import os
+import stat as _stat
 
 from imperal_sdk.code_index import FileIndex, Symbol
-from imperal_sdk.universal.kinds import kind_of, never_read
+from imperal_sdk.universal.kinds import kind_of, never_read_at
 from imperal_sdk.universal.view import View, view_of
 
-RAW_CAP = {"code": 10 * 1024 * 1024, "config": 10 * 1024 * 1024, "document": 100 * 1024 * 1024,
+# code and configs are parsed whole: the parser holds ~100-300x the file in memory (measured 2026-11-04: a 10 MB .sql
+# peaked at 0.98 GB, a 1.4 MB .py at 0.47 GB) -- 1 MB keeps one file under ~0.3 GB; a bigger one (a dump, generated
+# code) is listed as skipped with the reason
+RAW_CAP = {"code": 1024 * 1024, "config": 1024 * 1024, "document": 100 * 1024 * 1024,
            "data": 100 * 1024 * 1024, "mail": 100 * 1024 * 1024, "image": 100 * 1024 * 1024}
 _SF_DATALESS = 0x40000000      # macOS: an iCloud file whose bytes are not on this Mac (reading downloads it)
+# Windows: a cloud file (OneDrive, Dropbox, iCloud for Windows) whose bytes are not local -- reading it downloads it
+# (final review 2026-11-04): FILE_ATTRIBUTE_OFFLINE | RECALL_ON_OPEN | RECALL_ON_DATA_ACCESS
+_WIN_NOT_LOCAL = 0x1000 | 0x40000 | 0x400000
 
 
 def is_placeholder(rel: str, st: os.stat_result | None = None) -> bool:
-    """An iCloud placeholder: never read -- opening it starts a download."""
+    """A cloud placeholder (iCloud on macOS, OneDrive and other cloud files on Windows): never read -- opening it
+    starts a download. ``os.stat`` itself never downloads."""
     if rel.endswith(".icloud"):
         return True
-    return bool(st is not None and getattr(st, "st_flags", 0) & _SF_DATALESS)
+    if st is None:
+        return False
+    return bool(getattr(st, "st_flags", 0) & _SF_DATALESS or getattr(st, "st_file_attributes", 0) & _WIN_NOT_LOCAL)
+
+
+def readable_file(st: os.stat_result) -> bool:
+    """A regular file: a FIFO, a socket or a device never opens (reading a FIFO waits forever -- a hung build)."""
+    return _stat.S_ISREG(st.st_mode)
 
 
 def read_view(root: str, rel: str) -> View | None:
@@ -34,12 +49,14 @@ def read_view(root: str, rel: str) -> View | None:
     real = os.path.realpath(path)
     if os.path.isabs(rel) or os.path.islink(path) or os.path.commonpath([base, real]) != base:
         return View(kind, "", skipped="outside the folder")
-    if never_read(os.path.relpath(real, base)):
-        return None                        # a link in the path that leads into a secret store
+    if never_read_at(base, rel):
+        return None                        # a secret store by its real path: the root itself, or where a link leads
     try:
         st = os.stat(real)
     except OSError:
         return View(kind, "", skipped="cannot be opened")
+    if not readable_file(st):
+        return View(kind, "", skipped="not a regular file")
     if is_placeholder(rel, st):
         return View(kind, "", skipped="placeholder")
     cap = RAW_CAP.get(kind, RAW_CAP["document"])

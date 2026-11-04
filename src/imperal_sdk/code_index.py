@@ -1466,10 +1466,19 @@ def build_index(root: str, files: list[str]) -> ProjectIndex:
         # stay inside the root: no absolute or ``..`` escapes, no symlink leaving it
         if os.path.isabs(rel) or os.path.islink(path) or os.path.commonpath([base, real]) != base:
             continue
-        from imperal_sdk.universal.kinds import kind_of, never_read
-        if never_read(rel) or never_read(os.path.relpath(real, base)):
-            continue                       # a secret is never read, by its name or where a link leads (security review)
+        from imperal_sdk.universal.index import RAW_CAP, is_placeholder, readable_file
+        from imperal_sdk.universal.kinds import kind_of, never_read_at
+        if never_read_at(base, rel):
+            continue                       # a secret is never read: by its name, its real path, where a link leads
         kind = kind_of(rel)
+        try:
+            st = os.stat(real)
+        except OSError:
+            continue
+        # never a FIFO or device (a hung build), never a cloud placeholder (a download), never a file over its kind's
+        # cap read whole (final review 2026-11-04: one 200 MB .sql dump took 8 GB in the parser)
+        if not readable_file(st) or is_placeholder(rel, st) or st.st_size > RAW_CAP.get(kind or "code", RAW_CAP["code"]):
+            continue
         if kind not in ("code", "config") and os.path.splitext(rel)[1].lower() not in INDEXABLE_EXT:
             # any other kind through its view (universal index): sections, links, its text for search
             from imperal_sdk.universal.index import parse_view, read_view
@@ -1479,7 +1488,7 @@ def build_index(root: str, files: list[str]) -> ProjectIndex:
             continue
         try:
             with open(real, "r", encoding="utf-8") as f:
-                text = f.read()
+                text = f.read(RAW_CAP["code"] + 1)
         except (OSError, UnicodeDecodeError):
             continue
         fi = parse_file(rel, text)
@@ -1639,9 +1648,10 @@ def chunk_file(root: str, fi: FileIndex) -> list:
         if view is None or view.skipped or not view.text:
             return []
         return chunk_text(fi.path, view.text, [(s.name, s.kind, s.start_line, s.end_line) for s in fi.symbols])
+    from imperal_sdk.universal.index import RAW_CAP
     try:
         with open(os.path.join(root, fi.path), "r", encoding="utf-8") as f:
-            text = f.read()
+            text = f.read(RAW_CAP["code"] + 1)          # the file may have grown since it was indexed
     except (OSError, UnicodeDecodeError):
         return []
     return chunk_text(fi.path, text, [(s.name, s.kind, s.start_line, s.end_line) for s in fi.symbols])

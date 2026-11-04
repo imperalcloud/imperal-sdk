@@ -22,6 +22,15 @@ All notable changes to `imperal-sdk` are documented here.
 ### Security
 - `build_index` never reads a never-read path, whoever passes it. The never-read list ignores case and trailing dots
   (`.SSH`, `id_rsa.`) and checks where a link leads.
+- `kinds.never_read_at(root, path)` (and `kind_of(path, root=...)`): the check also takes the file's real absolute
+  path - a root that is itself a secret store (`~/secrets`, `~/.aws`, `~/Library/Keychains` opened as a folder) named
+  its files without the store's name and was read.
+- A FIFO, socket or device is never opened (reading a FIFO hung the build); `index.readable_file(st)`.
+- Code and configs are parsed only up to 1 MB (`RAW_CAP`): the parser holds ~100-300x the file in memory (measured: a
+  10 MB `.sql` peaked at 0.98 GB, a 1.4 MB `.py` at 0.47 GB; a 200 MB dump took 8 GB). A bigger file is skipped with
+  the reason. Chunking reads at most the cap too.
+- Windows cloud files (OneDrive and others: offline / recall-on-open / recall-on-data-access) are placeholders - never
+  read, so indexing never downloads them.
 
 ### Unchanged
 - `code_index.indexable` -- what may reach the vault -- is the same: code and resolution configs only.
