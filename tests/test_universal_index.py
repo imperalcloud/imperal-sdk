@@ -55,3 +55,10 @@ def test_a_document_is_chunked_over_its_view(tmp_path):
     fi = build_index(str(tmp_path), ["c.docx"]).files["c.docx"]
     chunks = chunk_file(str(tmp_path), fi)
     assert chunks and any("30 days." in c.text for c in chunks)
+
+
+def test_build_index_never_reads_a_secret_whoever_passes_it(tmp_path):
+    (tmp_path / ".gnupg").mkdir()
+    (tmp_path / ".gnupg" / "k.py").write_text("KEY = 1\n")
+    (tmp_path / "credentials.json").write_text('{"k": 1}')
+    assert build_index(str(tmp_path), [".gnupg/k.py", "credentials.json"]).files == {}
