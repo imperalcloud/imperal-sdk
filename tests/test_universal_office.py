@@ -102,3 +102,32 @@ def test_broken_encrypted_and_bombs_say_why(tmp_encrypted_docx):
     assert "encrypted" in view_of("y.docx", tmp_encrypted_docx).skipped
     bomb = _zip({"word/document.xml": "<a>" + "x" * 20_000_000 + "</a>"})
     assert "compress" in view_of("z.docx", bomb).skipped
+
+
+def _xlsx_with(sheet_xml: str, shared: str = "", sheets: int = 1) -> bytes:
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' \
+         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    names = "".join(f'<sheet name="S{i}" sheetId="{i}" r:id="rId1"/>' for i in range(sheets))
+    rels = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="x" Target="worksheets/sheet1.xml"/></Relationships>')
+    return _zip({"xl/workbook.xml": f'<workbook {ns}><sheets>{names}</sheets></workbook>',
+                 "xl/_rels/workbook.xml.rels": rels, "xl/sharedStrings.xml": f"<sst {ns}>{shared}</sst>",
+                 "xl/worksheets/sheet1.xml": f"<worksheet {ns}><sheetData>{sheet_xml}</sheetData></worksheet>"})
+
+
+def test_a_far_column_is_one_value_not_a_million_gaps():
+    v = view_of("c.xlsx", _xlsx_with('<row r="1"><c r="A1"><v>1</v></c><c r="XFD1"><v>2</v></c>'
+                                     '<c r="ZZZZZZ1"><v>3</v></c></row>'))
+    assert "1 | 2" in v.text and len(v.text) < 100
+
+
+def test_shared_string_amplification_stops_at_the_view_cap():
+    from imperal_sdk.universal.view import MAX_VIEW_CHARS
+    rows = "".join(f'<row r="{i}"><c r="A{i}" t="s"><v>0</v></c></row>' for i in range(1, 50_001))
+    v = view_of("s.xlsx", _xlsx_with(rows, "<si><t>" + "y" * 5000 + "</t></si>"))
+    assert len(v.text) <= MAX_VIEW_CHARS + 2100
+
+
+def test_a_part_named_by_many_sheets_is_read_once():
+    v = view_of("d.xlsx", _xlsx_with('<row r="1"><c r="A1"><v>7</v></c></row>', sheets=300))
+    assert v.text.count("\n7") + v.text.startswith("7") <= 1

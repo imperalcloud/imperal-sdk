@@ -10,11 +10,16 @@ import posixpath
 import re
 import zipfile
 
-from imperal_sdk.universal.view import Section, View, close_sections, line_count, parse_xml, register
+from imperal_sdk.universal.view import MAX_VIEW_CHARS, Section, View, close_sections, line_count, parse_xml, register
 
 MEMBER_MAX_BYTES = 50 * 1024 * 1024     # one unpacked XML part
 MEMBER_MAX_RATIO = 100                  # unpacked / packed: a deflated text part is ~5-15x
+DOC_MAX_UNPACKED = 200 * 1024 * 1024    # every part one document reads, together (security review 2026-11-04)
 SHEET_MAX_ROWS = 100_000
+MAX_SHEETS = 500
+MAX_SLIDES = 5_000
+MAX_COLUMN = 16_384                     # Excel's own last column (XFD)
+CELL_MAX_CHARS = 2_000
 _OLE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -43,11 +48,36 @@ def _open(raw: bytes) -> zipfile.ZipFile:
     return z
 
 
+class _Lines(list):
+    """The view's lines with a character budget: ``add`` says False once the view is full (``MAX_VIEW_CHARS``)."""
+
+    def __init__(self):
+        super().__init__()
+        self.size = 0
+
+    def add(self, line: str) -> bool:
+        if self.size >= MAX_VIEW_CHARS:
+            return False
+        self.append(line)
+        self.size += len(line) + 1
+        return True
+
+
 def _xml(z: zipfile.ZipFile, name: str):
+    """A part parsed once per document, inside the document's unpacked-bytes budget."""
+    seen = z.__dict__.setdefault("_imperal_parts", {})
+    if name in seen:
+        return None                               # a part named twice (a crafted rels file) is read once
     try:
-        return parse_xml(z.read(name))
+        info = z.getinfo(name)
     except KeyError:
         return None
+    used = z.__dict__.get("_imperal_unpacked", 0) + info.file_size
+    if used > DOC_MAX_UNPACKED:
+        raise _Refused(f"the document unpacks to over {DOC_MAX_UNPACKED // 1048576} MB")
+    z.__dict__["_imperal_unpacked"] = used
+    seen[name] = True
+    return parse_xml(z.read(name))
 
 
 def _rels(z: zipfile.ZipFile, part: str) -> dict[str, tuple[str, str]]:
@@ -84,7 +114,7 @@ def _docx(rel: str, raw: bytes) -> View:
         raise _Refused("no word/document.xml")
     rels = _rels(z, "word/document.xml")
     body = root.find(f"{W}body")
-    lines: list[str] = []
+    lines = _Lines()
     heads: list[tuple[str, str, int, int]] = []
     tables: list[Section] = []
     links: list[str] = []
@@ -97,7 +127,8 @@ def _docx(rel: str, raw: bytes) -> View:
                     links.append(target)
             if not text:
                 continue
-            lines.append(text)
+            if not lines.add(text):
+                break
             style = el.find(f"{W}pPr/{W}pStyle")
             level = el.find(f"{W}pPr/{W}outlineLvl")
             m = _HEADING.match(style.get(f"{W}val") or "") if style is not None else None
@@ -108,7 +139,8 @@ def _docx(rel: str, raw: bytes) -> View:
         elif el.tag == f"{W}tbl":
             start = len(lines) + 1
             for row in el.iter(f"{W}tr"):
-                lines.append(" | ".join(_texts(c, f"{W}t").strip() for c in row.iter(f"{W}tc")))
+                if not lines.add(" | ".join(_texts(c, f"{W}t").strip()[:CELL_MAX_CHARS] for c in row.iter(f"{W}tc"))):
+                    break
             if len(lines) >= start:
                 tables.append(Section(f"Table {len(tables) + 1}", "table", 9, start, len(lines)))
     text = "\n".join(lines)
@@ -133,14 +165,16 @@ def _xlsx(rel: str, raw: bytes) -> View:
     rels = _rels(z, "xl/workbook.xml")
     sst = _xml(z, "xl/sharedStrings.xml")
     shared = [_texts(si, f"{S}t") for si in sst.iter(f"{S}si")] if sst is not None else []
-    lines: list[str] = []
+    lines = _Lines()
     heads = []
-    for sheet in wb.iter(f"{S}sheet"):
+    for n_sheet, sheet in enumerate(wb.iter(f"{S}sheet")):
+        if n_sheet >= MAX_SHEETS or lines.size >= MAX_VIEW_CHARS:
+            break
         name = sheet.get("name") or "Sheet"
         target = rels.get(sheet.get(f"{R}id"), ("", ""))[0]
         part = posixpath.normpath(posixpath.join("xl", target)) if not target.startswith("/") else target.lstrip("/")
         ws = _xml(z, part)
-        lines.append(f"Sheet: {name}")
+        lines.add(f"Sheet: {name}")
         heads.append((f"Sheet: {name}", "sheet", 1, len(lines)))
         if ws is None:
             continue
@@ -156,9 +190,12 @@ def _xlsx(rel: str, raw: bytes) -> View:
                     val = _texts(c, f"{S}t")
                 else:
                     val = v.text if v is not None and v.text is not None else ""
-                cells[_col(c.get("r") or "") or len(cells) + 1] = val.strip()
-            if cells:
-                lines.append(" | ".join(cells.get(k, "") for k in range(1, max(cells) + 1)))
+                col = _col(c.get("r") or "") or len(cells) + 1
+                if col <= MAX_COLUMN:
+                    cells[col] = val.strip()[:CELL_MAX_CHARS]
+            # only the cells present, in column order: a lone cell in column XFD is one value, not 16 383 gaps
+            if cells and not lines.add(" | ".join(cells[k] for k in sorted(cells))):
+                break
     text = "\n".join(lines)
     return View("data", text, close_sections(heads, line_count(text)))
 
@@ -167,7 +204,8 @@ def _pptx(rel: str, raw: bytes) -> View:
     z = _open(raw)
     names = [n for n in z.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)]
     names.sort(key=lambda n: int(re.search(r"(\d+)\.xml$", n).group(1)))
-    lines: list[str] = []
+    names = names[:MAX_SLIDES]
+    lines = _Lines()
     heads = []
     for name in names:
         root = _xml(z, name)
@@ -175,9 +213,11 @@ def _pptx(rel: str, raw: bytes) -> View:
         paras = [" ".join(_texts(p, f"{A}t").split()) for p in root.iter(f"{A}p")] if root is not None else []
         paras = [p for p in paras if p]
         title = f"Slide {num}" + (f": {paras[0]}" if paras else "")
-        lines.append(title)
+        if not lines.add(title):
+            break
         heads.append((title, "slide", 1, len(lines)))
-        lines += paras[1:]
+        if not all(lines.add(p) for p in paras[1:]):
+            break
     text = "\n".join(lines)
     return View("document", text, close_sections(heads, line_count(text)))
 
@@ -188,38 +228,40 @@ def _odf(rel: str, raw: bytes) -> View:
     if root is None:
         raise _Refused("no content.xml")
     ext = posixpath.splitext(rel.lower())[1]
-    lines: list[str] = []
+    lines = _Lines()
     heads = []
     if ext == ".odt":
         for el in root.iter():
             if el.tag == f"{TEXT}h":
                 t = " ".join(_texts_all(el).split())
-                if t:
-                    lines.append(t)
+                if t and lines.add(t):
                     heads.append((t, "section", int(el.get(f"{TEXT}outline-level") or 1), len(lines)))
             elif el.tag == f"{TEXT}p":
                 t = " ".join(_texts_all(el).split())
-                if t:
-                    lines.append(t)
+                if t and not lines.add(t):
+                    break
     elif ext == ".ods":
         for tbl in root.iter(f"{TABLE}table"):
             name = tbl.get(f"{TABLE}name") or "Sheet"
-            lines.append(f"Sheet: {name}")
+            if not lines.add(f"Sheet: {name}"):
+                break
             heads.append((f"Sheet: {name}", "sheet", 1, len(lines)))
             for i, row in enumerate(tbl.iter(f"{TABLE}table-row")):
                 if i >= SHEET_MAX_ROWS:
                     break
-                cells = [" ".join(_texts_all(c).split()) for c in row.iter(f"{TABLE}table-cell")]
-                if any(cells):
-                    lines.append(" | ".join(cells).rstrip(" |"))
+                cells = [" ".join(_texts_all(c).split())[:CELL_MAX_CHARS] for c in row.iter(f"{TABLE}table-cell")][:MAX_COLUMN]
+                if any(cells) and not lines.add(" | ".join(c for c in cells if c)):
+                    break
     else:
         for n, page in enumerate(root.iter(f"{DRAW}page"), 1):
             paras = [" ".join(_texts_all(p).split()) for p in page.iter(f"{TEXT}p")]
             paras = [p for p in paras if p]
             title = f"Slide {n}" + (f": {paras[0]}" if paras else "")
-            lines.append(title)
+            if n > MAX_SLIDES or not lines.add(title):
+                break
             heads.append((title, "slide", 1, len(lines)))
-            lines += paras[1:]
+            if not all(lines.add(p) for p in paras[1:]):
+                break
     text = "\n".join(lines)
     return View("data" if ext == ".ods" else "document", text, close_sections(heads, line_count(text)))
 
