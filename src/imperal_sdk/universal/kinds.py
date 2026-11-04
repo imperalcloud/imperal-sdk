@@ -26,7 +26,14 @@ MAIL_EXT = frozenset({".eml", ".mbox"})
 IMAGE_EXT = frozenset({".jpg", ".jpeg", ".png", ".heic", ".tif", ".tiff"})
 
 # never read, whatever the kind: the parent list plus a person's keys, keychains, VPN profiles, wallets and browsers
-_NEVER_NAMES = SECRET_PATTERNS + ("*.keychain", "*.keychain-db", "*.ovpn", "*.mobileconfig", "wallet.dat", "*.kdb")
+_NEVER_NAMES = SECRET_PATTERNS + (
+    "*.keychain", "*.keychain-db", "*.ovpn", "*.mobileconfig", "wallet.dat", "*.kdb",
+    # credential files that look like plain data (security review 2026-11-04): cloud keys, tokens, infra state,
+    # tool logins, browser password exports
+    "credentials*", "*credentials.json", "client_secret*.json", "*service-account*.json", "*service_account*.json",
+    "token.json", "tokens.json", "secrets.*", "*kubeconfig*", "*.tfstate", "*.tfstate.*", "*.tfvars",
+    ".netrc", "_netrc", ".pgpass", ".npmrc", ".pypirc", ".git-credentials", "*.ppk", "*password*.csv",
+    "*passwords*", "*.asc", "*.gpg")
 _NEVER_PATHS = (".gnupg/", "Library/Keychains/", "Library/Application Support/Google/Chrome/",
                 "Library/Application Support/Firefox/Profiles/", "Library/Application Support/BraveSoftware/",
                 "Library/Application Support/Microsoft Edge/", "Library/Safari/", "Library/Cookies/",

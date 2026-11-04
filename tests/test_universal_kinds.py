@@ -23,3 +23,13 @@ def test_never_read_beats_every_kind():
 
 def test_the_vault_filter_is_unchanged():
     assert indexable("Contracts/NDA.docx") is None and indexable("app/main.py") == "code"
+
+
+def test_credential_files_that_look_like_data_are_never_read():
+    """security review 2026-11-04: a service-account key or a password export is JSON or CSV by format."""
+    for p in ("gcp/credentials.json", "Downloads/client_secret_123.apps.googleusercontent.com.json",
+              "ops/my-project-service-account.json", "token.json", "infra/terraform.tfstate", "prod.tfvars",
+              "k8s/kubeconfig.yaml", ".netrc", "home/.pgpass", "Downloads/Chrome Passwords.csv",
+              "keys/backup.gpg", "secrets.yaml"):
+        assert kind_of(p) is None, p
+    assert kind_of("finance/2026-budget.json") == "data" and kind_of("bank/statement.csv") == "data"
