@@ -19,6 +19,10 @@ CODE_LANGS: dict[str, str] = {
     ".scala": "scala", ".lua": "lua", ".sh": "bash", ".bash": "bash", ".zsh": "bash", ".sql": "sql",
     ".html": "html", ".css": "css", ".scss": "scss",
 }
+# code files known by their whole name (no extension)
+CODE_NAMES: dict[str, str] = {"dockerfile": "dockerfile", "containerfile": "dockerfile", "makefile": "make",
+                              "gnumakefile": "make", "gemfile": "ruby", "rakefile": "ruby", "podfile": "ruby",
+                              "jenkinsfile": "groovy", "procfile": "bash", "vagrantfile": "ruby", "brewfile": "ruby"}
 DOCUMENT_EXT = frozenset({".docx", ".doc", ".odt", ".rtf", ".pdf", ".pptx", ".ppt", ".odp", ".txt", ".md",
                           ".markdown", ".rst", ".htm"})
 DATA_EXT = frozenset({".xlsx", ".xls", ".ods", ".csv", ".tsv", ".json", ".yaml", ".yml", ".toml", ".xml"})
@@ -81,7 +85,7 @@ def kind_of(rel_path: str) -> str | None:
     if name in CONFIG_NAMES or _TSCONFIG.match(name):
         return "config"
     ext = os.path.splitext(name)[1]
-    if ext in CODE_LANGS:
+    if ext in CODE_LANGS or name in CODE_NAMES or name.startswith("dockerfile."):
         return "code"
     if ext in DOCUMENT_EXT:
         return "document"

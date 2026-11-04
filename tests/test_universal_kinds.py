@@ -33,3 +33,11 @@ def test_credential_files_that_look_like_data_are_never_read():
               "keys/backup.gpg", "secrets.yaml"):
         assert kind_of(p) is None, p
     assert kind_of("finance/2026-budget.json") == "data" and kind_of("bank/statement.csv") == "data"
+
+
+def test_build_files_known_by_name_are_code():
+    for p in ("Dockerfile", "svc/Dockerfile.prod", "Makefile", "Gemfile", "ci/Jenkinsfile", "Procfile"):
+        assert kind_of(p) == "code", p
+    from imperal_sdk.code_index import _lang_for
+    assert _lang_for("svc/Dockerfile") == "dockerfile" and _lang_for("Makefile") == "make"
+    assert _lang_for("a.py") == "python"

@@ -664,8 +664,9 @@ def _lang_for(path: str) -> str:
     ext = os.path.splitext(path)[1].lower()
     if ext in LANG_BY_EXT:
         return LANG_BY_EXT[ext]          # the vault's languages: unchanged
-    from imperal_sdk.universal.kinds import CODE_LANGS
-    return CODE_LANGS.get(ext, "other")
+    from imperal_sdk.universal.kinds import CODE_LANGS, CODE_NAMES
+    name = os.path.basename(path).lower()
+    return CODE_LANGS.get(ext) or CODE_NAMES.get(name) or ("dockerfile" if name.startswith("dockerfile.") else "other")
 
 
 # ---- what any source may index (spec 4.2: one list, enforced by every source, refused by the vault) ----
