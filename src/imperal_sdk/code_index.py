@@ -612,7 +612,9 @@ def language(lang: str):
             import tree_sitter_javascript as ts_js
             obj = Language(ts_js.language())
         else:
-            obj = None
+            # every other language through one grammar pack (the ``universal-index`` extra), universal index phase 2
+            import tree_sitter_language_pack as tslp
+            obj = tslp.get_language(lang)
     except Exception:
         obj = None
     _LANG_CACHE[lang] = obj
@@ -632,11 +634,37 @@ DEF_NODES = {
     "javascript": {"function_declaration": "function", "class_declaration": "class", "method_definition": "method"},
 }
 DEF_NODES["tsx"] = DEF_NODES["typescript"]
+# universal index phase 2: the definitions of the grammar pack's languages (node types read off each grammar)
+DEF_NODES.update({
+    "kotlin": {"class_declaration": "class", "object_declaration": "class", "function_declaration": "function"},
+    "java": {"class_declaration": "class", "interface_declaration": "class", "enum_declaration": "class",
+             "record_declaration": "class", "method_declaration": "method", "constructor_declaration": "method"},
+    "go": {"function_declaration": "function", "method_declaration": "method", "type_spec": "type"},
+    "rust": {"function_item": "function", "struct_item": "class", "enum_item": "class", "trait_item": "class",
+             "mod_item": "class"},
+    "swift": {"class_declaration": "class", "protocol_declaration": "class", "function_declaration": "function"},
+    "csharp": {"class_declaration": "class", "interface_declaration": "class", "struct_declaration": "class",
+               "enum_declaration": "class", "record_declaration": "class", "method_declaration": "method"},
+    "ruby": {"class": "class", "module": "class", "method": "method", "singleton_method": "method"},
+    "php": {"class_declaration": "class", "interface_declaration": "class", "function_definition": "function",
+            "method_declaration": "method"},
+    "dart": {"class_definition": "class", "function_signature": "function", "method_signature": "method"},
+    "scala": {"class_definition": "class", "object_definition": "class", "trait_definition": "class",
+              "function_definition": "function"},
+    "c": {"function_definition": "function", "struct_specifier": "class"},
+    "cpp": {"function_definition": "function", "class_specifier": "class", "struct_specifier": "class"},
+    "lua": {"function_declaration": "function"},
+    "bash": {"function_definition": "function"},
+})
 _DEF_NODES = DEF_NODES
 
 
 def _lang_for(path: str) -> str:
-    return LANG_BY_EXT.get(os.path.splitext(path)[1].lower(), "other")
+    ext = os.path.splitext(path)[1].lower()
+    if ext in LANG_BY_EXT:
+        return LANG_BY_EXT[ext]          # the vault's languages: unchanged
+    from imperal_sdk.universal.kinds import CODE_LANGS
+    return CODE_LANGS.get(ext, "other")
 
 
 # ---- what any source may index (spec 4.2: one list, enforced by every source, refused by the vault) ----
@@ -1363,8 +1391,14 @@ def scope_facts(path: str, text: str) -> BlobFacts | None:
         return None
 
 
+_NAME_CHILDREN = ("type_identifier", "simple_identifier", "identifier", "constant", "name")
+
+
 def _name_of(node, src_bytes: bytes) -> str:
     n = node.child_by_field_name("name")
+    if n is None and node.type not in ("class", "function"):
+        # a grammar without a ``name`` field (kotlin): the definition's first name-shaped child
+        n = next((c for c in node.children if c.type in _NAME_CHILDREN), None)
     if n is not None:
         return src_bytes[n.start_byte:n.end_byte].decode("utf-8", "replace")
     return ""
