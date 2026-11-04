@@ -2,7 +2,11 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
-## 6.4.0 — 2026-11-04
+## 6.4.1 - 2026-11-04
+
+The first release of this line: the 6.4.0 tag failed its release gate in CI (the legacy `.doc` test assumed a
+reader where none is installed) and never reached PyPI. CI now tests with the `universal-index` extra.
+
 
 ### Added
 - `imperal_sdk.universal`: every file kind a person works with, read into the code index (universal index phase 2).

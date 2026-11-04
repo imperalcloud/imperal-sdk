@@ -41,7 +41,7 @@ jobs:
           cache: pip
 
       - name: Install package with dev extras
-        run: pip install -e ".[dev,fastapi,db]"
+        run: pip install -e ".[dev,fastapi,db,universal-index]"
 
       - name: Run pytest
         run: pytest -q --tb=short

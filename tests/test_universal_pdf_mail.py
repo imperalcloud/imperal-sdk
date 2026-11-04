@@ -25,6 +25,12 @@ def test_password_pdf_says_why():
 
 
 def test_legacy_doc_has_text():
+    from imperal_sdk.universal import legacy
+    try:
+        import olefile  # noqa: F401
+    except ImportError:
+        if legacy._converter(".doc") is None:
+            pytest.skip("no legacy Office reader here (no converter, no olefile)")
     assert "Invoice" in view_of("old.doc", FIX("invoice.doc")).text
 
 
