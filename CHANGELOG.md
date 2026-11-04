@@ -16,6 +16,12 @@ All notable changes to `imperal-sdk` are documented here.
 - Code in 20+ languages (Kotlin, Java, Swift, Go, Rust, C/C++, C#, PHP, Ruby, Dart, Scala, Lua, Bash, ...) through
   `tree-sitter-language-pack`. New extra `universal-index` (`tree-sitter-language-pack`, `pypdf`, `olefile`).
 - `FileIndex.kind`. `build_index` reads every kind; code and resolution configs keep their exact path.
+- Documents are chunked over their view's text, so search by meaning reaches what a contract or a report says.
+- Dockerfile, Makefile, Gemfile, Jenkinsfile and other build files are code.
+
+### Security
+- `build_index` never reads a never-read path, whoever passes it. The never-read list ignores case and trailing dots
+  (`.SSH`, `id_rsa.`) and checks where a link leads.
 
 ### Unchanged
 - `code_index.indexable` -- what may reach the vault -- is the same: code and resolution configs only.
