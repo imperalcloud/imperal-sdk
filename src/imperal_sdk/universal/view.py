@@ -87,6 +87,27 @@ def parse_xml(raw: bytes):
     return ET.fromstring(raw)
 
 
+class BudgetLines(list):
+    """A view's lines with a character budget: ``add`` says False once the view is full (``MAX_VIEW_CHARS``) --
+    every reader that builds text from a compressed or repeated source stops there (security review 2026-11-04)."""
+
+    def __init__(self, limit: int | None = None):
+        super().__init__()
+        self.size = 0
+        self.limit = MAX_VIEW_CHARS if limit is None else limit
+
+    def add(self, line: str) -> bool:
+        if self.size >= self.limit:
+            return False
+        self.append(line)
+        self.size += len(line) + 1
+        return True
+
+    @property
+    def full(self) -> bool:
+        return self.size >= self.limit
+
+
 def close_sections(heads: list[tuple[str, str, int, int]], total_lines: int) -> list[Section]:
     """``(title, kind, level, start_line)`` in file order -> sections, each ending where the next head of the same or
     a higher level starts (or at the end of the text)."""

@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 
-from imperal_sdk.universal.view import View, register
+from imperal_sdk.universal.view import MAX_VIEW_CHARS, View, register
 
 CONVERTER_TIMEOUT_S = 30
 _OLE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
@@ -61,10 +61,16 @@ def _runs(data: bytes) -> list[str]:
             found.append((start, "".join(cur)))
     found.sort()
     out: list[str] = []
+    seen: set[str] = set()
+    size = 0
     for _pos, s in found:
         s = " ".join(s.split())
-        if len(s) >= _MIN_RUN and sum(c.isalnum() for c in s) >= len(s) // 2 and s not in out:
+        if len(s) >= _MIN_RUN and sum(c.isalnum() for c in s) >= len(s) // 2 and s not in seen:
+            seen.add(s)
             out.append(s)
+            size += len(s) + 1
+            if size >= MAX_VIEW_CHARS:
+                break
     return out
 
 

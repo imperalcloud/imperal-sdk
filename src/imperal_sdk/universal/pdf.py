@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 
-from imperal_sdk.universal.view import View, close_sections, line_count, register
+from imperal_sdk.universal.view import BudgetLines, View, close_sections, line_count, register
 
 PDF_MAX_PAGES = 5_000
 
@@ -41,19 +41,21 @@ def _pdf(rel: str, raw: bytes) -> View:
                 return View("document", "", skipped="encrypted PDF (password protected)")
         except Exception:
             return View("document", "", skipped="encrypted PDF (password protected)")
-    lines: list[str] = []
+    lines = BudgetLines()
     page_start: list[int] = []
     links: list[str] = []
     for i, page in enumerate(reader.pages):
-        if i >= PDF_MAX_PAGES:
-            break
+        if i >= PDF_MAX_PAGES or lines.full:
+            break                          # the view is full: no further page is decompressed
         page_start.append(len(lines) + 1)
-        lines.append(f"Page {i + 1}")
+        lines.add(f"Page {i + 1}")
         try:
             text = page.extract_text() or ""
         except Exception:
             text = ""
-        lines += [ln.rstrip() for ln in text.splitlines() if ln.strip()]
+        for ln in text.splitlines():
+            if ln.strip() and not lines.add(ln.rstrip()):
+                break
         for annot in (page.get("/Annots") or []):
             try:
                 uri = annot.get_object().get("/A", {}).get("/URI")

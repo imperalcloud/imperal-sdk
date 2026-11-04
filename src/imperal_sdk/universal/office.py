@@ -10,7 +10,8 @@ import posixpath
 import re
 import zipfile
 
-from imperal_sdk.universal.view import MAX_VIEW_CHARS, Section, View, close_sections, line_count, parse_xml, register
+from imperal_sdk.universal.view import (MAX_VIEW_CHARS, BudgetLines, Section, View, close_sections, line_count,
+                                        parse_xml, register)
 
 MEMBER_MAX_BYTES = 50 * 1024 * 1024     # one unpacked XML part
 MEMBER_MAX_RATIO = 100                  # unpacked / packed: a deflated text part is ~5-15x
@@ -48,19 +49,7 @@ def _open(raw: bytes) -> zipfile.ZipFile:
     return z
 
 
-class _Lines(list):
-    """The view's lines with a character budget: ``add`` says False once the view is full (``MAX_VIEW_CHARS``)."""
-
-    def __init__(self):
-        super().__init__()
-        self.size = 0
-
-    def add(self, line: str) -> bool:
-        if self.size >= MAX_VIEW_CHARS:
-            return False
-        self.append(line)
-        self.size += len(line) + 1
-        return True
+_Lines = BudgetLines
 
 
 def _xml(z: zipfile.ZipFile, name: str):

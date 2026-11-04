@@ -53,3 +53,21 @@ def test_mbox_is_one_section_per_message():
 def test_image_is_metadata_only():
     v = view_of("p.jpg", FIX("exif.jpg"))
     assert v.text == "" and v.meta["taken"] == "2026:11:03 10:00:00"
+
+
+def test_ole_text_runs_are_linear_and_bounded():
+    import time
+
+    from imperal_sdk.universal.legacy import _runs
+    blob = b"".join(f"word{i:06d} ".encode("utf-16-le") + b"\x00\x00" for i in range(60_000))
+    t0 = time.monotonic()
+    out = _runs(blob)
+    assert time.monotonic() - t0 < 10 and len(out) > 1000
+
+
+def test_pdf_extraction_stops_when_the_view_is_full(monkeypatch):
+    pytest.importorskip("pypdf")
+    from imperal_sdk.universal import view as uv
+    monkeypatch.setattr(uv, "MAX_VIEW_CHARS", 20)
+    v = view_of("r.pdf", FIX("two_pages.pdf"))
+    assert [s.kind for s in v.sections].count("page") == 1          # page 2 never extracted
