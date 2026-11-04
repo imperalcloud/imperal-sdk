@@ -6,7 +6,7 @@ import hashlib
 import os
 
 from imperal_sdk.code_index import FileIndex, Symbol
-from imperal_sdk.universal.kinds import kind_of
+from imperal_sdk.universal.kinds import kind_of, never_read
 from imperal_sdk.universal.view import View, view_of
 
 RAW_CAP = {"code": 10 * 1024 * 1024, "config": 10 * 1024 * 1024, "document": 100 * 1024 * 1024,
@@ -34,6 +34,8 @@ def read_view(root: str, rel: str) -> View | None:
     real = os.path.realpath(path)
     if os.path.isabs(rel) or os.path.islink(path) or os.path.commonpath([base, real]) != base:
         return View(kind, "", skipped="outside the folder")
+    if never_read(os.path.relpath(real, base)):
+        return None                        # a link in the path that leads into a secret store
     try:
         st = os.stat(real)
     except OSError:

@@ -53,19 +53,24 @@ def _parts(rel_path: str) -> list[str]:
     return parts
 
 
+_NEVER_PATHS_CF = tuple(p.casefold() for p in _NEVER_PATHS)
+
+
 def never_read(rel_path: str) -> bool:
-    """True for a path no extractor may open: secrets by name, and the secret stores of a home folder."""
-    parts = _parts(rel_path)
+    """True for a path no extractor may open: secrets by name, and the secret stores of a home folder. Compared
+    case-insensitively with trailing dots and spaces stripped -- the file systems of macOS and Windows open
+    ``.GNUPG/x`` and ``id_rsa.`` as ``.gnupg/x`` and ``id_rsa`` (security review 2026-11-04)."""
+    parts = [p.casefold().rstrip(". ") or p for p in _parts(rel_path)]
     if not parts:
         return True
     joined = "/".join(parts) + ("/" if len(parts) > 1 else "")
-    if any(joined.startswith(p) or f"/{p}" in f"/{joined}" for p in _NEVER_PATHS):
+    if any(joined.startswith(p) or f"/{p}" in f"/{joined}" for p in _NEVER_PATHS_CF):
         return True
     for pat in _NEVER_NAMES:
         if pat.endswith("/"):
-            if pat[:-1] in parts[:-1]:
+            if pat[:-1].casefold() in parts[:-1]:
                 return True
-        elif fnmatch.fnmatchcase(parts[-1].lower(), pat):
+        elif fnmatch.fnmatchcase(parts[-1], pat.casefold()):
             return True
     return False
 

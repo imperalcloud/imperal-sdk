@@ -1467,8 +1467,8 @@ def build_index(root: str, files: list[str]) -> ProjectIndex:
         if os.path.isabs(rel) or os.path.islink(path) or os.path.commonpath([base, real]) != base:
             continue
         from imperal_sdk.universal.kinds import kind_of, never_read
-        if never_read(rel):
-            continue                       # a secret is never read, whoever passed its path (security review)
+        if never_read(rel) or never_read(os.path.relpath(real, base)):
+            continue                       # a secret is never read, by its name or where a link leads (security review)
         kind = kind_of(rel)
         if kind not in ("code", "config") and os.path.splitext(rel)[1].lower() not in INDEXABLE_EXT:
             # any other kind through its view (universal index): sections, links, its text for search

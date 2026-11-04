@@ -41,3 +41,9 @@ def test_build_files_known_by_name_are_code():
     from imperal_sdk.code_index import _lang_for
     assert _lang_for("svc/Dockerfile") == "dockerfile" and _lang_for("Makefile") == "make"
     assert _lang_for("a.py") == "python"
+
+
+def test_never_read_ignores_case_and_trailing_dots():
+    for p in (".GNUPG/notes.docx", "library/KEYCHAINS/login.keychain-db", "keys/ID_RSA", "keys/id_rsa.",
+              "Secrets/a.md", "x/.SSH/config"):
+        assert never_read(p), p

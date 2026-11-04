@@ -62,3 +62,11 @@ def test_build_index_never_reads_a_secret_whoever_passes_it(tmp_path):
     (tmp_path / ".gnupg" / "k.py").write_text("KEY = 1\n")
     (tmp_path / "credentials.json").write_text('{"k": 1}')
     assert build_index(str(tmp_path), [".gnupg/k.py", "credentials.json"]).files == {}
+
+
+def test_a_link_in_the_path_into_a_secret_store_is_never_followed(tmp_path):
+    (tmp_path / ".gnupg").mkdir()
+    (tmp_path / ".gnupg" / "notes.md").write_text("# private\n")
+    os.symlink(tmp_path / ".gnupg", tmp_path / "docs")
+    assert build_index(str(tmp_path), ["docs/notes.md"]).files == {}
+    assert read_view(str(tmp_path), "docs/notes.md") is None
