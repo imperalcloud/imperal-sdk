@@ -38,6 +38,7 @@ class FileIndex:
     content_hash: str = ""
     endpoints: list[dict] = field(default_factory=list)
     schemas: list[dict] = field(default_factory=list)
+    kind: str = "code"   # code | config | document | data | mail | image (universal index, 2026-11-04)
 
 
 @dataclass
@@ -1464,6 +1465,15 @@ def build_index(root: str, files: list[str]) -> ProjectIndex:
         # stay inside the root: no absolute or ``..`` escapes, no symlink leaving it
         if os.path.isabs(rel) or os.path.islink(path) or os.path.commonpath([base, real]) != base:
             continue
+        from imperal_sdk.universal.kinds import kind_of
+        kind = kind_of(rel)
+        if kind not in ("code", "config") and os.path.splitext(rel)[1].lower() not in INDEXABLE_EXT:
+            # any other kind through its view (universal index): sections, links, its text for search
+            from imperal_sdk.universal.index import parse_view, read_view
+            view = read_view(base, rel)
+            if view is not None and not view.skipped:
+                idx.files[rel] = parse_view(rel, view)
+            continue
         try:
             with open(real, "r", encoding="utf-8") as f:
                 text = f.read()
@@ -1471,6 +1481,8 @@ def build_index(root: str, files: list[str]) -> ProjectIndex:
             continue
         fi = parse_file(rel, text)
         if fi is not None:
+            if kind == "config":
+                fi.kind = "config"
             idx.files[rel] = fi
     return idx
 
