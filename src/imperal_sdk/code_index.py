@@ -1168,6 +1168,113 @@ def _py_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported_names
         _py_walk(sc, c, scope, ctx, local, exported_names, is_init)
 
 
+def _py_type(sc: _Scope, node) -> list | None:
+    """A Python annotation as a chain: ``Repo``, ``db.Conn``, ``Optional[Repo]`` / ``Repo | None`` -> the class;
+    a builtin generic (``list[X]``, ``dict``) or anything else -> None."""
+    if node is None:
+        return None
+    if node.type == "type" and node.named_children:
+        node = node.named_children[0]
+    if node.type in ("identifier", "attribute"):
+        parts = sc.text(node).replace(" ", "").split(".")
+        return parts if all(_IDENT_SHAPE.match(x) for x in parts) and parts[-1] not in _PY_BUILTINS else None
+    if node.type == "binary_operator":                       # X | None
+        for side in ("left", "right"):
+            got = _py_type(sc, node.child_by_field_name(side))
+            if got and got != ["None"]:
+                return got
+        return None
+    if node.type in ("subscript", "generic_type"):          # Optional[X], Annotated[X, ...]
+        head = node.child_by_field_name("value") or (node.named_children[0] if node.named_children else None)
+        if head is not None and sc.text(head).rsplit(".", 1)[-1] in ("Optional", "Annotated"):
+            inner = [c for c in node.named_children if c is not None and c.start_byte != head.start_byte]
+            if inner and inner[0].type == "type_parameter":
+                inner = list(inner[0].named_children)
+            return _py_type(sc, inner[0]) if inner else None
+        return None
+    if node.type == "string":                                # a forward reference: 'Repo'
+        body = "".join(sc.text(c) for c in node.named_children if c.type == "string_content").strip()
+        parts = body.split(".")
+        return parts if body and all(_IDENT_SHAPE.match(x) for x in parts) else None
+    return None
+
+
+def _py_value_type(sc: _Scope, value) -> list | None:
+    """``Repo(...)`` / ``db.Conn(...)`` -> the class (a capitalized callee); ``make_repo(...)`` -> ``[make_repo, "()"]``
+    (the value its declared return type names -- resolved through its ``returns`` binding)."""
+    if value is None:
+        return None
+    if value.type == "await" and value.named_children:
+        value = value.named_children[0]
+    if value.type != "call":
+        return None
+    fn = value.child_by_field_name("function")
+    chain = _py_chain(sc, fn) if fn is not None else None
+    if not chain or chain[0] in _PY_BUILTINS:
+        return None
+    return chain if chain[-1][:1].isupper() else chain + ["()"]
+
+
+def _py_typed(sc: _Scope, fn) -> dict:
+    """``{local: type chain}`` of a Python function: annotated parameters, ``x: T = ...``, ``x = T(...)``,
+    ``x = make()`` (through make's return annotation)."""
+    out: dict = {}
+    params = fn.child_by_field_name("parameters")
+    for p in (params.named_children if params is not None else []):
+        if p.type in ("typed_parameter", "typed_default_parameter"):
+            n = p.child_by_field_name("name") or next((c for c in p.named_children if c.type == "identifier"), None)
+            ch = _py_type(sc, p.child_by_field_name("type"))
+            if n is not None and ch:
+                out[sc.text(n)] = ch
+    stack = list((fn.child_by_field_name("body") or fn).children)
+    while stack:
+        n = stack.pop()
+        if n.type in ("function_definition", "class_definition", "lambda"):
+            continue
+        if n.type == "assignment":
+            left = n.child_by_field_name("left")
+            if left is not None and left.type == "identifier":
+                ch = _py_type(sc, n.child_by_field_name("type")) or _py_value_type(sc, n.child_by_field_name("right"))
+                if ch:
+                    out[sc.text(left)] = ch
+        stack.extend(n.children)
+    return out
+
+
+def _py_fields(sc: _Scope, cls) -> dict:
+    """``{attribute: type chain}`` of a Python class: annotated class attributes (dataclasses, pydantic) and
+    ``self.x = T(...)`` / ``self.x: T`` / ``self.x = param`` (a typed parameter) in its methods."""
+    out: dict = {}
+    body = cls.child_by_field_name("body")
+    for st in (body.named_children if body is not None else []):
+        expr = st.named_children[0] if st.type == "expression_statement" and st.named_children else st
+        if expr.type == "assignment":
+            left = expr.child_by_field_name("left")
+            ch = _py_type(sc, expr.child_by_field_name("type")) or _py_value_type(sc, expr.child_by_field_name("right"))
+            if left is not None and left.type == "identifier" and ch:
+                out[sc.text(left)] = ch
+        fn = st.child_by_field_name("definition") if st.type == "decorated_definition" else st
+        if fn is None or fn.type != "function_definition":
+            continue
+        params = _py_typed(sc, fn)
+        stack = list((fn.child_by_field_name("body") or fn).children)
+        while stack:
+            n = stack.pop()
+            if n.type in ("function_definition", "class_definition", "lambda"):
+                continue
+            if n.type == "assignment":
+                left = n.child_by_field_name("left")
+                if left is not None and left.type == "attribute" and sc.text(left).startswith("self."):
+                    attr = sc.text(left)[5:]
+                    right = n.child_by_field_name("right")
+                    ch = (_py_type(sc, n.child_by_field_name("type")) or _py_value_type(sc, right)
+                          or (params.get(sc.text(right)) if right is not None and right.type == "identifier" else None))
+                    if ch and "." not in attr:
+                        out.setdefault(attr, ch)
+            stack.extend(n.children)
+    return out
+
+
 def _py_def(sc: _Scope, node, outer, scope: list, local: set, exported_names, is_init: bool) -> None:
     name_node = node.child_by_field_name("name")
     if name_node is None:
@@ -1183,6 +1290,17 @@ def _py_def(sc: _Scope, node, outer, scope: list, local: set, exported_names, is
         exp = bool(parent[2]) and parent[1] == "class" and not name.startswith("_")
     sc.defs.append(Def(name, qual, kind, _line_of(outer), node.end_point[0] + 1,
                        _first_line(sc.text(node)), exp))
+    if is_class:
+        fields = _py_fields(sc, node)
+        if fields:
+            sc.fields[qual] = fields
+    else:
+        typed = _py_typed(sc, node)
+        if typed:
+            sc.typed[qual] = typed
+        rch = _py_type(sc, node.child_by_field_name("return_type"))
+        if rch:
+            sc.bindings.append(Binding(qual + "()", "", ".".join(rch), "returns", _line_of(outer)))
     inner = (qual, "class" if is_class else "function", exp)
     sup = node.child_by_field_name("superclasses")
     if sup is not None:

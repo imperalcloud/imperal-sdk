@@ -615,10 +615,10 @@ class Linker:
             ret = next((b.imported for b in self.bindings(got[0])
                         if b.kind == "returns" and b.local_name == got[1] + _CALL and b.imported), None)
             if not ret:
-                return got
+                return None       # no declared return type: what ``.rest`` names is unproven (the call is its own ref)
             tp = [x for x in ret.split(".") if x]
             typed = self.resolve_ref(got[0], tp[0], ".".join(tp[1:] + rest), got[1], depth + 1)
-            return (typed[0], typed[1], "returns") if isinstance(typed, tuple) and typed[1] else got
+            return (typed[0], typed[1], "returns") if isinstance(typed, tuple) and typed[1] else None
         bound = [b for b in self.bindings(path) if b.local_name == head and b.kind != "star"]
         lang = _lang(path)
         if bound:

@@ -132,3 +132,30 @@ def test_the_summary_never_reads_as_no_callers_when_names_match():
     assert "1 more file(s) only mention the name" in out["summary"] and "before concluding" in out["summary"]
     assert impact(_linker(PY), ["compute"])["summary"].startswith("3 file(s) use compute by resolved links")
     assert "not a definition" in impact(_linker(PY), ["nope"])["summary"]
+
+
+def test_python_members_through_typed_locals_fields_and_returns():
+    lk = _linker({
+        "repo.py": "class Repo:\n    def save(self):\n        return 1\n\n\ndef make_repo() -> 'Repo':\n    return Repo()\n\n\n"
+                   "def open_repo() -> Repo:\n    return Repo()\n",
+        "svc.py": "from typing import Optional\nfrom repo import Repo, open_repo\n\n\nclass Svc:\n"
+                  "    def __init__(self, repo: Repo):\n        self.repo = repo\n\n    def run(self):\n"
+                  "        return self.repo.save()\n\n\ndef a():\n    r = Repo()\n    return r.save()\n\n\n"
+                  "def b(r: Optional[Repo]):\n    return r.save()\n\n\ndef c():\n    r = open_repo()\n    return r.save()\n\n\n"
+                  "def d(x):\n    return x.save()\n",
+    })
+    got = impact(lk, ["Repo.save"])
+    users = {c["user"] for i in got["data"]["items"] for c in i["callers"]}
+    assert users == {"Svc.run", "a", "b", "c"}             # d's x is untyped: by name only, never a resolved link
+    assert got["by_name"] == [] or all(b["path"] != "svc.py" for b in got["by_name"])
+
+
+
+def test_a_member_of_an_unannotated_call_result_is_never_linked_to_the_call():
+    """A spot check of real links found ``vs.to_arrays()`` linked to ``VectorStore.from_arrays`` (vs came from it)."""
+    lk = _linker({"v.py": "class VectorStore:\n    @classmethod\n    def from_arrays(cls, a):\n        return cls()\n\n"
+                          "    def to_arrays(self):\n        return 1\n",
+                  "u.py": "from v import VectorStore\n\n\ndef go():\n    vs = VectorStore.from_arrays(1)\n"
+                          "    return vs.to_arrays()\n"})
+    got = {(l[3], l[5]) for l in lk.links() if l[0] == "u.py"}
+    assert (5, "VectorStore.from_arrays") in got and (6, "VectorStore.from_arrays") not in got
