@@ -40,6 +40,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        exclude:
+          - os: ubuntu-latest          # its image carries no 3.9 (end of life): the same Linux on 22.04 below
+            python-version: "3.9"
+        include:
+          - os: ubuntu-22.04
+            python-version: "3.9"
 
     steps:
       - uses: actions/checkout@v4
