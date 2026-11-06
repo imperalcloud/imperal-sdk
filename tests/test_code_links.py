@@ -159,3 +159,12 @@ def test_a_member_of_an_unannotated_call_result_is_never_linked_to_the_call():
                           "    return vs.to_arrays()\n"})
     got = {(l[3], l[5]) for l in lk.links() if l[0] == "u.py"}
     assert (5, "VectorStore.from_arrays") in got and (6, "VectorStore.from_arrays") not in got
+
+
+
+def test_depth_never_grows_through_a_module_level_use_as_the_whole_file():
+    lk = _linker({"q.py": "def linker():\n    return 1\n",
+                  "mod.py": "from q import linker\nVALUE = linker()\n\n\ndef unrelated():\n    return 2\n",
+                  "uses_mod.py": "from mod import unrelated\n\n\ndef f():\n    return unrelated()\n"})
+    got = {(i["id"], i["depth"]) for i in impact(lk, ["linker"], depth=2)["data"]["items"]}
+    assert got == {("mod.py", 1)}                      # uses_mod.py only uses another definition of mod.py

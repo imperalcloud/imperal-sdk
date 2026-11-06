@@ -769,6 +769,8 @@ def impact(linker: Linker, symbols: list, depth: int = 2) -> dict:
                 if c not in it["callers"] and len(it["callers"]) < 20:
                     it["callers"].append(c)
             nk = (src, user)
+            if not user:              # a module-level use is no definition to follow -- never "the whole file"
+                continue
             if nk not in seen:
                 seen.add(nk)
                 nxt.append(nk)
