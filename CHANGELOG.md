@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.5.1 - 2026-11-06
+
+Fixes from the second 06.11 field report (Webbee 0.7.2 in a folder of nine repositories).
+
+### Fixed
+- `code_links`: a folder of repositories indexed as one resolves each absolute import in its OWN repository first.
+  `Linker(facts, configs, roots)` takes the repository roots; config directories are project roots too. Before,
+  `from app.sessions import ...` inside `gateway/` resolved nowhere, and two repositories with the same module names
+  took each other's files.
+- `impact()` carries a `summary`: one sentence that can't be misread. "0 resolved users, 11 files only mention the
+  name" is no longer read as "no callers".
+- Python members are resolved through typed values:
+  - typed locals and parameters (`Optional[...]`, forward references);
+  - `self.x` attributes and dataclass fields;
+  - return annotations.
+
+  A member of an unannotated call result is never linked to the call.
+
 ## 6.5.0 - 2026-11-06
 
 The code graph, fixed after the 06.11 report: one link algorithm for the vault and every client, every major
