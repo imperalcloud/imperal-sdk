@@ -553,3 +553,24 @@ def test_a_quoted_line_is_checked_by_its_hash():
     text = "def a():\n    return   1\n\n"
     hs = ci.line_hashes(text)
     assert len(hs) == 4 * 8 and hs[8:16] == ci.line_hash("return 1") and hs[16:24] == "-" * 8
+
+
+
+def test_embed_survives_a_lone_surrogate():
+    """06.11 report: one surrogate in any file's text failed the vectors of the whole index."""
+    np = pytest.importorskip("numpy")
+    from imperal_sdk import code_index as ci
+    seen = []
+
+    class _Model:
+        dim = 2
+
+        def encode(self, texts):
+            for t in texts:
+                t.encode("utf-8")           # a real model fails here on a lone surrogate
+                seen.append(t)
+            return np.zeros((len(texts), 2))
+    b = ci.Model2VecBackend(_Model())
+    out = b.embed(["ok", "bad \udcff tail"])
+    assert out.shape == (2, 2) and seen[1] == "bad ? tail"
+    assert b.embed_query("q \ud800").shape == (2,)

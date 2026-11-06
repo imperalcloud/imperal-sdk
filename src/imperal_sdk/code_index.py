@@ -1924,6 +1924,18 @@ _MODEL2VEC_MODEL = "minishlab/potion-base-8M"     # 256-dim, pure-numpy static
 _FASTEMBED_MODEL = "BAAI/bge-small-en-v1.5"        # 384-dim, ONNX
 
 
+def _embeddable(text) -> str:
+    """A text the embedder can encode: a lone surrogate (a file read with ``surrogateescape``, a broken emoji) made
+    one replacement char -- before, ONE such char in any file failed the whole index's vectors with no file named
+    (06.11 report)."""
+    t = str(text if text is not None else "")
+    try:
+        t.encode("utf-8")
+        return t
+    except UnicodeEncodeError:
+        return t.encode("utf-8", "replace").decode("utf-8")
+
+
 class Model2VecBackend:
     def __init__(self, model) -> None:
         self._m = model
@@ -1932,11 +1944,11 @@ class Model2VecBackend:
 
     def embed(self, texts: list):
         import numpy as np
-        return np.asarray(self._m.encode(list(texts)), dtype=np.float32)
+        return np.asarray(self._m.encode([_embeddable(t) for t in texts]), dtype=np.float32)
 
     def embed_query(self, text: str):
         import numpy as np
-        return np.asarray(self._m.encode([text]), dtype=np.float32)[0]
+        return np.asarray(self._m.encode([_embeddable(text)]), dtype=np.float32)[0]
 
 
 class FastEmbedBackend:
@@ -1947,11 +1959,11 @@ class FastEmbedBackend:
 
     def embed(self, texts: list):
         import numpy as np
-        return np.asarray(list(self._m.embed(list(texts))), dtype=np.float32)
+        return np.asarray(list(self._m.embed([_embeddable(t) for t in texts])), dtype=np.float32)
 
     def embed_query(self, text: str):
         import numpy as np
-        return np.asarray(next(iter(self._m.query_embed([text]))), dtype=np.float32)
+        return np.asarray(next(iter(self._m.query_embed([_embeddable(text)]))), dtype=np.float32)
 
 
 def _try_model2vec():
