@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.5.3 - 2026-11-06
+
+### Added
+- `code_links.contracts_reached(symbols, endpoints, callers_of)`: the endpoints a change reaches, meaning a handler
+  that is one of the symbols or calls one through up to 3 callers, each with its call chain. Field report 06.11 #3:
+  `contract_slice(session_for_sid)` returned nothing, because the endpoint's handler calls it and endpoints were matched
+  by their own text only. The kernel and the MCP use this one algorithm.
+
 ## 6.5.2 - 2026-11-06
 
 ### Fixed
