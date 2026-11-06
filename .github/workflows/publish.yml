@@ -75,6 +75,28 @@ jobs:
           # on publish success.
           skip-existing: true
 
+  move-stable:
+    name: Move the stable branch to this release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The `stable` branch is what every install from git names (webbee autoupdate, `pipx reinstall`, `uv tool
+      # upgrade`): moved here to the release just published -- only forward, a re-run of an older tag leaves it.
+      - name: Move
+        run: |
+          if git ls-remote --exit-code origin refs/heads/stable >/dev/null; then
+            git fetch -q origin stable
+            if git merge-base --is-ancestor HEAD FETCH_HEAD; then
+              echo "stable is already at or past this release"; exit 0
+            fi
+          fi
+          git push origin "HEAD:refs/heads/stable"
+
   # When a tag push triggered us (and there is no Release yet), also
   # create the GitHub Release so the version page is populated. No-op
   # when the trigger was already release:published.
