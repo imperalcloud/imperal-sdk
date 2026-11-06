@@ -64,19 +64,31 @@ def is_test_path(path: str) -> bool:
 
 # ---- module resolution (the vault's stitching code, §4.6.3) ----
 
-def module_index(paths, configs: list) -> dict:
+def module_index(paths, configs: list, roots=()) -> dict:
     """The repo's files as the resolver probes them: every path (exact and case-blind), and every
     Python module name under each package root -- the repo root, ``src/`` layouts, the roots the
     configs declare (pyproject ``where`` / ``package-dir``, setup.cfg ``package_dir``) and the top
-    of each ``__init__.py`` chain."""
+    of each ``__init__.py`` chain.
+
+    ``roots``: the repositories inside a folder indexed as one (``core/wpanel-sdk``, ``gateway``). With the
+    directories of the project configs they are PROJECT roots: an absolute import is looked up first among the
+    names of the project holding the importing file (report 06.11 #2: ``from app.sessions import ...`` inside
+    ``gateway/`` resolved nowhere, and two repos with the same module names took each other's files)."""
     paths = sorted(set(paths), key=lambda p: (not p.endswith(".py"), p))
     files = set(paths)
     lower: dict = {}
     for p in paths:
         lower.setdefault(p.lower(), p)
-    roots = {""}
+    projects = {""} | {_slashes(str(r)).strip("/") for r in roots or () if str(r).strip("/.")}
+    for c in configs or []:
+        if c.get("kind") in ("pyproject", "setup_cfg", "package_json", "go_mod", "cargo"):
+            projects.add(posixpath.dirname(_slashes(str(c.get("path") or "")).lstrip("/")))
+    roots = set(projects)
     if any(p.startswith("src/") for p in paths):
         roots.add("src")
+    for pr in projects:
+        if pr and any(p.startswith(pr + "/src/") for p in paths):
+            roots.add(pr + "/src")
     for c in configs or []:
         data = c.get("data") or {}
         base = posixpath.dirname(str(c.get("path") or ""))
@@ -86,6 +98,7 @@ def module_index(paths, configs: list) -> dict:
             if str(k) == "" and v:
                 roots.add(_slashes(posixpath.join(base, str(v))).lstrip("/"))
     py: dict = {}
+    by_root: dict = {}
     inits = {posixpath.dirname(p) for p in paths if posixpath.basename(p) in ("__init__.py", "__init__.pyi")}
     for p in paths:
         if not p.endswith(_PY_EXT):
@@ -99,12 +112,13 @@ def module_index(paths, configs: list) -> dict:
         while top and top in inits:
             top = posixpath.dirname(top)
         mine.add(top)
-        for root in mine:
+        for root in sorted(mine):
             if root and not (stem == root or stem.startswith(root + "/")):
                 continue
             rel = stem[len(root) + 1:] if root else stem
             if rel:
                 py.setdefault(rel.replace("/", "."), p)
+                by_root.setdefault(root, {}).setdefault(rel.replace("/", "."), p)
     pkgs = {}
     for c in configs or []:
         if c.get("kind") == "package_json" and (c.get("data") or {}).get("name"):
@@ -112,7 +126,21 @@ def module_index(paths, configs: list) -> dict:
     by_path = {_slashes(str(c.get("path") or "")).lstrip("/"): c for c in configs or []}
     ts = [dict(c, eff=_ts_effective(c, by_path, pkgs, set()))
           for c in configs or [] if c.get("kind") in ("tsconfig", "jsconfig")]
-    return {"files": files, "lower": lower, "py": py, "ts": ts, "pkgs": pkgs}
+    return {"files": files, "lower": lower, "py": py, "ts": ts, "pkgs": pkgs, "py_roots": by_root,
+            "projects": sorted(projects, key=len, reverse=True)}
+
+
+def _py_absolute(modules: dict, from_path: str, spec: str) -> str | None:
+    """An absolute Python module: first among the names of the project holding ``from_path`` (its own roots),
+    then anywhere (a package another project of the folder provides: ``wpanel_sdk`` from ``core/wpanel-sdk``)."""
+    proj = next((r for r in modules.get("projects") or () if not r or from_path.startswith(r + "/")), "")
+    if proj:
+        for root in sorted(modules.get("py_roots") or {}):
+            if root == proj or root.startswith(proj + "/"):
+                got = modules["py_roots"][root].get(spec)
+                if got:
+                    return got
+    return modules["py"].get(spec)
 
 
 def _ts_effective(c: dict, by_path: dict, pkgs: dict, seen: set) -> dict:
@@ -234,7 +262,7 @@ def resolve_module(modules: dict, from_path: str, spec: str, lang: str, configs:
                 parts = parts[:len(parts) - (level - 1)]
             target = "/".join(parts + ([x for x in rest.split(".") if x] if rest else []))
             return _probe(modules, target, "python") if target else _probe(modules, "__init__", "python")
-        return modules["py"].get(spec)
+        return _py_absolute(modules, from_path, spec)
     if spec.startswith("."):
         return _probe(modules, posixpath.join(posixpath.dirname(from_path), spec), lang)
     confs = sorted((c for c in modules.get("ts") or []
@@ -271,9 +299,10 @@ class Linker:
     parsed resolution configs (``code_index.parse_config``: ``{path, kind, data}``)."""
     facts: dict
     configs: list = field(default_factory=list)
+    roots: list = field(default_factory=list)      # the repositories of a folder indexed as one (module_index)
 
     def __post_init__(self):
-        self.modules = module_index(list(self.facts), self.configs)
+        self.modules = module_index(list(self.facts), self.configs, self.roots)
         self._defs: dict = {}
         self._pkgs: dict = {}                 # module key -> (files, names before the asked ones)
         self.ns: dict = {}                    # (family, package) -> files that declare it

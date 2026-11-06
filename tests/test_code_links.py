@@ -85,3 +85,41 @@ def test_resolve_module_is_the_vaults():
     assert resolve_module(mods, "src/a/__init__.py", ".b", "python") == "src/a/b.py"
     assert resolve_module(mods, "x.py", "a.b", "python") == "src/a/b.py"
     assert resolve_module(mods, "x.py", "requests", "python") is None
+
+
+FOLDER = {
+    "core/wpanel-sdk/pyproject.toml": '[project]\nname = "wpanel-sdk"\n[tool.setuptools.packages.find]\nwhere = ["src"]\n',
+    "core/wpanel-sdk/src/wpanel_sdk/__init__.py": "",
+    "core/wpanel-sdk/src/wpanel_sdk/ui/__init__.py": "class IRNode:\n    pass\n",
+    "modules/wpanel-tickets/wpanel_tickets/__init__.py": "",
+    "modules/wpanel-tickets/wpanel_tickets/screens.py": "from wpanel_sdk.ui import IRNode\n\n\ndef screen():\n"
+                                                        "    return IRNode()\n",
+    # two repos with the same top-level package name and no __init__ above it (namespace packages)
+    "gateway/app/sessions.py": "def session_for_sid(sid):\n    return sid\n",
+    "gateway/app/routes.py": "from app.sessions import session_for_sid\n\n\ndef me(sid):\n    return session_for_sid(sid)\n",
+    "billing/app/sessions.py": "def session_for_sid(sid):\n    return None\n",
+    "billing/app/api.py": "from app.sessions import session_for_sid\n\n\ndef pay(sid):\n    return session_for_sid(sid)\n",
+    "check-paths-agree.py": "print('IRNode')\n",
+}
+
+
+def _folder_linker(roots):
+    facts, configs = {}, []
+    for p, t in FOLDER.items():
+        if p.endswith(".toml"):
+            kind, data = ci.parse_config(p, t)
+            configs.append({"path": p, "kind": kind, "data": data})
+        else:
+            facts[p] = ci.scope_facts(p, t)
+    return Linker(facts, configs, roots)
+
+
+def test_a_folder_of_repositories_resolves_each_import_in_its_own_repository():
+    """06.11 #2: a folder indexed as one -- absolute imports from each repository's own root, a package another
+    repository provides by its name."""
+    lk = _folder_linker(["core/wpanel-sdk", "modules/wpanel-tickets", "gateway", "billing"])
+    assert [i["id"] for i in impact(lk, ["IRNode"])["data"]["items"]] == ["modules/wpanel-tickets/wpanel_tickets/screens.py"]
+    assert [i["id"] for i in impact(lk, ["gateway/app/sessions.py::session_for_sid"])["data"]["items"]] == \
+        ["gateway/app/routes.py"]
+    assert [i["id"] for i in impact(lk, ["billing/app/sessions.py::session_for_sid"])["data"]["items"]] == \
+        ["billing/app/api.py"]
