@@ -831,3 +831,55 @@ def impact_summary(symbols, resolved, users: int, by_name: int, same_file: int =
     elif not users:
         head += " and no other file mentions the name"
     return head
+
+
+# ── contracts reached through callers (field report 06.11 #3) ────────────────────────────────
+
+def _bare(name) -> str:
+    """A definition's own name: ``path::Class.method`` -> ``method``."""
+    return str(name or "").split("::")[-1].rsplit(".", 1)[-1]
+
+
+def contracts_reached(symbols, endpoints, callers_of, depth: int = 3, k: int = 50) -> list:
+    """The endpoints a change to ``symbols`` reaches: an endpoint whose handler IS one of them, or calls one of them
+    through up to ``depth`` callers. ``endpoints``: the catalog's records (``handler`` = the handler's qualname);
+    ``callers_of(names) -> {name: [qualnames of the definitions that call it]}`` asks the code graph (graph_slice).
+    Each endpoint returned carries ``via`` ("handler" | "caller") and ``chain`` (``mint_ticket -> session_for_sid``).
+    Field report 06.11 #3: contract_slice(session_for_sid) answered nothing -- the endpoint's handler CALLS it, and
+    endpoints were matched by their own text only. One algorithm for every client (kernel, MCP). PURE but for
+    ``callers_of``; never raises on a failing one (what was reached so far stands)."""
+    chain: dict = {}
+    for s in symbols or []:
+        b = _bare(s)
+        if b:
+            chain.setdefault(b, [b])
+    frontier = list(chain)
+    for _ in range(max(0, int(depth))):
+        if not frontier:
+            break
+        try:
+            got = callers_of(list(frontier)) or {}
+        except Exception:
+            break
+        nxt = []
+        for name in frontier:
+            for caller in got.get(name) or []:
+                c = _bare(caller)
+                if c and c not in chain:
+                    chain[c] = [c] + chain[name]
+                    nxt.append(c)
+        frontier = nxt
+    out, seen = [], set()
+    for e in endpoints or []:
+        if not isinstance(e, dict):
+            continue
+        h = _bare(e.get("handler"))
+        if h not in chain:
+            continue
+        key = (e.get("repo") or e.get("repo_key"), e.get("method"), e.get("route") or e.get("key"), h)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({**e, "via": "handler" if len(chain[h]) == 1 else "caller", "chain": " -> ".join(chain[h])})
+    out.sort(key=lambda e: (len(str(e["chain"]).split(" -> ")), str(e.get("route") or e.get("key") or "")))
+    return out[:max(1, int(k))]
