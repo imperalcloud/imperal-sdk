@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from imperal_sdk.code_index import DEF_NODES, Binding, Def, Ref, _first_line, _line_of, _name_of
+from imperal_sdk.code_index import DEF_NODES, Binding, Def, Ref, _first_line, _line_of, _name_of, _retype, _type_chain
 
 
 def _f(node, name):
@@ -143,6 +143,17 @@ SPECS: dict = {
 }
 
 LANGS = frozenset(SPECS)
+# the field declarations of a type (``this.repo.save()`` / ``s.db.Query()`` -> the field's type)
+_FIELDS = {"go": ("field_declaration",), "rust": ("field_declaration",), "java": ("field_declaration",),
+           "csharp": ("field_declaration", "property_declaration"),
+           "kotlin": ("property_declaration", "class_parameter"),
+           "php": ("property_declaration", "property_promotion_parameter")}
+_IMPLICIT_THIS = frozenset({"java", "csharp", "kotlin"})
+# where a definition declares what it returns (``x := NewShaper()`` -> ``x`` is a ``Shaper``)
+_RETURNS = {"go": "result", "rust": "return_type", "java": "type", "csharp": "returns", "php": "return_type"}
+# a call expression -> its callee (an initialiser ``x := F()`` types ``x`` by F's declared return)
+_CALLEE = {"go": "function", "rust": "function", "java": "", "csharp": "function", "kotlin": "@0"}
+CALL = "()"                       # a chain part: "the value this call returns"
 _RUBY_LOADS = ("require", "require_relative", "load")
 
 
@@ -177,6 +188,8 @@ class _Walk:
         self.refs: list = []
         self._seen: set = set()
         self.consumed: set = set()       # names a chain already reported
+        self.typed: dict = {}            # def qualname -> {local: type chain}
+        self.fields: dict = {}           # type qualname -> {field: type chain}
 
     def text(self, node) -> str:
         return self.src[node.start_byte:node.end_byte].decode("utf-8", "replace")
@@ -242,6 +255,8 @@ class _Walk:
         return left + [nm] if left else None
 
     def ref(self, parts: list, in_def, kind: str, line: int, local: set) -> None:
+        if parts and (self.typed or self.fields):
+            parts = _retype(parts, in_def, self.typed, self.fields, local, self.lang in _IMPLICIT_THIS)
         if not parts or (parts[0] in local and parts[0] != "self"):
             return
         r = Ref(parts[0], ".".join(parts[1:6]), in_def, kind, line)
@@ -264,6 +279,116 @@ class _Walk:
                 if tgt is not None:
                     out |= self._names_in(tgt)
             stack.extend(n.children)
+        return out
+
+    def typed_of(self, node) -> dict:
+        """``{local: type chain}`` of a definition: declared types of parameters and locals, ``new T()`` /
+        ``T{}`` / ``T()`` (kotlin) / ``T::new()`` (rust) initialisers."""
+        out: dict = {}
+        stack = list(node.children)
+        while stack:
+            n = stack.pop()
+            if n.type in self.defs_of:
+                continue
+            if n.type in self.sp.locals and self.sp.locals[n.type] is not None:
+                tgt = _child(n, self.sp.locals[n.type])
+                ch = self._decl_type(n)
+                if tgt is not None and ch:
+                    for name in self._names_in(tgt):
+                        out[name] = ch
+            stack.extend(n.children)
+        return out
+
+    def _decl_type(self, n) -> list | None:
+        tnode = _f(n, "type")
+        if tnode is None and n.parent is not None and n.type == "variable_declarator":
+            tnode = _f(n.parent, "type")
+        if tnode is None:
+            tnode = next((c for c in n.named_children if c.type == "user_type"), None)
+        if tnode is not None and tnode.type != "implicit_type":
+            ch = _type_chain(self.src, tnode)
+            if ch and ch != ["var"]:            # java ``var x = ...``: inferred, see the initialiser
+                return ch
+        for c in n.named_children:                  # the initialiser
+            v = c
+            if v.type == "expression_list" and v.named_children:           # go ``x := F()``
+                v = v.named_children[0]
+            ch = self._call_type(v)
+            if ch:
+                return ch
+            if v.type == "unary_expression" and v.named_children:          # go &T{}
+                v = v.named_children[0]
+            if v.type in ("object_creation_expression", "composite_literal"):
+                return _type_chain(self.src, _f(v, "type") or (v.named_children[0] if v.named_children else None))
+            if self.lang == "kotlin" and v.type == "call_expression" and v.named_children:
+                callee = v.named_children[0]
+                if callee.type == "simple_identifier" and self.text(callee)[:1].isupper():
+                    return [self.text(callee)]
+            if self.lang == "rust" and v.type == "call_expression":
+                fn = _f(v, "function")
+                path = _f(fn, "path") if fn is not None and fn.type == "scoped_identifier" else None
+                ch = _type_chain(self.src, path) if path is not None else None
+                if ch and ch[-1][:1].isupper():
+                    return ch
+        return None
+
+    def _call_type(self, v) -> list | None:
+        """``F()`` / ``pkg.F()`` / ``a.b.make()`` as ``[F, "()"]``: the value the call returns (the resolver reads the
+        callee's declared return type)."""
+        call_types = {"go": "call_expression", "rust": "call_expression", "java": "method_invocation",
+                      "csharp": "invocation_expression", "kotlin": "call_expression"}
+        if v.type != call_types.get(self.lang):
+            return None
+        sel = _CALLEE.get(self.lang)
+        fn = v if sel == "" else _child(v, sel)
+        if fn is None:
+            return None
+        used: set = set()
+        before = set(self.consumed)
+        parts = self.chain(fn, set(), used)
+        self.consumed = before                # a probe, not a walk: nothing is consumed
+        if not parts or (self.lang == "kotlin" and parts[-1][:1].isupper() and len(parts) == 1):
+            return None                       # kotlin ``T()`` is a constructor (``_decl_type``)
+        if self.lang == "rust" and len(parts) >= 2 and parts[-2][:1].isupper():
+            return None                       # rust ``T::new()``: the type itself (``_decl_type``)
+        return parts + [CALL]
+
+    def fields_of(self, node) -> dict:
+        out: dict = {}
+        kinds = _FIELDS.get(self.lang, ())
+        stack = list(node.children)
+        while stack:
+            n = stack.pop()
+            if n.type in self.defs_of and n.type not in ("constructor_declaration",) and not (
+                    self.lang == "php" and n.type == "method_declaration"):
+                continue
+            if n.type in kinds:
+                ch = self._decl_type(n)
+                if not ch:
+                    vd = next((c for c in n.named_children if c.type in ("variable_declaration",)), None)
+                    ch = self._decl_type(vd) if vd is not None else None
+                names = self._field_names(n)
+                if ch:
+                    for name in names:
+                        out[name] = ch
+                continue
+            stack.extend(n.children)
+        return out
+
+    def _field_names(self, n) -> list:
+        name = _f(n, "name")
+        if name is not None:
+            return [self.text(name).lstrip("$")]
+        out = []
+        for c in _all(n, "variable_declarator") + _all(n, "property_element"):
+            nm = _f(c, "name") or next((x for x in c.named_children if x.type in ("identifier", "variable_name")), None)
+            if nm is not None:
+                out.append(self.text(nm).lstrip("$"))
+        if not out:
+            vd = next((c for c in n.named_children if c.type == "variable_declaration"), n)
+            nm = next((c for c in vd.named_children if c.type == "simple_identifier"), None)
+            if nm is not None:
+                out.append(self.text(nm))
         return out
 
     def _names_in(self, node) -> set:
@@ -452,6 +577,8 @@ class _Walk:
             return
         inh = inherit or t in sp.inherit
         # a declaring name (a parameter, a local, a field) is not a use
+        if self.lang == "java" and t == "type_identifier" and self.text(node) == "var":
+            return
         if t in sp.idents and (parent_type in sp.decl_parents or
                                (field_name in ("name", "pattern", "alias", "label", "left")
                                 and parent_type not in sp.member and parent_type not in sp.calls)):
@@ -532,9 +659,24 @@ class _Walk:
         if qual_scope and kind == "function" and lang in ("rust", "kotlin", "php", "java", "csharp"):
             kind = "method"
         qual = ".".join(qual_scope + [name])
+        ret = _child(node, _RETURNS[lang]) if lang in _RETURNS and kind in ("function", "method") else None
+        if ret is None and lang == "kotlin" and kind in ("function", "method"):
+            ret = next((c for c in node.named_children if c.type in ("user_type", "nullable_type")), None)
+        rch = _type_chain(self.src, ret) if ret is not None else None
+        if rch == ["Self"] and qual_scope:
+            rch = list(qual_scope)
+        if rch:
+            self.bindings.append(Binding(qual + CALL, "", ".".join(rch), "returns", _line_of(node)))
         self.defs.append(Def(name.rsplit(".", 1)[-1], qual, kind, _line_of(node), node.end_point[0] + 1,
                              _first_line(self.text(node)), self._exported(node, name)))
         inner_local = (local | self.locals_of(node)) - {"self"}
+        typed = self.typed_of(node)
+        if typed:
+            self.typed[qual] = typed
+        if kind == "class":
+            fields = self.fields_of(node)
+            if fields:
+                self.fields.setdefault(qual, {}).update(fields)
         if lang == "go" and mine:
             inner_local -= mine
         name_node = _f(node, "name")

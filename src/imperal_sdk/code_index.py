@@ -595,8 +595,11 @@ def _schema_keys(lang: str, path: str, text: str, defs: list) -> list:
 # ---- indexer (from webbee/intel/indexer.py; the language table of the kernel's code_outline) ----
 
 # ONE language table for the client and the kernel: .tsx is TSX (JSX parses), .mjs / .cjs are JavaScript.
-LANG_BY_EXT = {".py": "python", ".pyi": "python", ".ts": "typescript", ".tsx": "tsx",
-               ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript"}
+LANG_BY_EXT = {".py": "python", ".pyi": "python", ".ts": "typescript", ".tsx": "tsx", ".mts": "typescript",
+               ".cts": "typescript", ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript",
+               ".cjs": "javascript"}
+# single-file components: their <script> blocks are TS/JS, their template uses components (``sfc_facts``)
+SFC_EXT = (".vue", ".svelte", ".astro")
 
 # tree-sitter Language handles are lazy-loaded + cached (import cost is real).
 _LANG_CACHE: dict = {}
@@ -680,10 +683,13 @@ def _lang_for(path: str) -> str:
 # 3 (2026-11-04): a blob is sent without its text -- facts with descriptions (``Def.doc``, ``BlobFacts.doc``), its
 # line hashes and size; a config as its parsed keys. The vault asks every version of an older extractor again, so the
 # text it held is replaced by the index (owner 2026-11-04: the vault holds the index, never the code)
-EXTRACTOR_VERSION = "3"
+EXTRACTOR_VERSION = "4"
+# 4 (2026-11-06): Go, Rust, Java, Kotlin, C#, PHP, Ruby carry imports and references (``code_langs``); TS/JS default
+# exports, CommonJS exports, dynamic import(); Vue / Svelte / Astro components -- every older blob is asked again
 MAX_FILE_BYTES = 10 * 1024 * 1024     # one file in the code index (Cloud OS: shared vault, many users)
 MAX_REPO_FILES = 20_000
-INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte",
+                 ".astro", ".go", ".rs", ".java", ".kt", ".kts", ".cs", ".php", ".rb")
 # the resolution configs (read and stored parsed); setup.py is code to execute -- never read
 CONFIG_NAMES = ("pyproject.toml", "setup.cfg", "jsconfig.json", "package.json", "go.mod", "cargo.toml")
 _TSCONFIG = re.compile(r"^tsconfig(?:\.[\w.-]+)?\.json$")
@@ -896,6 +902,64 @@ _JS_GLOBALS = frozenset({
 })
 
 
+_TYPE_LEAVES = frozenset({"type_identifier", "identifier", "name", "constant"})
+_TYPE_PATHS = frozenset({"nested_type_identifier", "qualified_type", "scoped_type_identifier", "qualified_name",
+                         "scoped_identifier", "nested_identifier"})
+_TYPE_NEVER = frozenset({"type_arguments", "type_parameters", "type_projection", "type_argument_list",
+                         "predefined_type", "primitive_type", "integral_type", "floating_point_type", "void_type",
+                         "boolean_type", "array_type", "tuple_type", "function_type", "union_type", "literal_type"})
+_IDENT_SHAPE = re.compile(r"^[A-Za-z_$][\w$]*$")
+
+
+def _type_chain(src: bytes, node, depth: int = 0) -> list | None:
+    """The named type a declaration carries (``Repo``, ``db.Conn``, ``Map<K, V>`` -> ``Map``, ``*Server`` ->
+    ``Server``, ``Repo?`` -> ``Repo``) as a chain, or None (a primitive, a union, an array, a function type)."""
+    if node is None or depth > 6 or node.type in _TYPE_NEVER:
+        return None
+    t = node.type
+    if t in _TYPE_LEAVES or t in _TYPE_PATHS:
+        txt = src[node.start_byte:node.end_byte].decode("utf-8", "replace")
+        parts = [x for x in re.split(r"(?:\.|::|\\)+", txt) if x]
+        return parts if parts and all(_IDENT_SHAPE.match(x) for x in parts) else None
+    if t == "user_type":                        # kotlin: a.b.C
+        parts = [src[c.start_byte:c.end_byte].decode("utf-8", "replace") for c in node.named_children
+                 if c.type == "type_identifier"]
+        return parts or None
+    for c in node.named_children:
+        got = _type_chain(src, c, depth + 1)
+        if got:
+            return got
+    return None
+
+
+def _retype(parts: list, in_def, typed: dict, fields: dict, local: set, implicit: bool) -> list:
+    """A chain on a typed local / parameter / field, as a chain on its type: ``s.load`` with ``s = new Store()`` ->
+    ``Store.load``; ``this.svc.run`` with ``svc: Svc`` -> ``Svc.run``; with ``implicit`` (Java, C#, Kotlin) a bare
+    field ``repo.save`` too. Untyped chains stay as they are."""
+    if not in_def or len(parts) < 2:
+        return parts
+    q = in_def.split(".")
+    if parts[0] in ("self", "this", "cls"):
+        if len(parts) >= 3:
+            for k in range(len(q) - 1, 0, -1):
+                f = fields.get(".".join(q[:k]))
+                if f and parts[1] in f:
+                    return f[parts[1]] + parts[2:]
+        return parts
+    if parts[0] in local:
+        for k in range(len(q), 0, -1):
+            t = typed.get(".".join(q[:k]))
+            if t and parts[0] in t:
+                return t[parts[0]] + parts[1:]
+        return parts
+    if implicit:
+        for k in range(len(q) - 1, 0, -1):
+            f = fields.get(".".join(q[:k]))
+            if f and parts[0] in f:
+                return f[parts[0]] + parts[1:]
+    return parts
+
+
 class _Scope:
     """What one walk collects: the file's defs, bindings and refs, and the locals of each def."""
 
@@ -905,11 +969,15 @@ class _Scope:
         self.bindings: list = []
         self.refs: list = []
         self._seen: set = set()
+        self.typed: dict = {}       # def qualname -> {local: type chain}
+        self.fields: dict = {}      # class qualname -> {field: type chain}
 
     def text(self, node) -> str:
         return self.src[node.start_byte:node.end_byte].decode("utf-8", "replace")
 
     def ref(self, parts: list, in_def, kind: str, line: int, local: set) -> None:
+        if parts and (self.typed or self.fields):
+            parts = _retype(parts, in_def, self.typed, self.fields, local, False)
         if not parts or (parts[0] in local and parts[0] not in ("self", "cls")):
             return
         r = Ref(parts[0], ".".join(parts[1:_CHAIN_PARTS]), in_def, kind, line)
@@ -1157,6 +1225,80 @@ def _ts_string(sc: _Scope, node) -> str:
     return "".join(sc.text(c) for c in node.children if c.type == "string_fragment") if node is not None else ""
 
 
+def _ts_typed(sc: _Scope, fn) -> dict:
+    """``{local: type chain}`` of a function: typed parameters, ``const x: T``, ``const x = new T()``."""
+    out: dict = {}
+    stack = list(fn.children)
+    while stack:
+        n = stack.pop()
+        if n.type in ("required_parameter", "optional_parameter"):
+            pat = n.child_by_field_name("pattern")
+            ch = _type_chain(sc.src, n.child_by_field_name("type"))
+            if pat is not None and pat.type == "identifier" and ch:
+                out[sc.text(pat)] = ch
+        elif n.type == "variable_declarator":
+            name = n.child_by_field_name("name")
+            ch = _type_chain(sc.src, n.child_by_field_name("type"))
+            value = n.child_by_field_name("value")
+            if value is not None and value.type == "await_expression" and value.named_children:
+                value = value.named_children[0]
+            if not ch and value is not None and value.type == "new_expression":
+                ctor = value.child_by_field_name("constructor")
+                ch = _ts_chain(sc, ctor) if ctor is not None else None
+            if not ch and value is not None and value.type == "call_expression" \
+                    and not _ts_module_value(sc, value):
+                fnode = value.child_by_field_name("function")
+                callee = _ts_chain(sc, fnode) if fnode is not None else None
+                ch = callee + ["()"] if callee and callee[0] not in _JS_GLOBALS else None
+            if name is not None and name.type == "identifier" and ch:
+                out[sc.text(name)] = ch
+        if n.type in _TS_DEFS and n is not fn:
+            continue
+        stack.extend(n.children)
+    return out
+
+
+def _ts_fields(sc: _Scope, cls) -> dict:
+    """``{field: type chain}`` of a class: typed fields, ``x = new T()`` fields, constructor parameter properties
+    (``constructor(private svc: Svc)`` -- the dependency-injection form)."""
+    out: dict = {}
+    body = cls.child_by_field_name("body")
+    for m in (body.named_children if body is not None else []):
+        if m.type in ("public_field_definition", "field_definition"):
+            name = m.child_by_field_name("name") or m.child_by_field_name("property")
+            ch = _type_chain(sc.src, m.child_by_field_name("type"))
+            value = m.child_by_field_name("value")
+            if not ch and value is not None and value.type == "new_expression":
+                ctor = value.child_by_field_name("constructor")
+                ch = _ts_chain(sc, ctor) if ctor is not None else None
+            if name is not None and ch:
+                out[sc.text(name)] = ch
+        elif m.type == "method_definition":
+            name = m.child_by_field_name("name")
+            if name is None or sc.text(name) != "constructor":
+                continue
+            params = m.child_by_field_name("parameters")
+            for prm in (params.named_children if params is not None else []):
+                if prm.type in ("required_parameter", "optional_parameter") and any(
+                        c.type in ("accessibility_modifier", "readonly", "override_modifier") or sc.text(c) == "readonly"
+                        for c in prm.children):
+                    pat = prm.child_by_field_name("pattern")
+                    ch = _type_chain(sc.src, prm.child_by_field_name("type"))
+                    if pat is not None and ch:
+                        out[sc.text(pat)] = ch
+    return out
+
+
+def _ts_module_value(sc: _Scope, value) -> bool:
+    """``require("./x")`` / ``await import("./x")``: the declarator binds a module (``_ts_require``)."""
+    if value is not None and value.type == "await_expression" and value.named_children:
+        value = value.named_children[0]
+    if value is None or value.type != "call_expression":
+        return False
+    fn = value.child_by_field_name("function")
+    return fn is not None and sc.text(fn) in ("require", "import")
+
+
 def _ts_locals(sc: _Scope, fn) -> set:
     out: set = set()
     stack = list(fn.children)
@@ -1170,7 +1312,7 @@ def _ts_locals(sc: _Scope, fn) -> set:
             for c in n.named_children:
                 if c.type == "identifier":
                     out.add(sc.text(c))
-        elif n.type == "variable_declarator":
+        elif n.type == "variable_declarator" and not _ts_module_value(sc, n.child_by_field_name("value")):
             name = n.child_by_field_name("name")
             if name is not None and name.type == "identifier":
                 out.add(sc.text(name))
@@ -1225,10 +1367,12 @@ def _ts_import(sc: _Scope, node) -> None:
 def _ts_require(sc: _Scope, decl) -> bool:
     """``const x = require("./a")`` / ``const {a: b, c} = require("./a")``: bindings like an import."""
     value = decl.child_by_field_name("value")
+    if value is not None and value.type == "await_expression" and value.named_children:
+        value = value.named_children[0]              # ``const m = await import("./x")``
     if value is None or value.type != "call_expression":
         return False
     fn, args = value.child_by_field_name("function"), value.child_by_field_name("arguments")
-    if fn is None or sc.text(fn) != "require" or args is None or not args.named_children \
+    if fn is None or sc.text(fn) not in ("require", "import") or args is None or not args.named_children \
             or args.named_children[0].type != "string":
         return False
     module, line = _ts_string(sc, args.named_children[0]), _line_of(decl)
@@ -1246,6 +1390,68 @@ def _ts_require(sc: _Scope, decl) -> bool:
     return True
 
 
+def _ts_cjs_export(sc: _Scope, assign, named_exports: set) -> bool:
+    """CommonJS exports: ``exports.x = ...`` / ``module.exports.x = ...`` define ``x``; ``module.exports = {a, b: fn}``
+    defines its function members; ``module.exports = X`` is the default export."""
+    left, right = assign.child_by_field_name("left"), assign.child_by_field_name("right")
+    if left is None or right is None:
+        return False
+    target = sc.text(left).replace(" ", "")
+    line = _line_of(assign)
+    name = ""
+    if target.startswith("exports.") and target.count(".") == 1:
+        name = target.split(".", 1)[1]
+    elif target.startswith("module.exports.") and target.count(".") == 2:
+        name = target.rsplit(".", 1)[1]
+    elif target == "module.exports":
+        if right.type == "identifier":
+            sc.bindings.append(Binding("default", "", sc.text(right), "default", line))
+            return True
+        if right.type == "object":
+            for p in right.named_children:
+                if p.type == "shorthand_property_identifier":
+                    named_exports.add(sc.text(p))
+                    continue
+                if p.type == "method_definition":
+                    k, v = p.child_by_field_name("name"), p
+                elif p.type == "pair":
+                    k, v = p.child_by_field_name("key"), p.child_by_field_name("value")
+                else:
+                    continue
+                if k is None or v is None:
+                    continue
+                if p.type == "method_definition" or v.type in _TS_FUNCTION_VALUES:
+                    _ts_define(sc, sc.text(k), v, _line_of(p))
+                else:
+                    _ts_walk(sc, v, [], "read", set(), False, named_exports)
+            return True
+        named = right.child_by_field_name("name") if right.type in _TS_FUNCTION_VALUES | {"class"} else None
+        if named is not None:
+            sc.bindings.append(Binding("default", "", sc.text(named), "default", line))
+            _ts_define(sc, sc.text(named), right, line)
+            return True
+        return False
+    if not name or not name.replace("$", "_").isidentifier():
+        return False
+    if right.type in _TS_FUNCTION_VALUES or right.type == "class":
+        _ts_define(sc, name, right, line)
+    elif right.type == "identifier":
+        named_exports.add(sc.text(right))
+        if sc.text(right) != name:
+            sc.bindings.append(Binding(name, "", sc.text(right), "default", line))
+    else:
+        sc.defs.append(Def(name, name, "variable", line, assign.end_point[0] + 1, _first_line(sc.text(assign)), True))
+        _ts_walk(sc, right, [], "read", set(), False, named_exports)
+    return True
+
+
+def _ts_define(sc: _Scope, name: str, value, line: int) -> None:
+    kind = "class" if value.type == "class" else "function"
+    sc.defs.append(Def(name, name, kind, line, value.end_point[0] + 1, _first_line(sc.text(value)), True))
+    for c in value.children:
+        _ts_walk(sc, c, [(name, kind, True)], "read", _ts_locals(sc, value), False, set())
+
+
 def _ts_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported: bool, named_exports: set) -> None:
     t = node.type
     in_def = scope[-1][0] if scope else None
@@ -1256,12 +1462,23 @@ def _ts_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported: bool
         if node.child_by_field_name("source") is not None:
             _ts_import(sc, node)
             return
+        if any(c.type == "default" for c in node.children) and not scope:
+            value = node.child_by_field_name("value")
+            decl = node.child_by_field_name("declaration")
+            named = decl.child_by_field_name("name") if decl is not None else None
+            if value is not None and value.type == "identifier":
+                sc.bindings.append(Binding("default", "", sc.text(value), "default", _line_of(node)))
+            elif named is not None:
+                sc.bindings.append(Binding("default", "", sc.text(named), "default", _line_of(node)))
         for c in node.named_children:
             if c.type == "export_clause":
                 for spec in (x for x in c.named_children if x.type == "export_specifier"):
                     n = spec.child_by_field_name("name")
                     if n is not None:
                         named_exports.add(sc.text(n))
+                        a = spec.child_by_field_name("alias")
+                        if a is not None and sc.text(a) == "default":
+                            sc.bindings.append(Binding("default", "", sc.text(n), "default", _line_of(spec)))
             elif c.type == "identifier" and node.child_by_field_name("value") is not None:
                 named_exports.add(sc.text(c))
             elif c.type == "decorator":
@@ -1282,8 +1499,19 @@ def _ts_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported: bool
         qual = f"{parent[0]}.{name}" if parent else name
         exp = exported if parent is None else (bool(parent[2]) and parent[1] == "class")
         sc.defs.append(Def(name, qual, kind, _line_of(node), node.end_point[0] + 1, _first_line(sc.text(node)), exp))
+        rch = _type_chain(sc.src, node.child_by_field_name("return_type")) if kind in ("function", "method") else None
+        if rch:
+            sc.bindings.append(Binding(qual + "()", "", ".".join(rch), "returns", _line_of(node)))
         inner = (qual, "class" if kind == "class" else "function", exp)
         mine = local | (_ts_locals(sc, node) if kind in ("function", "method") else set())
+        if kind in ("function", "method"):
+            typed = _ts_typed(sc, node)
+            if typed:
+                sc.typed[qual] = typed
+        elif kind == "class":
+            fields = _ts_fields(sc, node)
+            if fields:
+                sc.fields[qual] = fields
         for c in node.children:
             if c.type in ("class_heritage", "extends_clause", "implements_clause", "extends_type_clause"):
                 _ts_walk(sc, c, scope, "inherit", local, False, named_exports)
@@ -1310,6 +1538,9 @@ def _ts_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported: bool
                                        decl.end_point[0] + 1, _first_line(sc.text(decl)), exported and not scope))
                     if fn_value:
                         mine = local | _ts_locals(sc, value)
+                        typed = _ts_typed(sc, value)
+                        if typed:
+                            sc.typed[qual] = typed
                         _ts_walk(sc, value, scope + [(qual, "function", exported)], "read", mine, False, named_exports)
                         continue
             if typ is not None:
@@ -1364,7 +1595,11 @@ def _ts_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported: bool
         if value is not None:
             _ts_walk(sc, value, scope, ctx, local, False, named_exports)
         return
-    if t in ("property_identifier", "string", "comment", "jsx_text", "regex", "number"):
+    if t == "expression_statement" and not scope and node.named_children \
+            and node.named_children[0].type == "assignment_expression" \
+            and _ts_cjs_export(sc, node.named_children[0], named_exports):
+        return
+    if t in ("property_identifier", "string", "comment", "jsx_text", "regex", "number", "jsx_closing_element"):
         return
     for c in node.children:
         _ts_walk(sc, c, scope, ctx, local, False, named_exports)
@@ -1617,11 +1852,38 @@ def parse_config(path: str, text: str) -> tuple:
                          "lib": str((data.get("lib") or {}).get("path") or "")}
     data = parse_jsonc(text)
     if name == "package.json":
-        return "package_json", {"name": str(data.get("name") or ""), "main": str(data.get("main") or "")}
+        return "package_json", {"name": str(data.get("name") or ""), "main": str(data.get("main") or ""),
+                                "module": str(data.get("module") or ""), "source": str(data.get("source") or ""),
+                                "types": str(data.get("types") or data.get("typings") or ""),
+                                "exports": _package_exports(data.get("exports"))}
     co = data.get("compilerOptions") or {}
+    ext = data.get("extends")
     return ("jsconfig" if name == "jsconfig.json" else "tsconfig"), {
         "baseUrl": str(co.get("baseUrl") or ""),
-        "paths": {str(k): [str(x) for x in v or []] for k, v in (co.get("paths") or {}).items() if isinstance(v, list)}}
+        "paths": {str(k): [str(x) for x in v or []] for k, v in (co.get("paths") or {}).items() if isinstance(v, list)},
+        "extends": [str(x) for x in (ext if isinstance(ext, list) else [ext] if ext else [])]}
+
+
+_EXPORT_CONDITIONS = ("source", "types", "import", "module", "default", "require", "node", "browser")
+
+
+def _package_exports(exp) -> dict:
+    """package.json ``exports`` as ``{subpath: [file, ...]}`` (``"."``, ``"./button"``, ``"./*"``), each subpath's
+    condition targets in resolution order (sources and types first: the repo holds the sources, not the build)."""
+    def targets(v) -> list:
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return [t for x in v for t in targets(x)]
+        if isinstance(v, dict):
+            keys = sorted(v, key=lambda k: _EXPORT_CONDITIONS.index(k) if k in _EXPORT_CONDITIONS else 99)
+            return [t for k in keys for t in targets(v[k])]
+        return []
+    if exp is None:
+        return {}
+    if isinstance(exp, (str, list)) or (isinstance(exp, dict) and not any(str(k).startswith(".") for k in exp)):
+        return {".": targets(exp)[:8]}
+    return {str(k): targets(v)[:8] for k, v in list(exp.items())[:200] if str(k).startswith(".")}
 
 
 def _scope_langs() -> frozenset:
@@ -1629,9 +1891,99 @@ def _scope_langs() -> frozenset:
     return LANGS
 
 
+# mechanical formats of single-file components (tag boundaries, never meaning)
+_SFC_SCRIPT = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.S | re.I)
+_SFC_STYLE = re.compile(r"<style\b[^>]*>.*?</style\s*>", re.S | re.I)
+_SFC_LANG = re.compile(r"""\blang\s*=\s*["']?(tsx|ts|typescript|jsx)\b""", re.I)
+_SFC_FRONTMATTER = re.compile(r"\A\s*---\r?\n(.*?)\r?\n---", re.S)
+_SFC_TAG = re.compile(r"<([A-Z][\w$]*(?:\.[\w$]+)*|[a-z][\w]*(?:-[\w]+)+)(?=[\s/>])")
+_SFC_COMMENT = re.compile(r"<!--.*?-->", re.S)
+
+
+def _pascal(name: str) -> str:
+    return "".join(p[:1].upper() + p[1:] for p in re.split(r"[-_.\s]+", name) if p)
+
+
+def sfc_facts(path: str, text: str) -> BlobFacts | None:
+    """A Vue / Svelte / Astro component: its ``<script>`` blocks (and Astro's frontmatter) are TS/JS with their own
+    lines; the component itself is a definition named after the file (``user-card.vue`` -> ``UserCard``), the
+    module's default export; every component its template uses (``<UserCard>``, ``<user-card>``, ``<ui.Button>``) is
+    a reference from it."""
+    text = str(text)
+    ext = os.path.splitext(path)[1].lower()
+    comp = _pascal(os.path.splitext(os.path.basename(_slashes(path)))[0]) or "Component"
+    blocks = []
+    if ext == ".astro":
+        m = _SFC_FRONTMATTER.match(text)
+        if m:
+            blocks.append(("typescript", m.start(1), m.group(1)))
+    for m in _SFC_SCRIPT.finditer(text):
+        attrs = m.group(1)
+        lm = _SFC_LANG.search(attrs)
+        lang = {"ts": "typescript", "typescript": "typescript", "tsx": "tsx", "jsx": "tsx"}.get(
+            lm.group(1).lower() if lm else "", "typescript" if ext in (".svelte", ".astro") else "javascript")
+        if re.search(r"\bsrc\s*=", attrs):
+            continue
+        blocks.append((lang, m.start(2), m.group(2)))
+    total = text.count("\n") + 1
+    defs = [Def(comp, comp, "class", 1, total, _first_line(text), True)]
+    bindings = [Binding("default", "", comp, "default", 1)]
+    refs: list = []
+    names: set = {comp}
+    seen: set = set()
+    local_names: set = set()
+    for lang, start, body in blocks:
+        off = text.count("\n", 0, start)
+        fake = {"typescript": "c.ts", "tsx": "c.tsx", "javascript": "c.js"}[lang]
+        fx = scope_facts(fake, body)
+        if fx is None:
+            continue
+        defs += [Def(d.name, d.qualname, d.kind, d.start_line + off, d.end_line + off, d.signature, d.exported, d.doc)
+                 for d in fx.defs]
+        bindings += [Binding(b.local_name, b.module, b.imported, b.kind, b.line + off) for b in fx.bindings
+                     if not (b.kind == "default" and b.local_name == "default")]
+        for r in fx.refs:
+            nr = Ref(r.head, r.chain, r.in_def or comp, r.kind, r.line + off)
+            if nr not in seen:
+                seen.add(nr)
+                refs.append(nr)
+        names |= set(fx.names)
+        local_names |= {b.local_name for b in fx.bindings} | {d.name for d in fx.defs}
+    # the template: script / style / comments blanked line-for-line, then every component tag
+    tpl = text
+    for rx in (_SFC_SCRIPT, _SFC_STYLE, _SFC_COMMENT):
+        tpl = rx.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), tpl)
+    if ext == ".astro":
+        fm = _SFC_FRONTMATTER.match(tpl)
+        if fm:
+            tpl = re.sub(r"[^\n]", " ", tpl[:fm.end()]) + tpl[fm.end():]
+    for m in _SFC_TAG.finditer(tpl):
+        tag = m.group(1)
+        if "-" in tag:
+            if ext != ".vue":
+                continue                     # a custom element, not a component
+            tag = _pascal(tag)
+            if tag not in local_names:
+                continue
+        parts = tag.split(".")
+        r = Ref(parts[0], ".".join(parts[1:6]), comp, "call", tpl.count("\n", 0, m.start()) + 1)
+        if r not in seen:
+            seen.add(r)
+            refs.append(r)
+        names.add(tag)
+    defs.sort(key=lambda d: (d.start_line, d.qualname))
+    return BlobFacts(lang=ext[1:], lines=total, defs=defs, bindings=bindings, refs=refs, strings=[],
+                     doc=_first_line(text), names=sorted(names)[:NAMES_PER_FILE])
+
+
 def scope_facts(path: str, text: str) -> BlobFacts | None:
     """The file's scope graph (its defs, bindings with aliases, reference chains) and string keys,
     from this file alone. None when it is not code the parser knows (or the parser is absent)."""
+    if os.path.splitext(str(path))[1].lower() in SFC_EXT:
+        try:
+            return sfc_facts(path, text) if language("typescript") is not None else None
+        except Exception:
+            return None
     lang = _lang_for(path)
     lang_obj = language(lang) if lang != "other" else None
     if lang_obj is None:

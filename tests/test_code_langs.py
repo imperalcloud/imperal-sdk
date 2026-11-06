@@ -192,3 +192,72 @@ def test_configs_go_mod_and_cargo_are_resolution_configs():
     assert ci.parse_config("go.mod", "// c\nmodule example.com/app // x\n") == ("go_mod", {"module": "example.com/app"})
     assert ci.parse_config("Cargo.toml", '[package]\nname = "a-b"\n[lib]\npath = "src/x.rs"\n') == \
         ("cargo", {"name": "a-b", "lib": "src/x.rs"})
+
+
+TYPED = {
+    "go.mod": "module ex.com/t\n",
+    "repo/repo.go": "package repo\n\ntype Repo struct{}\n\nfunc (r *Repo) Save() error { return nil }\n",
+    "svc/svc.go": 'package svc\n\nimport "ex.com/t/repo"\n\ntype Svc struct{ db *repo.Repo }\n\n'
+                  "func (s *Svc) Run() error { return s.db.Save() }\n\nfunc Use(r *repo.Repo) { r.Save() }\n"
+                  "func Make() { x := &repo.Repo{}; x.Save() }\n",
+    "src/main/java/a/Repo.java": "package a;\n\npublic class Repo { public void save() {} }\n",
+    "src/main/java/a/Svc.java": "package a;\n\npublic class Svc {\n  private final Repo repo;\n"
+                                "  Svc(Repo repo) { this.repo = repo; }\n  void run() { repo.save(); }\n"
+                                "  void other() { Repo r = new Repo(); r.save(); }\n}\n",
+    "Sharp/Repo.cs": "namespace Sharp { public class Repo { public void Save() {} } }\n",
+    "Sharp/Svc.cs": "namespace Sharp { public class Svc { private readonly Repo _repo;\n"
+                    "  public void Run() { _repo.Save(); var r = new Repo(); r.Save(); } } }\n",
+    "k/Repo.kt": "package k\n\nclass Repo { fun save() {} }\n",
+    "k/Svc.kt": "package k\n\nclass Svc(private val repo: Repo) {\n  fun run() { repo.save(); val r = Repo(); r.save() }\n}\n",
+    "src/Repo.php": "<?php\nnamespace App;\n\nclass Repo { public function save() {} }\n",
+    "src/Svc.php": "<?php\nnamespace App;\n\nclass Svc {\n  public function __construct(private Repo $repo) {}\n"
+                   "  public function run() { $this->repo->save(); }\n}\n",
+    "Cargo.toml": '[package]\nname = "t"\n',
+    "src/lib.rs": "mod repo;\nuse repo::Repo;\n\npub struct Svc { repo: Repo }\n\nimpl Svc {\n"
+                  "    fn run(&self) { self.repo.save(); let r = Repo::new(); r.save(); }\n}\n",
+    "src/repo.rs": "pub struct Repo;\n\nimpl Repo {\n    pub fn new() -> Self { Repo }\n    pub fn save(&self) {}\n}\n",
+}
+
+
+@pytest.mark.parametrize("sym,users", [
+    ("repo/repo.go::Repo.Save", {"svc/svc.go"}),
+    ("src/main/java/a/Repo.java::Repo.save", {"src/main/java/a/Svc.java"}),
+    ("Sharp/Repo.cs::Repo.Save", {"Sharp/Svc.cs"}),
+    ("k/Repo.kt::Repo.save", {"k/Svc.kt"}),
+    ("src/Repo.php::Repo.save", {"src/Svc.php"}),
+    ("src/repo.rs::Repo.save", {"src/lib.rs"}),
+])
+def test_members_through_typed_fields_parameters_and_constructors(sym, users):
+    lk = _lk(TYPED)
+    got = _users(lk, sym)
+    assert set(got) == users
+    callers = {c["user"] for c in next(iter(got.values()))["callers"]}
+    assert len(callers) >= 1
+
+
+RETURNS = {
+    "go.mod": "module ex.com/r\n",
+    "shape/shape.go": "package shape\n\ntype Shaper struct{}\n\nfunc NewShaper() *Shaper { return &Shaper{} }\n\n"
+                      "func (s *Shaper) Jitter() int { return 1 }\n",
+    "use/use.go": 'package use\n\nimport "ex.com/r/shape"\n\nfunc Go() int { s := shape.NewShaper(); return s.Jitter() }\n',
+    "src/main/java/f/Repo.java": "package f;\n\npublic class Repo { public void save() {} }\n",
+    "src/main/java/f/Factory.java": "package f;\n\npublic class Factory { public static Repo make() { return new Repo(); } }\n",
+    "src/main/java/f/Use.java": "package f;\n\nclass Use { void go() { var r = Factory.make(); r.save(); } }\n",
+    "Cargo.toml": '[package]\nname = "r"\n',
+    "src/lib.rs": "pub struct Pool;\n\nimpl Pool {\n    pub fn open() -> Self { Pool }\n    pub fn get(&self) {}\n}\n\n"
+                  "pub fn make() -> Pool { Pool }\n\nfn go() { let p = make(); p.get(); }\n",
+}
+
+
+@pytest.mark.parametrize("sym,user", [
+    ("shape/shape.go::Shaper.Jitter", "use/use.go"),
+    ("src/main/java/f/Repo.java::Repo.save", "src/main/java/f/Use.java"),
+])
+def test_a_local_typed_by_what_its_initialiser_returns(sym, user):
+    got = _users(_lk(RETURNS), sym)
+    assert set(got) == {user} and got[user]["origin"] == "returns"
+
+
+def test_rust_return_type_in_the_same_file():
+    lk = _lk(RETURNS)
+    assert lk.resolve_ref("src/lib.rs", "make", "().get", "go") == ("src/lib.rs", "Pool.get", "returns")

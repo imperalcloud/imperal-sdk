@@ -31,7 +31,7 @@ NEXT_TSCONFIG = """{
 def test_next_tsconfig_keeps_its_paths():
     kind, data = parse_config("tsconfig.json", NEXT_TSCONFIG)
     assert kind == "tsconfig"
-    assert data == {"baseUrl": "", "paths": {"@/*": ["./src/*"]}}
+    assert data == {"baseUrl": "", "paths": {"@/*": ["./src/*"]}, "extends": []}
 
 
 def test_comments_and_trailing_commas_go_outside_strings_only():
@@ -66,5 +66,23 @@ def test_not_an_object_is_empty():
 
 def test_package_json_and_jsconfig():
     assert parse_config("web/package.json", '{"name": "web", "main": "index.js", // c\n}') == (
-        "package_json", {"name": "web", "main": "index.js"})
+        "package_json", {"name": "web", "main": "index.js", "module": "", "source": "", "types": "", "exports": {}})
     assert parse_config("jsconfig.json", '{"compilerOptions": {"baseUrl": "src"}}')[0] == "jsconfig"
+
+
+def test_package_exports_and_tsconfig_extends():
+    """06.11 report (web): monorepo packages resolve through ``exports`` (sources and types first), tsconfig paths
+    inherit through ``extends``."""
+    kind, data = parse_config("packages/ui/package.json", """{"name": "@acme/ui", "types": "dist/index.d.ts",
+      "exports": {".": {"import": "./dist/index.mjs", "types": "./dist/index.d.ts", "source": "./src/index.ts"},
+                  "./button": "./src/Button.tsx", "./*": "./src/*.ts", "./package.json": "./package.json"}}""")
+    assert kind == "package_json" and data["name"] == "@acme/ui" and data["types"] == "dist/index.d.ts"
+    assert data["exports"]["."] == ["./src/index.ts", "./dist/index.d.ts", "./dist/index.mjs"]
+    assert data["exports"]["./button"] == ["./src/Button.tsx"] and data["exports"]["./*"] == ["./src/*.ts"]
+    assert parse_config("p/package.json", '{"exports": "./lib/main.js"}')[1]["exports"] == {".": ["./lib/main.js"]}
+    assert parse_config("p/package.json", '{"exports": {"require": "./a.cjs", "import": "./a.mjs"}}')[1]["exports"] \
+        == {".": ["./a.mjs", "./a.cjs"]}
+    assert parse_config("apps/web/tsconfig.json", '{"extends": "../../tsconfig.base.json"}')[1]["extends"] == \
+        ["../../tsconfig.base.json"]
+    assert parse_config("tsconfig.json", '{"extends": ["@tsconfig/node20/tsconfig.json", "./a.json"]}')[1][
+        "extends"] == ["@tsconfig/node20/tsconfig.json", "./a.json"]

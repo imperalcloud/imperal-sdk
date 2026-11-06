@@ -23,7 +23,10 @@ from dataclasses import dataclass, field
 from imperal_sdk.code_index import _lang_for, _slashes
 
 _PY_EXT = (".py", ".pyi")
-_TS_EXT = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".d.ts")
+_TS_EXT = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".d.ts", ".d.mts", ".d.cts", ".vue",
+           ".svelte", ".astro")
+_JS_TO_TS = {".js": (".ts", ".tsx", ".d.ts"), ".jsx": (".tsx",), ".mjs": (".mts", ".d.mts"), ".cjs": (".cts", ".d.cts")}
+_BUILD_DIRS = ("dist", "build", "lib", "out", "esm", "cjs")
 _SELF = ("self", "cls", "this")
 BY_NAME_SHOWN = 15
 
@@ -32,12 +35,14 @@ BY_NAME_SHOWN = 15
 _OTHER = frozenset({"go", "rust", "java", "kotlin", "csharp", "php", "ruby"})
 # languages whose files share one namespace by a declared package (``Binding.kind == "package"``)
 _FAMILY = {"java": "jvm", "kotlin": "jvm", "csharp": "cs", "php": "php"}
-_PKG = "\0pkg:"          # a module key that is a group of files (a Go package, a Java package, a C# namespace)
+_PKG = "\0pkg:"
+_CALL = "()"              # a chain part: the value a call returns (``code_langs.CALL``)          # a module key that is a group of files (a Go package, a Java package, a C# namespace)
 
 
 def _lang(path: str) -> str:
     ext = posixpath.splitext(str(path).lower())[1]
-    got = {".py": "python", ".pyi": "python", ".ts": "typescript", ".tsx": "tsx"}.get(
+    got = {".py": "python", ".pyi": "python", ".ts": "typescript", ".tsx": "tsx", ".mts": "typescript",
+           ".cts": "typescript"}.get(
         ext, "javascript" if ext in (".js", ".jsx", ".mjs", ".cjs") else "")
     if got:
         return got
@@ -100,8 +105,91 @@ def module_index(paths, configs: list) -> dict:
             rel = stem[len(root) + 1:] if root else stem
             if rel:
                 py.setdefault(rel.replace("/", "."), p)
-    ts = [c for c in configs or [] if c.get("kind") in ("tsconfig", "jsconfig")]
-    return {"files": files, "lower": lower, "py": py, "ts": ts}
+    pkgs = {}
+    for c in configs or []:
+        if c.get("kind") == "package_json" and (c.get("data") or {}).get("name"):
+            pkgs.setdefault(str(c["data"]["name"]), c)
+    by_path = {_slashes(str(c.get("path") or "")).lstrip("/"): c for c in configs or []}
+    ts = [dict(c, eff=_ts_effective(c, by_path, pkgs, set()))
+          for c in configs or [] if c.get("kind") in ("tsconfig", "jsconfig")]
+    return {"files": files, "lower": lower, "py": py, "ts": ts, "pkgs": pkgs}
+
+
+def _ts_effective(c: dict, by_path: dict, pkgs: dict, seen: set) -> dict:
+    """A tsconfig with its ``extends`` chain applied: ``base`` (the effective baseUrl directory or None), ``paths`` and
+    ``paths_dir`` (the directory of the config that declared them -- paths resolve against baseUrl when there is one,
+    else against that directory)."""
+    data = c.get("data") or {}
+    cdir = posixpath.dirname(_slashes(str(c.get("path") or "")).lstrip("/"))
+    out = {"base": None, "paths": None, "paths_dir": None}
+    for e in data.get("extends") or []:
+        e = str(e)
+        if e.startswith("."):
+            parent = posixpath.normpath(posixpath.join(cdir, e))
+        else:                                  # a workspace package's config: "@acme/tsconfig/base.json"
+            name = next((n for n in sorted(pkgs, key=len, reverse=True) if e == n or e.startswith(n + "/")), None)
+            if name is None:
+                continue
+            pdir = posixpath.dirname(_slashes(str(pkgs[name].get("path") or "")).lstrip("/"))
+            parent = posixpath.normpath(posixpath.join(pdir, e[len(name):].lstrip("/") or "tsconfig.json"))
+        if not parent.endswith(".json"):
+            parent += ".json"
+        if parent in by_path and parent not in seen:
+            pe = _ts_effective(by_path[parent], by_path, pkgs, seen | {parent})
+            for k, v in pe.items():
+                if v is not None:
+                    out[k] = v
+    if data.get("baseUrl"):
+        out["base"] = posixpath.normpath(posixpath.join(cdir, data["baseUrl"]))
+    if data.get("paths"):
+        out["paths"], out["paths_dir"] = data["paths"], cdir
+    return out
+
+
+def _package_module(modules: dict, spec: str, lang: str) -> str | None:
+    """A bare specifier naming a package of this repo (a monorepo workspace): its ``exports`` subpath, else
+    ``source`` / ``types`` / ``module`` / ``main``, else ``src/index`` / ``index``; a build output path is also tried as
+    the source it was built from (``dist/x.js`` -> ``src/x.ts``)."""
+    pkgs = modules.get("pkgs") or {}
+    name = next((n for n in sorted(pkgs, key=len, reverse=True) if spec == n or spec.startswith(n + "/")), None)
+    if name is None:
+        return None
+    c = pkgs[name]
+    data = c.get("data") or {}
+    pdir = posixpath.dirname(_slashes(str(c.get("path") or "")).lstrip("/"))
+    sub = "." + spec[len(name):]
+    exports = data.get("exports") or {}
+    cands: list = list(exports.get(sub) or [])
+    for pattern, targets in exports.items():
+        pre, star, post = pattern.partition("*")
+        if star and sub.startswith(pre) and sub.endswith(post) and len(sub) >= len(pre) + len(post):
+            middle = sub[len(pre):len(sub) - len(post)] if post else sub[len(pre):]
+            cands += [t.replace("*", middle) for t in targets]
+    if sub == ".":
+        cands += [data.get(k) for k in ("source", "types", "module", "main") if data.get(k)] + ["src/index", "index"]
+    else:
+        cands += [sub, "src/" + sub[2:]]
+    for t in cands:
+        t = str(t).lstrip("./") if str(t).startswith("./") else str(t)
+        for v in _source_forms(t):
+            got = _probe(modules, posixpath.join(pdir, v) if pdir else v, lang)
+            if got:
+                return got
+    return None
+
+
+def _source_forms(t: str) -> list:
+    out = [t]
+    for d in (".d.ts", ".d.mts", ".d.cts"):
+        if t.endswith(d):
+            out.append(t[:-len(d)])
+    head, _, rest = t.partition("/")
+    if head in _BUILD_DIRS and rest:
+        for x in list(out):
+            r = x.partition("/")[2]
+            stem, ext = posixpath.splitext(r)
+            out += ["src/" + (stem if ext in (".js", ".mjs", ".cjs", ".jsx") else r)]
+    return out
 
 
 def _probe(modules: dict, base: str, lang: str) -> str | None:
@@ -117,8 +205,8 @@ def _probe(modules: dict, base: str, lang: str) -> str | None:
         return None
     cands = [base]
     stem, ext = posixpath.splitext(base)
-    if ext in (".js", ".jsx", ".mjs", ".cjs"):
-        cands += [stem + e for e in (".ts", ".tsx", ".d.ts")]
+    if ext in _JS_TO_TS:
+        cands += [stem + e for e in _JS_TO_TS[ext]]
     cands += [base + e for e in _TS_EXT] + [base + "/index" + e for e in _TS_EXT]
     for c in cands:
         if posixpath.splitext(c)[1] and hit(c):
@@ -153,10 +241,9 @@ def resolve_module(modules: dict, from_path: str, spec: str, lang: str, configs:
                     if not posixpath.dirname(c["path"]) or from_path.startswith(posixpath.dirname(c["path"]) + "/")),
                    key=lambda c: -len(posixpath.dirname(c["path"])))
     for c in confs:
-        data = c.get("data") or {}
-        cdir = posixpath.dirname(c["path"])
-        base_dir = posixpath.join(cdir, data.get("baseUrl") or ".")
-        for pattern, targets in (data.get("paths") or {}).items():
+        eff = c.get("eff") or _ts_effective(c, {}, {}, set())
+        base_dir = eff["base"] if eff["base"] is not None else (eff["paths_dir"] or "")
+        for pattern, targets in (eff["paths"] or {}).items():
             pre, star, post = pattern.partition("*")
             if star and spec.startswith(pre) and spec.endswith(post) and len(spec) >= len(pre) + len(post):
                 middle = spec[len(pre):len(spec) - len(post)] if post else spec[len(pre):]
@@ -169,11 +256,11 @@ def resolve_module(modules: dict, from_path: str, spec: str, lang: str, configs:
                     got = _probe(modules, posixpath.join(base_dir, tgt), lang)
                     if got:
                         return got
-        if data.get("baseUrl"):
+        if eff["base"] is not None:
             got = _probe(modules, posixpath.join(base_dir, spec), lang)
             if got:
                 return got
-    return None
+    return _package_module(modules, spec, lang)
 
 
 # ---- reference resolution (the vault's ``_Facts.target`` / ``_resolve_ref``, over plain data) ----
@@ -309,13 +396,18 @@ class Linker:
         if src is None:
             return None
         first = segs[0]
+        rel = from_path[len(src) + 1:] if src else from_path
+        here = rel[:-3].split("/") if rel.endswith(".rs") else rel.split("/")
+        if (here and here[-1] == "mod") or (len(here) == 1 and here[0] in ("lib", "main")):
+            here = here[:-1]
+        other = next(((d, lib) for d, name, lib in self.crates if name and name == first), None)
+        local_mod = other is None and first not in ("crate", "self", "super") and any(
+            b.local_name == first and b.module == "self::" + first for b in self.bindings(from_path))
         if first == "crate":
             mod, rest = [], segs[1:]
-        elif first in ("self", "super"):
-            rel = from_path[len(src) + 1:] if src else from_path
-            mod = rel[:-3].split("/") if rel.endswith(".rs") else rel.split("/")
-            if mod and mod[-1] in ("mod",) or (len(mod) == 1 and mod[0] in ("lib", "main")):
-                mod = mod[:-1]
+        elif first in ("self", "super") or local_mod:
+            # ``self::x`` / ``super::x``; 2018 paths also start at a module declared here (``mod repo; use repo::X``)
+            mod = here
             rest = segs
             while rest and rest[0] in ("self", "super"):
                 if rest[0] == "super":
@@ -324,7 +416,6 @@ class Linker:
                     mod = mod[:-1]
                 rest = rest[1:]
         else:
-            other = next(((d, lib) for d, name, lib in self.crates if name and name == first), None)
             if other is None:
                 return None                     # an external crate
             src, root = self._rust_crate(posixpath.join(other[0], "src", "lib.rs").lstrip("/"))
@@ -450,12 +541,18 @@ class Linker:
             q = ".".join(names[:k])
             if q in defs:
                 return path, q
+        alias = next((b.imported for b in self.bindings(path)
+                      if b.kind == "default" and b.local_name == names[0] and b.imported), None)
+        if alias and alias != names[0]:      # ``export default Foo`` / ``exports.x = y``: the name it stands for
+            return self.target(path, [alias] + list(names[1:]), depth + 1)
+        if names[0] == "default":
+            return path, ""                  # an anonymous default export: the module itself
         for b in self.bindings(path):
             if b.local_name == names[0] and b.kind in ("import", "reexport"):
                 tgt = self.module(path, b.module)
                 if tgt is None:
                     return None
-                rest = ([b.imported] if b.imported and b.imported != "default" else []) + names[1:]
+                rest = ([b.imported] if b.imported else []) + names[1:]
                 got = self.target(tgt, rest, depth + 1)
                 if got is None and b.imported and _lang(path) == "python":
                     mod = b.module
@@ -475,10 +572,24 @@ class Linker:
                 return self.target(sub, names[1:], depth + 1)
         return path, ""
 
-    def resolve_ref(self, path: str, head: str, chain: str, in_def: str | None):
+    def resolve_ref(self, path: str, head: str, chain: str, in_def: str | None, depth: int = 0):
         """One reference -> ``(path, qualname, origin)``, ``"external"`` (bound to a module outside the repo, or
         instance data) or None (unresolved)."""
         parts = [x for x in chain.split(".") if x] if chain else []
+        if _CALL in parts and depth < 4:
+            # ``F().m`` (a local typed by its initialiser ``x := F()``): F, then m on the type F declares it returns
+            i = parts.index(_CALL)
+            got = self.resolve_ref(path, head, ".".join(parts[:i]), in_def, depth + 1)
+            rest = parts[i + 1:]
+            if not isinstance(got, tuple) or not rest:
+                return got
+            ret = next((b.imported for b in self.bindings(got[0])
+                        if b.kind == "returns" and b.local_name == got[1] + _CALL and b.imported), None)
+            if not ret:
+                return got
+            tp = [x for x in ret.split(".") if x]
+            typed = self.resolve_ref(got[0], tp[0], ".".join(tp[1:] + rest), got[1], depth + 1)
+            return (typed[0], typed[1], "returns") if isinstance(typed, tuple) and typed[1] else got
         bound = [b for b in self.bindings(path) if b.local_name == head and b.kind != "star"]
         lang = _lang(path)
         if bound:
@@ -491,7 +602,10 @@ class Linker:
             tgt = self.module(path, b.module)
             if tgt is None:
                 return "external"
-            names = ([b.imported] if b.imported and b.imported != "default" else []) + parts
+            names = ([b.imported] if b.imported else []) + parts
+            if not names and tgt in self.facts and any(x.kind == "default" and x.local_name == "default"
+                                                       for x in self.bindings(tgt)):
+                names = ["default"]           # ``const f = require("./f"); f()``: the module's default export
             got = self.target(tgt, names)
             if got is None and b.imported and _lang(path) == "python":
                 mod = b.module
