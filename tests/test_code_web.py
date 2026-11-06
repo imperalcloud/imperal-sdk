@@ -135,3 +135,23 @@ def test_ts_factory_return_types():
     })
     got = _users(lk, "Store.load")
     assert set(got) == {"src/app.ts"} and got["src/app.ts"]["origin"] == "returns"
+
+
+def test_clients_ask_the_sdk_which_files_have_scope_facts():
+    for p in ("a.py", "a.ts", "a.mts", "a.cjs", "a.vue", "a.svelte", "a.astro", "a.go", "a.rs", "A.java", "a.kt",
+              "a.cs", "a.php", "a.rb"):
+        assert ci.has_scope_facts(p), p
+    assert not ci.has_scope_facts("a.md") and not ci.has_scope_facts("a.css")
+    for p in ("tsconfig.app.json", "x/package.json", "go.mod", "crates/a/Cargo.toml", "pyproject.toml"):
+        assert ci.is_resolution_config(p), p
+    assert not ci.is_resolution_config("composer.lock")
+    fi = ci.parse_file("src/user-card.vue", '<template><X/></template>\n<script setup lang="ts">\n'
+                                            'import X from "./X.vue"\nfunction go() {}\n</script>\n')
+    assert fi.lang == "vue" and [s.name for s in fi.symbols] == ["UserCard", "go"]
+
+
+def test_project_roots_of_every_ecosystem():
+    for names in ([".git"], ["Cargo.toml"], ["go.mod"], ["pom.xml"], ["build.gradle.kts"], ["App.csproj"],
+                  ["Shop.sln"], ["composer.json"], ["Gemfile"], ["package.json"], ["pyproject.toml"]):
+        assert ci.is_project_root(names), names
+    assert not ci.is_project_root(["Documents", "notes.md", "photo.jpg"])

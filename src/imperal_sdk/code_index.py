@@ -1886,6 +1886,38 @@ def _package_exports(exp) -> dict:
     return {str(k): targets(v)[:8] for k, v in list(exp.items())[:200] if str(k).startswith(".")}
 
 
+def has_scope_facts(path: str) -> bool:
+    """Whether ``scope_facts`` reads this file's imports and references (the clients' one test -- never a list of
+    their own): Python, TS/JS (``.ts .tsx .mts .cts .js .jsx .mjs .cjs``), Vue / Svelte / Astro, Go, Rust, Java,
+    Kotlin, C#, PHP, Ruby."""
+    ext = os.path.splitext(str(path))[1].lower()
+    return ext in LANG_BY_EXT or ext in SFC_EXT or _lang_for(str(path)) in _scope_langs()
+
+
+# a project's root: what each ecosystem keeps there (names compared case-blind; ``*.csproj`` / ``*.sln`` by suffix)
+PROJECT_MANIFESTS = frozenset(CONFIG_NAMES) | {
+    "setup.py", "requirements.txt", "pipfile", "tsconfig.json", "deno.json", "deno.jsonc", "go.work",
+    "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "composer.json",
+    "gemfile", "mix.exs", "pubspec.yaml", "package.swift", "cmakelists.txt", "makefile", "build.sbt"}
+_PROJECT_SUFFIXES = (".csproj", ".fsproj", ".vbproj", ".sln")
+
+
+def is_project_root(names) -> bool:
+    """A folder whose entries ``names`` make it a project: version control or any ecosystem's manifest."""
+    for n in names:
+        low = str(n).lower()
+        if low == ".git" or low in PROJECT_MANIFESTS or low.endswith(_PROJECT_SUFFIXES):
+            return True
+    return False
+
+
+def is_resolution_config(path: str) -> bool:
+    """A file the linker reads as a resolution config (``parse_config``): pyproject.toml, setup.cfg, package.json,
+    tsconfig*.json, jsconfig.json, go.mod, Cargo.toml."""
+    low = os.path.basename(_slashes(str(path))).lower()
+    return low in CONFIG_NAMES or bool(_TSCONFIG.match(low))
+
+
 def _scope_langs() -> frozenset:
     from imperal_sdk.code_langs import LANGS
     return LANGS
@@ -2037,6 +2069,17 @@ def parse_file(path: str, text: str) -> FileIndex | None:
     endpoints, schemas = extract_contracts(path, text, lang)
     fi.endpoints = [x.to_dict() for x in endpoints]
     fi.schemas = [x.to_dict() for x in schemas]
+    if os.path.splitext(path)[1].lower() in SFC_EXT:
+        # a component: its definitions (the component, the script's functions) and the components it uses
+        fx = scope_facts(path, text)
+        if fx is not None:
+            lines = text.split("\n")
+            fi.lang = fx.lang
+            fi.symbols = [Symbol(name=d.name, kind=d.kind, path=path, start_line=d.start_line, end_line=d.end_line,
+                                 signature=(lines[d.start_line - 1] if 0 < d.start_line <= len(lines) else "")[:200])
+                          for d in fx.defs]
+            fi.refs = [r.head for r in fx.refs]
+        return fi
     if lang == "other":
         return fi  # line-only fallback (no symbols) — never crash
     L = _get_language(lang)
@@ -2582,7 +2625,7 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
 _SFTP_DIR, _SFTP_LINK = 2, 3          # SFTP protocol file types (FILEXFER_TYPE_DIRECTORY / _SYMLINK)
 _WINDOWS_ROOT = re.compile(r"^/?[A-Za-z]:(?:/|$)")
 _REPO_MARKERS = (".git",)
-_MANIFESTS = ("pyproject.toml", "package.json")
+_MANIFESTS = tuple(sorted(PROJECT_MANIFESTS))      # lower-case; compare through ``is_project_root``
 
 
 def sftp_os(root: str) -> str:
@@ -2668,7 +2711,7 @@ async def sftp_repo_root(sftp, path: str) -> str:
                 names = set()
         if names & set(_REPO_MARKERS):
             return cur
-        if not manifest and names & set(_MANIFESTS):
+        if not manifest and is_project_root(set(names) - {".git"}):
             manifest = cur
         parent = posixpath.dirname(cur.rstrip("/")) or "/"
         if parent == cur:
