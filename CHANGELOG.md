@@ -2,6 +2,45 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.5.0 - 2026-11-06
+
+The code graph, fixed after the 06.11 report: one link algorithm for the vault and every client, every major
+language, web code to the maximum, any OS.
+
+### Added
+- `imperal_sdk.code_links`: the vault's resolver as pure functions. `Linker(facts, configs)` resolves every reference
+  to the definition it names; `impact(linker, symbols, depth)` answers like the vault: the files that use a symbol,
+  the line, the user, depth through the enclosing definition only, code before tests. Files that only share a name
+  are listed apart under `by_name`, never mixed in. A client without the vault no longer links by bare name (a
+  function with no caller had answered 481 files).
+- `imperal_sdk.code_langs`: scope facts (imports, references, receivers, locals) for **Go, Rust, Java, Kotlin, C#,
+  PHP, Ruby**, from each grammar's node types. Resolution per language:
+  - Go packages through `go.mod`;
+  - Rust `crate::` / `super::` / `self::`, `mod` files and workspace crates through `Cargo.toml`;
+  - Java, Kotlin, C# and PHP by declared package or namespace (static imports, aliases, same package, fully
+    qualified names, C# parent namespaces);
+  - Ruby constants by lexical nesting, and `require`;
+  - members across the files of one type (Go, C# partial classes, reopened Ruby classes).
+- Web code:
+  - workspace packages through `package.json` `exports` (sources and types first, `dist/` mapped back to `src/`);
+  - `tsconfig` `extends`;
+  - `export default` and CommonJS (`module.exports`, `exports.x`);
+  - dynamic `import()`;
+  - `.mts` / `.cts`;
+  - **Vue / Svelte / Astro** components: script blocks on the file's own lines, the component as the default export,
+    template tags as its uses.
+- Typed members in every language: `const s = new Store()`, typed parameters and fields, constructor parameter
+  properties (DI), and `x := NewShaper()` through the callee's declared return type.
+- `has_scope_facts(path)`, `is_resolution_config(path)`, `is_project_root(names)`: the clients' one answer.
+- `go.mod` and `Cargo.toml` are resolution configs. Project roots of every ecosystem are recognised
+  (`pom.xml`, `build.gradle(.kts)`, `*.csproj`, `*.sln`, `composer.json`, `Gemfile`...), case-blind, locally and
+  over SFTP.
+
+### Changed
+- `EXTRACTOR_VERSION` 4: every older blob is extracted again.
+- The embedders replace lone surrogates instead of failing the whole index.
+- CI runs the code graph on Ubuntu, macOS and Windows with Python 3.9-3.14.
+
 ## 6.4.1 - 2026-11-04
 
 The first release of this line: the 6.4.0 tag failed its release gate in CI (the legacy `.doc` test assumed a

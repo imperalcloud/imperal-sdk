@@ -29,3 +29,29 @@ jobs:
 
       - name: Run pytest
         run: pytest -q --tb=short
+
+  # The code graph runs on users' machines: every OS x every Python the clients support (06.11 report -- Linux of
+  # any distribution, macOS, Windows). Its tests need no SDK fixtures (--noconftest).
+  code-graph:
+    name: code graph (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Install the code index with every grammar
+        run: pip install -e ".[code-index,universal-index]" pytest
+
+      - name: Run the code graph tests
+        run: pytest -q --noconftest tests/test_code_links.py tests/test_code_langs.py tests/test_code_web.py tests/test_code_index_configs.py

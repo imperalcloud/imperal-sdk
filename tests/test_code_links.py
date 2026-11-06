@@ -1,5 +1,7 @@
 """imperal_sdk.code_links: the vault's link rules, computed locally (2026-11-06 report: a function with no caller
 answered 481 files when links were made by bare name)."""
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("tree_sitter")
