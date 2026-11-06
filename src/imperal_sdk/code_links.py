@@ -807,6 +807,25 @@ def impact(linker: Linker, symbols: list, depth: int = 2) -> dict:
             same_file += [{"path": p, "user": user, "line": line} for src, user, _k, line, tp, tq, _o in links
                           if src == p and tp == p and tq == q and user != q][:20]
     out = sorted(items.values(), key=lambda i: (i["group"] == "tests", i["depth"], i["id"]))
+    resolved = [f"{p}::{q}" if q else p for p, q in targets]
     return {"ok": True, "data": {"items": out, "total": len(out), "has_more": False},
             "by_name_count": len(by_name_files), "by_name": by_name[:BY_NAME_SHOWN], "same_file": same_file,
-            "resolved": [f"{p}::{q}" if q else p for p, q in targets]}
+            "resolved": resolved,
+            "summary": impact_summary(symbols, resolved, len(out), len(by_name_files), len(same_file))}
+
+
+def impact_summary(symbols, resolved, users: int, by_name: int, same_file: int = 0) -> str:
+    """One sentence an agent cannot misread (report 06.11 #2: ``items: 0`` beside 11 name matches was read as "no
+    callers"): how many files use the symbol by resolved links, and what the name-only matches are -- unproven."""
+    what = ", ".join(str(s) for s in symbols or []) or "the symbol"
+    if not resolved:
+        return f"{what}: not a definition in this index -- nothing to trace (check the name or pass path::name)"
+    head = (f"{users} file(s) use {what} by resolved links" if users else f"no file uses {what} by a resolved link")
+    if same_file:
+        head += f"; {same_file} use(s) inside its own file"
+    if by_name:
+        head += (f"; {by_name} more file(s) only mention the name (by_name) -- calls through an untyped value or a "
+                 f"name clash: neither proven users nor proven unrelated, read them before concluding")
+    elif not users:
+        head += " and no other file mentions the name"
+    return head

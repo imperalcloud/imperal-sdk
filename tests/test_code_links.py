@@ -123,3 +123,12 @@ def test_a_folder_of_repositories_resolves_each_import_in_its_own_repository():
         ["gateway/app/routes.py"]
     assert [i["id"] for i in impact(lk, ["billing/app/sessions.py::session_for_sid"])["data"]["items"]] == \
         ["billing/app/api.py"]
+
+
+
+def test_the_summary_never_reads_as_no_callers_when_names_match():
+    out = impact(_linker(PY), ["lonely"])
+    assert out["data"]["items"] == [] and "no file uses lonely by a resolved link" in out["summary"]
+    assert "1 more file(s) only mention the name" in out["summary"] and "before concluding" in out["summary"]
+    assert impact(_linker(PY), ["compute"])["summary"].startswith("3 file(s) use compute by resolved links")
+    assert "not a definition" in impact(_linker(PY), ["nope"])["summary"]
