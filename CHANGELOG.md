@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.5.2 - 2026-11-06
+
+### Fixed
+- `impact()` depth grows only through the definition that uses the symbol. A module-level use no longer counts as
+  "the whole file", so depth 2 no longer lists every file that imports anything from that module (found on a live
+  check).
+
 ## 6.5.1 - 2026-11-06
 
 Fixes from the second 06.11 field report (Webbee 0.7.2 in a folder of nine repositories).
