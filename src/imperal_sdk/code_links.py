@@ -20,7 +20,7 @@ from __future__ import annotations
 import posixpath
 from dataclasses import dataclass, field
 
-from imperal_sdk.code_index import _slashes
+from imperal_sdk.code_index import _lang_for, _slashes
 
 _PY_EXT = (".py", ".pyi")
 _TS_EXT = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".d.ts")
@@ -28,17 +28,33 @@ _SELF = ("self", "cls", "this")
 BY_NAME_SHOWN = 15
 
 
+# languages whose scope facts come from ``code_langs`` (resolved here by their own module rules)
+_OTHER = frozenset({"go", "rust", "java", "kotlin", "csharp", "php", "ruby"})
+# languages whose files share one namespace by a declared package (``Binding.kind == "package"``)
+_FAMILY = {"java": "jvm", "kotlin": "jvm", "csharp": "cs", "php": "php"}
+_PKG = "\0pkg:"          # a module key that is a group of files (a Go package, a Java package, a C# namespace)
+
+
 def _lang(path: str) -> str:
     ext = posixpath.splitext(str(path).lower())[1]
-    return {".py": "python", ".pyi": "python", ".ts": "typescript", ".tsx": "tsx"}.get(
+    got = {".py": "python", ".pyi": "python", ".ts": "typescript", ".tsx": "tsx"}.get(
         ext, "javascript" if ext in (".js", ".jsx", ".mjs", ".cjs") else "")
+    if got:
+        return got
+    other = _lang_for(str(path))
+    return other if other in _OTHER else ""
+
+
+_TEST_SUFFIXES = ("_test.py", ".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts", ".spec.tsx", ".spec.js",
+                  ".spec.jsx", ".test.mjs", ".test.cjs", ".test.mts", ".spec.mts", "_test.go", "test.java",
+                  "tests.java", "test.kt", "tests.kt", "test.cs", "tests.cs", "test.php", "_spec.rb", "_test.rb")
 
 
 def is_test_path(path: str) -> bool:
     p = "/" + str(path).replace("\\", "/").lower()
     base = posixpath.basename(p)
-    return ("/tests/" in p or "/test/" in p or "/__tests__/" in p or base.startswith("test_")
-            or base.endswith(("_test.py", ".test.ts", ".test.tsx", ".test.js", ".spec.ts", ".spec.tsx", ".spec.js")))
+    return ("/tests/" in p or "/test/" in p or "/__tests__/" in p or "/spec/" in p or base.startswith("test_")
+            or base.endswith(_TEST_SUFFIXES))
 
 
 # ---- module resolution (the vault's stitching code, §4.6.3) ----
@@ -172,6 +188,32 @@ class Linker:
     def __post_init__(self):
         self.modules = module_index(list(self.facts), self.configs)
         self._defs: dict = {}
+        self._pkgs: dict = {}                 # module key -> (files, names before the asked ones)
+        self.ns: dict = {}                    # (family, package) -> files that declare it
+        self.dirs: dict = {}                  # Go: directory -> its .go files (one package)
+        self.qual: dict = {}                  # Ruby: qualname -> files defining it (constants are global)
+        for path in sorted(self.facts):
+            fx = self.facts[path]
+            lang = _lang(path)
+            if fx is None or lang not in _OTHER:
+                continue
+            fam = _FAMILY.get(lang)
+            if fam:
+                for pk in [b.module for b in fx.bindings if b.kind == "package"] or [""]:
+                    self.ns.setdefault((fam, pk), []).append(path)
+            elif lang == "go":
+                self.dirs.setdefault(posixpath.dirname(path), []).append(path)
+            elif lang == "ruby":
+                for d in fx.defs:
+                    self.qual.setdefault(d.qualname, []).append(path)
+        self.go_mods = sorted(((posixpath.dirname(_slashes(c.get("path") or "")).lstrip("/"),
+                                str((c.get("data") or {}).get("module") or ""))
+                               for c in self.configs or [] if c.get("kind") == "go_mod"),
+                              key=lambda x: -len(x[1]))
+        self.crates = [(posixpath.dirname(_slashes(c.get("path") or "")).lstrip("/"),
+                        str((c.get("data") or {}).get("name") or "").replace("-", "_"),
+                        str((c.get("data") or {}).get("lib") or ""))
+                       for c in self.configs or [] if c.get("kind") == "cargo"]
 
     def defs(self, path: str) -> dict:
         if path not in self._defs:
@@ -184,14 +226,223 @@ class Linker:
         return sorted(fx.bindings, key=lambda b: b.line) if fx else []
 
     def module(self, from_path: str, spec: str) -> str | None:
-        return resolve_module(self.modules, from_path, spec, "python" if _lang(from_path) == "python" else "ts",
+        lang = _lang(from_path)
+        if lang in _OTHER:
+            return self._other_module(from_path, str(spec or ""), lang)
+        return resolve_module(self.modules, from_path, spec, "python" if lang == "python" else "ts",
                               self.configs)
+
+    # ---- module rules of Go, Rust, Java/Kotlin, C#, PHP, Ruby ----
+
+    def _pkg(self, key: str, files: list, prefix: list) -> str | None:
+        if not files:
+            return None
+        self._pkgs[_PKG + key] = (list(files), list(prefix))
+        return _PKG + key
+
+    def _other_module(self, from_path: str, spec: str, lang: str):
+        if not spec:
+            return None
+        fam = _FAMILY.get(lang)
+        if fam:
+            # a package / namespace, or a type inside one (Java ``import static a.b.C.m``, ``using static``)
+            if (fam, spec) in self.ns:
+                return self._pkg(f"{fam}:{spec}", self.ns[(fam, spec)], [])
+            parent, _, cls = spec.rpartition(".")
+            if cls and (fam, parent) in self.ns:
+                return self._pkg(f"{fam}:{spec}", self.ns[(fam, parent)], [cls])
+            return None
+        if lang == "go":
+            for d, mod in self.go_mods:
+                if mod and (spec == mod or spec.startswith(mod + "/")):
+                    rel = spec[len(mod):].strip("/")
+                    pdir = posixpath.normpath(posixpath.join(d, rel)) if (d or rel) else ""
+                    pdir = "" if pdir == "." else pdir
+                    return self._pkg(f"go:{pdir}", self.dirs.get(pdir) or [], [])
+            return None
+        if lang == "rust":
+            return self._rust_module(from_path, spec)
+        if lang == "ruby":
+            if spec.startswith("."):
+                base = posixpath.normpath(posixpath.join(posixpath.dirname(from_path), spec))
+                if base.startswith(".."):
+                    return None
+                cands = [base if base.endswith(".rb") else base + ".rb"]
+            else:
+                b = spec if spec.endswith(".rb") else spec + ".rb"
+                cands = [b, "lib/" + b] + sorted(p for p in self.facts if p.endswith("/lib/" + b))
+            return next((c for c in cands if c in self.facts), None)
+        return None
+
+    def _rust_crate(self, from_path: str):
+        """``(src_dir, root_file)`` of the crate holding ``from_path``: the nearest Cargo.toml, else the nearest
+        directory above it that holds ``lib.rs`` / ``main.rs``."""
+        best = None
+        for d, _name, lib in self.crates:
+            if not d or from_path.startswith(d + "/"):
+                if best is None or len(d) > len(best[0]):
+                    best = (d, lib)
+        if best is not None:
+            d, lib = best
+            if lib:
+                root = posixpath.normpath(posixpath.join(d, lib))
+                return posixpath.dirname(root), root
+            src = posixpath.join(d, "src") if d else "src"
+            for f in ("lib.rs", "main.rs"):
+                if posixpath.join(src, f) in self.facts:
+                    return src, posixpath.join(src, f)
+            return src, None
+        d = posixpath.dirname(from_path)
+        while True:
+            for f in ("lib.rs", "main.rs"):
+                if posixpath.join(d, f).lstrip("/") in self.facts:
+                    return d, posixpath.join(d, f).lstrip("/")
+            if not d:
+                return None, None
+            d = posixpath.dirname(d)
+
+    def _rust_module(self, from_path: str, spec: str):
+        segs = [x for x in spec.split("::") if x]
+        if not segs:
+            return None
+        src, root = self._rust_crate(from_path)
+        if src is None:
+            return None
+        first = segs[0]
+        if first == "crate":
+            mod, rest = [], segs[1:]
+        elif first in ("self", "super"):
+            rel = from_path[len(src) + 1:] if src else from_path
+            mod = rel[:-3].split("/") if rel.endswith(".rs") else rel.split("/")
+            if mod and mod[-1] in ("mod",) or (len(mod) == 1 and mod[0] in ("lib", "main")):
+                mod = mod[:-1]
+            rest = segs
+            while rest and rest[0] in ("self", "super"):
+                if rest[0] == "super":
+                    if not mod:
+                        return None
+                    mod = mod[:-1]
+                rest = rest[1:]
+        else:
+            other = next(((d, lib) for d, name, lib in self.crates if name and name == first), None)
+            if other is None:
+                return None                     # an external crate
+            src, root = self._rust_crate(posixpath.join(other[0], "src", "lib.rs").lstrip("/"))
+            if src is None:
+                return None
+            root = posixpath.join(src, "lib.rs") if posixpath.join(src, "lib.rs") in self.facts else root
+            mod, rest = [], segs[1:]
+        path = mod + rest
+        # the longest prefix that is a file; the rest are inline modules / items inside it
+        for k in range(len(path), -1, -1):
+            if k == 0:
+                f = root
+            else:
+                base = posixpath.join(src, *path[:k]) if src else "/".join(path[:k])
+                f = next((c for c in (base + ".rs", base + "/mod.rs") if c in self.facts), None)
+            if f:
+                left = path[k:]
+                return f if not left else self._pkg(f"rs:{f}:{'.'.join(left)}", [f], left)
+        return None
+
+    def _def_in_any(self, files: list, names: list):
+        """The longest qualified match over a group of files (a C# partial class / Ruby reopened class: ``Repo`` in
+        one file, ``Repo.Open`` in another -- the member wins)."""
+        for k in range(min(len(names), 3), 0, -1):
+            q = ".".join(names[:k])
+            for f in files:
+                if q in self.defs(f):
+                    return f, q
+        return None
+
+    def _def_in(self, path: str, names: list):
+        defs = self.defs(path)
+        for k in range(min(len(names), 3), 0, -1):
+            q = ".".join(names[:k])
+            if q in defs:
+                return path, q
+        return None
+
+    def _other_ref(self, path: str, lang: str, head: str, parts: list, in_def):
+        """The rules past bindings and the file's own scopes: Rust ``crate::`` / ``super::`` paths, the same Go /
+        Java / Kotlin / C# / PHP package, a fully qualified name, a Ruby constant from its lexical nesting."""
+        names = [head] + parts
+        if lang == "rust" and head in ("crate", "super"):
+            for k in range(len(parts), -1, -1):
+                tgt = self.module(path, "::".join([head] + parts[:k]))
+                if tgt:
+                    got = self.target(tgt, parts[k:])
+                    if got:
+                        return got[0], got[1], "path"
+            return None
+        if in_def and lang != "rust":
+            # an implicit receiver member (``Flush()`` in a C# partial class, a Go / Kotlin / Ruby method of the
+            # same type declared in another file)
+            scope = in_def.split(".")
+            for i in range(len(scope) - 1, 0, -1):
+                got = self._member_elsewhere(path, lang, ".".join(scope[:i]), head)
+                if got and self.defs(got[0])[got[1]].kind != "class":     # a nested type is a constant, below
+                    return got[0], got[1], "self"
+        if lang == "go":
+            got = self._def_in_any([f for f in self.dirs.get(posixpath.dirname(path)) or [] if f != path], names)
+            return (got[0], got[1], "package") if got else None
+        fam = _FAMILY.get(lang)
+        if fam:
+            fx = self.facts.get(path)
+            mine = [b.module for b in (fx.bindings if fx else []) if b.kind == "package"] or [""]
+            seen = set()
+            for pk in mine:
+                chain = [pk]
+                if fam == "cs":           # C#: the enclosing namespaces too
+                    segs = pk.split(".")
+                    chain = [".".join(segs[:i]) for i in range(len(segs), -1, -1)]
+                for p in chain:
+                    if p in seen:
+                        continue
+                    seen.add(p)
+                    got = self._def_in_any([f for f in self.ns.get((fam, p)) or [] if f != path], names)
+                    if got:
+                        return got[0], got[1], "package"
+            for k in range(len(names) - 1, 0, -1):     # a fully qualified name: com.acme.Repo.save
+                got = self._def_in_any(self.ns.get((fam, ".".join(names[:k]))) or [], names[k:])
+                if got:
+                    return got[0], got[1], "qualified"
+            return None
+        if lang == "ruby":
+            scope = in_def.split(".") if in_def else []
+            for i in range(len(scope), -1, -1):
+                for k in range(min(len(names), 3), 0, -1):
+                    q = ".".join(scope[:i] + names[:k])
+                    files = self.qual.get(q)
+                    if files:
+                        return (path if path in files else files[0]), q, "constant"
+        return None
+
+    def _member_elsewhere(self, path: str, lang: str, cls: str, member: str):
+        """``self.member`` defined in another file of the same type: a Go method in another file of the package,
+        a reopened Ruby class, a C# partial class, a PHP / Kotlin type split over files."""
+        q = f"{cls}.{member}"
+        if lang == "go":
+            files = self.dirs.get(posixpath.dirname(path)) or []
+        elif lang == "ruby":
+            files = self.qual.get(q) or []
+        elif lang in _FAMILY:
+            fx = self.facts.get(path)
+            pk = [b.module for b in (fx.bindings if fx else []) if b.kind == "package"] or [""]
+            files = [f for p in pk for f in self.ns.get((_FAMILY[lang], p)) or []]
+        else:
+            return None
+        return next(((f, q) for f in files if f != path and q in self.defs(f)), None)
 
     def target(self, path: str, names: list, depth: int = 0):
         """``(path, qualname)`` of ``names`` inside the module ``path`` (re-exports and star exports followed, a
         Python submodule of a package entered); ``qualname`` "" = the module itself."""
         if depth > 8 or not path:
             return None
+        if path in self._pkgs:
+            files, prefix = self._pkgs[path]
+            names = prefix + list(names)
+            return self._def_in_any(files, names) if names else None
         if not names:
             return path, ""
         defs = self.defs(path)
@@ -229,8 +480,14 @@ class Linker:
         instance data) or None (unresolved)."""
         parts = [x for x in chain.split(".") if x] if chain else []
         bound = [b for b in self.bindings(path) if b.local_name == head and b.kind != "star"]
+        lang = _lang(path)
         if bound:
             b = bound[-1]
+            if lang == "rust" and b.imported and b.module:     # ``use crate::store;`` names the module itself
+                sub = self.module(path, f"{b.module}::{b.imported}")
+                if sub:
+                    got = self.target(sub, parts)
+                    return (got[0], got[1], "binding") if got else "external"
             tgt = self.module(path, b.module)
             if tgt is None:
                 return "external"
@@ -252,7 +509,18 @@ class Linker:
                 d = defs.get(cls)
                 if d is not None and d.kind == "class":
                     member = f"{cls}.{parts[0]}"
-                    return (path, member, "self") if member in defs else "external"
+                    if member in defs:
+                        return path, member, "self"
+                    got = self._member_elsewhere(path, lang, cls, parts[0]) if lang in _OTHER else None
+                    return (got[0], got[1], "self") if got else "external"
+                if d is None and lang in _OTHER and k == len(q) - 1:
+                    # the type is declared in another file of the package (Go methods live beside their type)
+                    member = f"{cls}.{parts[0]}"
+                    if member in defs:
+                        return path, member, "self"
+                    got = self._member_elsewhere(path, lang, cls, parts[0])
+                    if got:
+                        return got[0], got[1], "self"
             return "external"
         if head in defs:
             q = f"{head}.{parts[0]}" if parts and f"{head}.{parts[0]}" in defs else head
@@ -269,6 +537,8 @@ class Linker:
                 got = self.target(tgt, [head] + parts) if tgt else None
                 if got and got[1]:
                     return got[0], got[1], "star"
+        if lang in _OTHER:
+            return self._other_ref(path, lang, head, parts, in_def)
         return None
 
     # ---- the repo's link table, built once ----

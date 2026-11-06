@@ -685,7 +685,7 @@ MAX_FILE_BYTES = 10 * 1024 * 1024     # one file in the code index (Cloud OS: sh
 MAX_REPO_FILES = 20_000
 INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 # the resolution configs (read and stored parsed); setup.py is code to execute -- never read
-CONFIG_NAMES = ("pyproject.toml", "setup.cfg", "jsconfig.json", "package.json")
+CONFIG_NAMES = ("pyproject.toml", "setup.cfg", "jsconfig.json", "package.json", "go.mod", "cargo.toml")
 _TSCONFIG = re.compile(r"^tsconfig(?:\.[\w.-]+)?\.json$")
 SECRET_PATTERNS = (".env*", "*.pem", "*.key", "*.crt", "id_*", "*.p12", "*.pfx", "*.kdbx",
                    "secrets/", ".ssh/", ".aws/", ".git/")
@@ -1595,6 +1595,26 @@ def parse_config(path: str, text: str) -> tuple:
             if sep:
                 pdir[k.strip()] = v.strip()
         return "setup_cfg", {"package_dir": pdir}
+    if name == "go.mod":
+        mod = ""
+        for line in text.splitlines():
+            parts = line.split("//", 1)[0].split()
+            if len(parts) >= 2 and parts[0] == "module":
+                mod = parts[1].strip('"`')
+                break
+        return "go_mod", {"module": mod}
+    if name == "cargo.toml":
+        data = {}
+        try:
+            try:
+                import tomllib as _toml
+            except ImportError:            # Python < 3.11
+                import tomli as _toml      # type: ignore
+            data = _toml.loads(text)
+        except Exception:
+            data = {}
+        return "cargo", {"name": str((data.get("package") or {}).get("name") or ""),
+                         "lib": str((data.get("lib") or {}).get("path") or "")}
     data = parse_jsonc(text)
     if name == "package.json":
         return "package_json", {"name": str(data.get("name") or ""), "main": str(data.get("main") or "")}
@@ -1602,6 +1622,11 @@ def parse_config(path: str, text: str) -> tuple:
     return ("jsconfig" if name == "jsconfig.json" else "tsconfig"), {
         "baseUrl": str(co.get("baseUrl") or ""),
         "paths": {str(k): [str(x) for x in v or []] for k, v in (co.get("paths") or {}).items() if isinstance(v, list)}}
+
+
+def _scope_langs() -> frozenset:
+    from imperal_sdk.code_langs import LANGS
+    return LANGS
 
 
 def scope_facts(path: str, text: str) -> BlobFacts | None:
@@ -1621,6 +1646,9 @@ def scope_facts(path: str, text: str) -> BlobFacts | None:
             exported_names = _py_all(sc, tree.root_node)
             for c in tree.root_node.children:
                 _py_walk(sc, c, [], "read", set(), exported_names, is_init)
+        elif lang in _scope_langs():
+            from imperal_sdk.code_langs import walk_facts
+            sc.defs, sc.bindings, sc.refs = walk_facts(lang, tree, src)
         else:
             named: set = set()
             for c in tree.root_node.children:
