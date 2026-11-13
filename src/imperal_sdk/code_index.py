@@ -12,6 +12,7 @@ import base64
 import hashlib
 import os
 import re
+import dataclasses
 from dataclasses import asdict, dataclass, field
 from typing import Iterable
 
@@ -26,6 +27,7 @@ class Symbol:
     start_line: int
     end_line: int
     signature: str = ""
+    doc: str = ""        # its docstring / the comment above it (from scope_facts) -- search answers carry it
 
 
 @dataclass
@@ -227,6 +229,33 @@ def _endpoint_refs(fn, call) -> tuple:
     return tuple(sorted(refs))
 
 
+def _known_route_decorator(dec: "ast.Call") -> bool:
+    """@x.get / @x.route / @x.api_route: the frameworks' own route decorators (read below by their verb)."""
+    return isinstance(dec.func, ast.Attribute) and (dec.func.attr.lower() in _HTTP_METHODS
+                                                     or dec.func.attr.lower() in ("route", "api_route"))
+
+
+def _decorator_path(dec: "ast.Call") -> str:
+    """The URL path a decorator call declares: its first argument or path= / route= / rule=, when it starts with
+    "/" ("" for any decorator that names no path -- @lru_cache(128), @retry("x"))."""
+    cand = [dec.args[0]] if dec.args else []
+    cand += [k.value for k in dec.keywords if k.arg in ("path", "route", "rule")]
+    for c in cand:
+        got = _literal_string(c)
+        if isinstance(got, str) and got.startswith("/") and len(got) > 1 and " " not in got:
+            return got
+    return ""
+
+
+def _method_kw(dec: "ast.Call") -> list:
+    """method="POST" as one keyword (the plural methods=[...] is _methods_kw's)."""
+    for k in dec.keywords:
+        if k.arg == "method":
+            got = _literal_string(k.value)
+            return [got.lower()] if got else []
+    return []
+
+
 def _python_contracts(path: str, text: str):
     try:
         tree = ast.parse(text)
@@ -247,6 +276,17 @@ def _python_contracts(path: str, text: str):
                                                       node.lineno, _endpoint_refs(funcs.get(handler), node)))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for dec in node.decorator_list:
+                if isinstance(dec, ast.Call) and not _known_route_decorator(dec):
+                    # any other decorator that names a path is the project's own route declarer (live 2026-11-13:
+                    # the gateway's @door("/v1/panel/redirect", methods=["GET"]) had no endpoint)
+                    route = _decorator_path(dec)
+                    if route:
+                        for method in (_methods_kw(dec) or _method_kw(dec) or ["get"]):
+                            if method in _HTTP_METHODS:
+                                endpoints.append(EndpointEvidence(
+                                    method.upper(), _route_of(prefixes, "", route), node.name, path,
+                                    getattr(dec, "lineno", node.lineno), _endpoint_refs(node, dec)))
+                    continue
                 if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Attribute):
                     continue
                 verb = dec.func.attr.lower()
@@ -683,9 +723,11 @@ def _lang_for(path: str) -> str:
 # 3 (2026-11-04): a blob is sent without its text -- facts with descriptions (``Def.doc``, ``BlobFacts.doc``), its
 # line hashes and size; a config as its parsed keys. The vault asks every version of an older extractor again, so the
 # text it held is replaced by the index (owner 2026-11-04: the vault holds the index, never the code)
-EXTRACTOR_VERSION = "4"
+EXTRACTOR_VERSION = "5"
 # 4 (2026-11-06): Go, Rust, Java, Kotlin, C#, PHP, Ruby carry imports and references (``code_langs``); TS/JS default
 # exports, CommonJS exports, dynamic import(); Vue / Svelte / Astro components -- every older blob is asked again
+# 5 (2026-11-13): a function held by a const inside a function (an arrow handler in a React component) is a
+# definition with its doc; a bare route decorator (@door("/x")) declares an endpoint
 MAX_FILE_BYTES = 10 * 1024 * 1024     # one file in the code index (Cloud OS: shared vault, many users)
 MAX_REPO_FILES = 20_000
 INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte",
@@ -1646,8 +1688,10 @@ def _ts_walk(sc: _Scope, node, scope: list, ctx: str, local: set, exported: bool
                 continue
             name, value = decl.child_by_field_name("name"), decl.child_by_field_name("value")
             typ = decl.child_by_field_name("type")
-            if name is not None and name.type == "identifier" and (not scope or scope[-1][1] == "class"):
-                fn_value = value is not None and value.type in _TS_FUNCTION_VALUES
+            fn_value = value is not None and value.type in _TS_FUNCTION_VALUES
+            # a function held by a const INSIDE a function is a definition too (live 2026-11-13: completeSignIn and
+            # handleLogin inside a React component were never found by search_code, outline saw them)
+            if name is not None and name.type == "identifier" and (not scope or scope[-1][1] == "class" or fn_value):
                 if not scope or fn_value:
                     nm = sc.text(name)
                     parent = scope[-1] if scope else None
@@ -2240,7 +2284,38 @@ def parse_file(path: str, text: str) -> FileIndex | None:
             stack.extend(node.children)
     except Exception:
         return fi  # parse error -> line-only, fail-soft
+    if lang in _SCOPE_FACT_LANGS:
+        _with_scope_defs(fi, path, text)
     return fi
+
+
+# the languages scope_facts reads: their symbols also take its definitions (nested arrow functions, module constants)
+# and descriptions, so the local index and the vault's index are one extractor's (2026-11-13)
+_SCOPE_FACT_LANGS = frozenset({"python", "typescript", "tsx", "javascript"})
+_SCOPE_DEF_KINDS = frozenset({"function", "method", "class", "type"})
+
+
+def _with_scope_defs(fi: "FileIndex", path: str, text: str) -> None:
+    try:
+        fx = scope_facts(path, text)
+    except Exception:
+        return
+    if fx is None:
+        return
+    lines = text.split("\n")
+    have = {(s.name, s.start_line): i for i, s in enumerate(fi.symbols)}
+    for d in fx.defs:
+        at = have.get((d.name, d.start_line))
+        if at is not None:
+            if d.doc and not fi.symbols[at].doc:
+                fi.symbols[at] = dataclasses.replace(fi.symbols[at], doc=d.doc)
+            continue
+        # a module-level constant is a definition worth finding (PANEL_ORIGIN); a local variable is not
+        if d.kind in _SCOPE_DEF_KINDS or (d.kind == "variable" and d.qualname == d.name):
+            sig = (lines[d.start_line - 1] if 0 < d.start_line <= len(lines) else "")[:200]
+            fi.symbols.append(Symbol(name=d.name, kind=d.kind, path=path, start_line=d.start_line,
+                                     end_line=d.end_line, signature=sig, doc=d.doc))
+            have[(d.name, d.start_line)] = len(fi.symbols) - 1
 
 
 def build_index(root: str, files: list[str]) -> ProjectIndex:

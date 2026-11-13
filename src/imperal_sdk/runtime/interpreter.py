@@ -15,12 +15,17 @@ from .verbs import eval_conditional, run_store, run_ai, run_call, make_directive
 
 async def run_steps(steps: list[dict], ctx: Any, *, event: dict | None = None) -> dict:
     """Execute a non-Turing declarative steps[] flow. Returns {steps, prev}."""
-    # Guard: all steps must have an "id"
-    for step in steps:
-        if "id" not in step:
-            raise ValueError(f"step missing required 'id': {step!r}")
+    # one validator for the checker and the runner: every problem of every step, named, before anything runs
+    from imperal_sdk.ir.actions import validate_step
+    problems = [f"step {s.get('id') or i + 1}: {e}" for i, s in enumerate(steps)
+                for e in (validate_step(s) if isinstance(s, dict) else ["a step must be an object"])]
+    if problems:
+        raise ValueError("invalid steps: " + "; ".join(problems))
     by_id = {s["id"]: s for s in steps}
-    tcx: dict[str, Any] = {"event": event or {}, "steps": {}, "prev": {}}
+    # `args` names the function's parameters too: the IR spec and every agent write {{args.x}}; it resolved to "" and
+    # a stored link came back with an empty url (2026-11-13). `event` stays the canonical name.
+    params = event or {}
+    tcx: dict[str, Any] = {"event": params, "args": params, "steps": {}, "prev": {}}
     # linear walk with conditional jumps
     order = [s["id"] for s in steps]
     budget = max(64, len(steps) * 8)

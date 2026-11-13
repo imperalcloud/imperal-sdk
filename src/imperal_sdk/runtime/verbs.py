@@ -48,6 +48,8 @@ async def run_store(op: str, args: dict, store) -> dict:
     """
     coll = args.get("kind", "")
     if op == "create":
+        if not isinstance(args.get("data"), dict):
+            raise ValueError("store.create needs args.data (an object of the fields to store)")
         doc = await store.create(coll, args["data"])
         doc_id = doc.get("id") if isinstance(doc, dict) else getattr(doc, "id", None)
         return {"id": doc_id}

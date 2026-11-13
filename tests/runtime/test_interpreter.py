@@ -161,5 +161,5 @@ async def test_step_missing_id_raises():
     steps = [
         {"op": "send", "args": {"message": "no id here"}},
     ]
-    with pytest.raises(ValueError, match="missing required 'id'"):
+    with pytest.raises(ValueError, match="needs an 'id'"):
         await run_steps(steps, ctx=_ctx(caps))

@@ -146,11 +146,25 @@ def validate_step(step: dict) -> list[str]:
     op = step.get("op")
     if op not in ACTION_SCHEMAS:
         return [f"unknown op {op!r}; valid verbs: {sorted(ACTION_SCHEMAS)}"]
+    # the runner needs an id on every step (runtime/interpreter.run_steps); one validator for both, so a step that
+    # validates also runs (2026-11-13: validate passed a step smoke then refused with "step missing required 'id'")
+    errs: list[str] = []
+    sid = step.get("id")
+    if not isinstance(sid, str) or not sid.strip():
+        errs.append("step needs an 'id' (a non-empty string other steps and conditionals can name)")
 
     if op == "conditional":
         # conditional is pure control-flow — its fields (if/then/else) live at
         # the step ROOT, not under args. Validate the step dict itself.
-        return _validate_object(step, ACTION_SCHEMAS["conditional"])
+        return errs + _validate_object(step, ACTION_SCHEMAS["conditional"])
 
     args = step.get("args", {})
-    return _validate_object(args, ACTION_SCHEMAS[op])
+    if not isinstance(args, dict):
+        return errs + [f"'args' must be an object, got {type(args).__name__}"]
+    misplaced = sorted(k for k in step if k not in ("id", "op", "args", "if", "then", "else")
+                       and k in (ACTION_SCHEMAS[op].get("properties") or {}))
+    if misplaced:
+        # live 2026-11-13: {op, kind, data} at the step root read as "missing data" although data was right there
+        return errs + [f"{', '.join(misplaced)} must go under 'args': "
+                       f"{{\"id\": ..., \"op\": \"{op}\", \"args\": {{{', '.join(repr(k) + ': ...' for k in misplaced)}}}}}"]
+    return errs + _validate_object(args, ACTION_SCHEMAS[op])

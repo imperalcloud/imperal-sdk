@@ -95,7 +95,7 @@ def test_one_table_and_the_old_private_names_stay_aliases():
     assert indexer.DEF_NODES["typescript"]["type_alias_declaration"] == "type"
     assert indexer.DEF_NODES["typescript"]["enum_declaration"] == "class"
     assert indexer._DEF_NODES is indexer.DEF_NODES and indexer._get_language is indexer.language
-    assert indexer.EXTRACTOR_VERSION == "4" and indexer.MAX_FILE_BYTES == 10 * 1024 * 1024
+    assert indexer.EXTRACTOR_VERSION == "5" and indexer.MAX_FILE_BYTES == 10 * 1024 * 1024
     assert indexer.MAX_REPO_FILES == 20_000
 
 
