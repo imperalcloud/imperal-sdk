@@ -2,6 +2,27 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.6.0 - 2026-11-13
+
+From the imperal-mcp 0.9.14 field test.
+
+### Added
+- `Symbol.doc`: a symbol carries its docstring or the comment above it; Python, TypeScript and JavaScript symbols also
+  take scope_facts' definitions (module constants such as `PANEL_ORIGIN`), so the local index and the vault's are one
+  extractor's.
+- A project's own route decorator that names a URL path (`@door("/v1/x", methods=["GET"])`, `path=`, `method=`) declares
+  an endpoint; a decorator that names no path (`@lru_cache(128)`) does not.
+- IR runner: `{{args.x}}` names the function's parameters, like `{{event.x}}` (the spec and every agent wrote `args`;
+  it resolved to "" and a stored link came back empty).
+
+### Fixed
+- A function held by a `const` inside a function (an arrow handler inside a React component) is a definition; search
+  never found `completeSignIn`/`handleLogin` although outline saw them. `EXTRACTOR_VERSION` 5: the vault asks every
+  older blob again.
+- IR: one rule for the checker and the runner. `validate_step` requires a step `id` and names verb fields placed at the
+  step root ("must go under 'args'"); `run_steps` validates every step before it runs; `store.create` without
+  `args.data` says so instead of `KeyError: 'data'`.
+
 ## 6.5.3 - 2026-11-06
 
 ### Added
