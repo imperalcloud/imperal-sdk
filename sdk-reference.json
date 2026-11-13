@@ -1,5 +1,5 @@
 {
-  "sdk_version": "6.5.3",
+  "sdk_version": "6.6.0",
   "symbols": {
     "ActionResult": {
       "action_vocab_safe": false,
