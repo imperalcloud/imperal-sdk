@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.6.1 - 2026-11-14
+
+From the imperal-mcp 0.9.15 field test (report 2, 13.11).
+
+### Fixed
+- IR: a step field the verb does not take is named with the step's right shape -- `collection`/`table` -> `args.kind`,
+  `values`/`fields`/`record` -> `args.data`, `update`/`changes` -> `args.set` -- instead of a bare "unknown field".
+
 ## 6.6.0 - 2026-11-13
 
 From the imperal-mcp 0.9.14 field test.
