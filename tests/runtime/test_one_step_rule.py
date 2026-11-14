@@ -50,3 +50,11 @@ async def test_args_names_the_functions_parameters():
     await run_steps([{"id": "s", "op": "store.create", "args": {"kind": "link", "data": {"url": "{{args.url}}"}}}],
                     ctx, event={"url": "https://imperal.io"})
     assert ctx.store.docs == [("link", {"url": "https://imperal.io"})]
+
+
+def test_the_field_tests_exact_step_is_told_its_right_shape():
+    # 2026-11-13: {"op":"store.create","collection":"notes","data":{...}} -- three tries, never told the right shape
+    errs = validate_step({"op": "store.create", "collection": "notes", "data": {"text": "hello"}})
+    text = " ".join(errs)
+    assert "needs an 'id'" in text and "'collection' -> args.kind" in text
+    assert '{"id": "s1", "op": "store.create", "args": {"kind": ..., "data": ...}}' in text

@@ -131,6 +131,13 @@ def _validate_object(value: Any, schema: dict) -> list[str]:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _shape_of(op: str, props: dict) -> str:
+    """The step's shape as one line an agent can copy: {"id": "s1", "op": op, "args": {...its required fields}}."""
+    req = list((ACTION_SCHEMAS.get(op) or {}).get("required") or list(props)[:2])
+    inner = ", ".join(f'"{k}": ...' for k in req)
+    return f'{{"id": "s1", "op": "{op}", "args": {{{inner}}}}}'
+
+
 def validate_step(step: dict) -> list[str]:
     """Validate a single declarative step dict against its verb's arg schema.
 
@@ -161,8 +168,17 @@ def validate_step(step: dict) -> list[str]:
     args = step.get("args", {})
     if not isinstance(args, dict):
         return errs + [f"'args' must be an object, got {type(args).__name__}"]
-    misplaced = sorted(k for k in step if k not in ("id", "op", "args", "if", "then", "else")
-                       and k in (ACTION_SCHEMAS[op].get("properties") or {}))
+    props = ACTION_SCHEMAS[op].get("properties") or {}
+    misplaced = sorted(k for k in step if k not in ("id", "op", "args", "if", "then", "else") and k in props)
+    unknown = sorted(k for k in step if k not in ("id", "op", "args", "if", "then", "else") and k not in props)
+    if unknown:
+        # a key the step does not have at all (field test 2026-11-13: "collection" where store steps say "kind")
+        alias = {"collection": "kind", "table": "kind", "values": "data", "fields": "data", "record": "data",
+                 "update": "set", "changes": "set"}
+        hints = [f"'{k}' -> args.{alias[k]}" for k in unknown if alias.get(k) in props]
+        errs.append(f"unknown step field(s) {', '.join(repr(k) for k in unknown)}"
+                    + (f" (did you mean {'; '.join(hints)})" if hints else "")
+                    + f"; a {op} step is {_shape_of(op, props)}")
     if misplaced:
         # live 2026-11-13: {op, kind, data} at the step root read as "missing data" although data was right there
         return errs + [f"{', '.join(misplaced)} must go under 'args': "
