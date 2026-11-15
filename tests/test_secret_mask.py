@@ -177,3 +177,17 @@ def test_masking_values_never_breaks_a_mask_already_made():
     vals = [f"v{i:03d}" for i in range(120)] + ["100"]
     out, _ = mask_values(" ".join(vals), vals)
     assert set(out.split()) == {"<redacted:secret-file-value>"}
+
+
+def test_a_text_holding_nul_bytes_is_masked_and_kept_whole():
+    """Live 2026-11-15 (vault on 6.7.0): a message holding NUL bytes -- one of them before digits, as a mask's own
+    mark is -- made finish() look up a mask never made: IndexError, every such write a 500."""
+    for text in ("a\x000\x00b", "\x00", "\x00\x00e1\x00", "x\x0012\x00 y"):
+        assert mask(text) == (text, ())                    # nothing secret: the text whole, NULs kept
+    out, masked = mask("x\x0012\x00 key ghp_FAKEgate00000000000000000 \x00")
+    assert out == "x\x0012\x00 key <redacted:github-token> \x00"
+    assert len(masked) == 1 and out[masked[0].at:].startswith("<redacted:github-token>")
+    assert masked[0].length == len("ghp_FAKEgate00000000000000000")
+    from imperal_sdk.secret_mask import mask_values, secret_file_view
+    assert secret_file_view("A=1\x002\n", ".env")[0] == "A=<redacted:secret-file-value>\n"
+    assert mask_values("v\x00al ok", ["v\x00al"])[0] == "<redacted:secret-file-value> ok"

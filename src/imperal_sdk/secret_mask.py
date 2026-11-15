@@ -108,8 +108,15 @@ _DECIMAL = re.compile(r"^\d+\.\d+[,;)}\]]*$")
 _DOTTED = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
 _PLACEHOLDERS = frozenset({"changeme", "password123", "your_password_here", "xxxxxxxxxxxx"})
 
-# a mask in the making: \x00<n>\x00 never occurs in a decoded text (normalise_text refuses NUL), and no rule matches it
+# a mask in the making: \x00<n>\x00. A NUL of the text itself is held as \x00e while masking (_NUL), so it is never
+# followed by a digit and never read as a mask (live 2026-11-15, vault: a message holding NUL bytes made finish() look up
+# a mask that was never made -- IndexError, every such write a 500)
 _SLOT = re.compile(r"\x00(\d+)\x00")
+_NUL, _NUL_HELD = "\x00", "\x00e"
+
+
+def _released(text: str) -> str:
+    return text.replace(_NUL_HELD, _NUL)
 
 
 def strong(value: str) -> bool:
@@ -158,7 +165,7 @@ def _keyword_secret(key: str, sep: str, val: str, code: bool) -> bool:
 
 class _Masker:
     def __init__(self, text: str):
-        self.text = text
+        self.text = text.replace(_NUL, _NUL_HELD)
         self.found: list = []          # (kind, value)
 
     def slot(self, kind: str, value: str) -> str:
@@ -192,16 +199,16 @@ class _Masker:
         out, masked, size = [], [], 0
         at = 0
         for m in _SLOT.finditer(self.text):
-            piece = self.text[at:m.start()]
+            piece = _released(self.text[at:m.start()])
             out.append(piece)
             size += len(piece)
             kind, value = self.found[int(m.group(1))]
             mask = MASK.format(kind)
-            masked.append(Masked(kind, size, len(value)))
+            masked.append(Masked(kind, size, len(_released(value))))
             out.append(mask)
             size += len(mask)
             at = m.end()
-        out.append(self.text[at:])
+        out.append(_released(self.text[at:]))
         return "".join(out), tuple(masked)
 
 
@@ -320,7 +327,7 @@ def secret_file_values(text: str, path: str = "") -> list:
         m = _Masker(t)
         _settings(m)
         _rules(m, False)
-        vals = [str(v).strip().strip("\"'") for _, v in m.found] + [str(v).strip() for _, v in m.found]
+        vals = [_released(str(v)).strip().strip("\"'") for _, v in m.found] + [_released(str(v)).strip() for _, v in m.found]
     return sorted({v for v in vals if len(v) >= SECRET_VALUE_MIN}, key=len, reverse=True)
 
 
@@ -332,7 +339,8 @@ def mask_values(text: str, values) -> tuple:
     random-looking token alone (``strong``: a value passed through base64 or hex no longer equals itself); then the usual
     rules."""
     m = _Masker(str(text or ""))
-    for v in sorted({str(x) for x in values or () if len(str(x)) >= SECRET_VALUE_MIN}, key=len, reverse=True):
+    for v in sorted({str(x).replace(_NUL, _NUL_HELD) for x in values or () if len(str(x)) >= SECRET_VALUE_MIN},
+                    key=len, reverse=True):
         if v in m.text:      # never inside a mask already made (its slot number may hold the same digits)
             parts = re.split(r"(\x00\d+\x00)", m.text)
             m.text = "".join(p if _SLOT.fullmatch(p) else p.replace(v, m.slot("secret-file-value", v)) for p in parts)

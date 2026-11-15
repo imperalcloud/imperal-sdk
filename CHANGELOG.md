@@ -2,6 +2,13 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.7.1 - 2026-11-15
+
+### Fixed
+- `secret_mask`: a text holding NUL bytes is masked and kept whole. A mask in the making is marked `\x00<n>\x00`; a NUL
+  of the text before digits was read as such a mark and `finish()` looked up a mask never made (IndexError). Live on
+  the vault with 6.7.0: every write of a message holding NUL bytes answered 500.
+
 ## 6.7.0 - 2026-11-15
 
 The truth architecture (spec 2026-11-14, ICNLI §3.5, §7.2, §7.5, §7.7): the SDK is the one owner of every fact the
