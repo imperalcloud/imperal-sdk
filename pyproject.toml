@@ -107,6 +107,7 @@ packages = ["src/imperal_sdk"]
 "src/imperal_sdk/schemas/http_response.schema.json" = "imperal_sdk/schemas/http_response.schema.json"
 "src/imperal_sdk/schemas/metered_event.schema.json" = "imperal_sdk/schemas/metered_event.schema.json"
 "src/imperal_sdk/schemas/ir.schema.json" = "imperal_sdk/schemas/ir.schema.json"
+"src/imperal_sdk/schemas/tool_contract.json" = "imperal_sdk/schemas/tool_contract.json"
 "src/imperal_sdk/schemas/ui_children/tabs.json" = "imperal_sdk/schemas/ui_children/tabs.json"
 "src/imperal_sdk/schemas/ui_children/accordion.json" = "imperal_sdk/schemas/ui_children/accordion.json"
 "src/imperal_sdk/schemas/ui_children/datatable_columns.json" = "imperal_sdk/schemas/ui_children/datatable_columns.json"

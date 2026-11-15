@@ -1,0 +1,1229 @@
+{
+  "append_file": {
+    "description": "Add text to the END of a file (created when missing), on a new line. Use it for a log or a results protocol you write step by step: no anchor to match (Webbee 0.7.12+).",
+    "params": {
+      "path": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "path",
+      "content"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "write"
+  },
+  "bash": {
+    "description": "Run a shell command in the workspace root. A long-running command may pass `timeout` seconds (default 120, max 3600). Declare `effect`. A read the kernel can verify runs without a confirmation and is remembered (asked again, it is answered from memory); anything else asks first.",
+    "params": {
+      "command": {
+        "type": "string"
+      },
+      "timeout": {
+        "type": "integer"
+      },
+      "effect": {
+        "type": "object",
+        "description": "What this command does: read (only looks), check (runs tests / build / lint), change (writes files -- list them in `writes`) or act (restarts, pushes, kills: no file). The kernel verifies it; a declaration can only make a call stricter.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "read",
+              "check",
+              "change",
+              "act"
+            ]
+          },
+          "writes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    "required": [
+      "command"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "run"
+  },
+  "check_syntax": {
+    "description": "Parse a file after you edit it and list its syntax errors with lines (local and instant).",
+    "params": {
+      "path": {
+        "type": "string"
+      },
+      "root": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "checkpoint": {
+    "description": "Snapshot the workspace into the local reversibility history (a shadow git -- the user's own VCS is never touched). Write tools auto-checkpoint before every change; call this manually before a risky multi-step operation. Returns the checkpoint id. root: snapshot only that repository or folder (default: the workspace).",
+    "params": {
+      "label": {
+        "type": "string",
+        "description": "A short name for the snapshot."
+      },
+      "root": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "snapshot"
+  },
+  "checkpoint_diff": {
+    "description": "Show workspace changes since a checkpoint (default: the latest). target accepts a checkpoint id, cp-N or N; an unknown one is an error that lists the checkpoints that exist -- never a diff of another one. paths narrows it; root names the repository or folder. Use it to review your own work before finishing or rolling back.",
+    "params": {
+      "target": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ],
+        "description": "A checkpoint's number or id; default: the latest. An unknown one is an error."
+      },
+      "paths": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Only these files or folders, relative to root."
+      },
+      "root": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "checkpoint_rollback": {
+    "description": "Restore the workspace to an earlier checkpoint (target: id, cp-N or N). The current state is checkpointed first, so a rollback is itself undoable; fix a wrong step by rolling back, not by guessing forward. Files you did not write in this session, or inside a nested repository, are refused with their list: pass paths to restore only those, or allow_nested=true.",
+    "params": {
+      "target": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ]
+      },
+      "paths": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "restore only these files"
+      },
+      "allow_nested": {
+        "type": "boolean"
+      },
+      "root": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "write"
+  },
+  "coding_context": {
+    "description": "The workspace's file tree (respecting .gitignore, without dependency and build folders) and its git status.",
+    "params": {
+      "root": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "contract_slice": {
+    "description": "The API endpoints a change reaches: give the symbols you plan to change; returns each endpoint whose handler is one of them or calls one through its callers (with the call chain), plus endpoints whose route or handler names `query`, and the symbols' definitions with their callers.",
+    "params": {
+      "symbols": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "name, Class.method or path::name each."
+      },
+      "query": {
+        "type": "string"
+      },
+      "k": {
+        "type": "integer"
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "create_file": {
+    "description": "Generate a real, downloadable FILE from Markdown you write -- docx, pdf, odt, xlsx, csv, html, md or txt. Use whenever the user asks for a document, report, spreadsheet or export as a FILE, instead of pasting the content into the chat and asking them to save it. In the terminal the file is written to their machine (pass `path`); in the panel and Telegram it comes back as a download link.",
+    "params": {
+      "content": {
+        "type": "string",
+        "description": "The document body as Markdown: # headings, **bold**, - lists, and | tables | for spreadsheets. Write the real finished content here -- this IS the document."
+      },
+      "format": {
+        "type": "string",
+        "description": "Target format: docx, pdf, odt, xlsx, csv, html, md or txt."
+      },
+      "filename": {
+        "type": "string",
+        "description": "Preferred name WITHOUT extension (it is added). Any language is fine. Defaults to the document title."
+      },
+      "title": {
+        "type": "string",
+        "description": "Document title; defaults to the first heading in content."
+      },
+      "path": {
+        "type": "string",
+        "description": "TERMINAL ONLY: where to write it on the user's machine (relative to the workspace). Ignored on other surfaces."
+      }
+    },
+    "required": [
+      "content",
+      "format"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "write"
+  },
+  "deploy_ir": {
+    "description": "Deploy an app.ir.json to the user's Imperal account; a new app id creates the app.",
+    "params": {
+      "app_ir": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "app_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "app_ir",
+      "app_id"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "write"
+  },
+  "edit_file": {
+    "description": "Replace `old` with `new` in a file. `old` must match EXACTLY ONCE -- include enough surrounding context to make it unique, or set `replace_all` to replace every occurrence (use multi_edit for several coordinated replacements across files).",
+    "params": {
+      "path": {
+        "type": "string"
+      },
+      "old": {
+        "type": "string"
+      },
+      "new": {
+        "type": "string"
+      },
+      "replace_all": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "path",
+      "old",
+      "new"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "write"
+  },
+  "frame": {
+    "description": "Your step frame from the Imperal kernel: the task and plan with what is proven and what is only claimed, the code around your focus, what a change reaches, the machines and repos, your path so far. Call it at the start and after each change. Costs credits; needs login.",
+    "params": {
+      "root": {
+        "type": "string"
+      },
+      "target": {
+        "type": "string"
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "get_app": {
+    "description": "One app and its callable tools (name, action type, what it does): the names run_read_tool and run_write_tool take. full=true gives the raw record with the whole manifest.",
+    "params": {
+      "app_id": {
+        "type": "string"
+      },
+      "full": {
+        "default": false,
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "app_id"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "glob": {
+    "description": "List workspace files matching a glob pattern.",
+    "params": {
+      "pattern": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "pattern"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "graph_slice": {
+    "description": "For each given symbol name, return its definition location, signature, direct callers and callees from the code graph. Batch-first: pass ALL symbols you care about at once.",
+    "params": {
+      "symbols": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "name, Class.method or path::name each."
+      },
+      "depth": {
+        "type": "integer",
+        "description": "How many call hops to follow."
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      }
+    },
+    "required": [
+      "symbols"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "grep_code": {
+    "description": "Exact text or a regex in the repository's text files (code, configs, docs): a string inside a function body or a setting the symbol search does not index. Secret files are never searched.",
+    "params": {
+      "pattern": {
+        "type": "string",
+        "description": "The exact text to find; a regular expression when regex=true."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "path_glob": {
+        "type": "string",
+        "description": "Only paths matching it, e.g. src/**/*.py."
+      },
+      "k": {
+        "default": 50,
+        "type": "integer"
+      },
+      "regex": {
+        "default": false,
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "pattern"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "impact_of_change": {
+    "description": "Given symbols you plan to change, return the files/symbols that depend on them (who breaks). Use before editing shared code.",
+    "params": {
+      "symbols": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "name, Class.method or path::name each."
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      },
+      "full": {
+        "default": false,
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "symbols"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "inspect_page": {
+    "description": "Look at a web page in the local browser (Chrome/Brave with remote debugging on port 9222): its element boxes, roles and colors at each width, and a screenshot you see. The kernel measures them and tells you what is wrong: overlap, layout broken at a width, small touch targets, low contrast, what users see first, what changed since the last look. Use it instead of writing your own browser scripts. url: open or reload this page; tab: an open tab (id, or a part of its url or title); widths: viewport widths (default 375, 768, 1440).",
+    "params": {
+      "url": {
+        "type": "string"
+      },
+      "tab": {
+        "type": "string"
+      },
+      "widths": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      },
+      "screenshot": {
+        "type": "boolean"
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "inspect_screen": {
+    "description": "Check a page's layout from its real element boxes (pass them from your browser run): elements that overlap, touch targets under 44px, layers that collide, what changed between two states. Without element boxes nothing is measured -- it says so.",
+    "params": {
+      "target": {
+        "type": "string",
+        "description": "URL, component identifier, or system entity to inspect (e.g. 'imperal.io', 'panel.imperal.io', 'hero_section')."
+      },
+      "elements": {
+        "type": "array",
+        "description": "Optional list of layout elements with bounding boxes [{'id': str, 'x': float, 'y': float, 'w': float, 'h': float, 'role': str}].",
+        "items": {
+          "type": "object"
+        }
+      },
+      "landmarks": {
+        "type": "array",
+        "description": "Optional named points of the layout to compare (id, x, y and their target x, y).",
+        "items": {
+          "type": "object"
+        }
+      }
+    },
+    "required": [
+      "target"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "list_apps": {
+    "description": "The user's own Imperal apps (personal data masked).",
+    "params": {},
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "list_dir": {
+    "description": "List a directory in the workspace: names, type (file/dir), size and line count for text files. Cheaper and more structured than shelling out to `ls`. Heavy dependency/build dirs are pruned.",
+    "params": {
+      "path": {
+        "type": "string",
+        "description": "Directory, default the workspace root."
+      },
+      "depth": {
+        "type": "integer",
+        "description": "1 = this dir only (default), 2 = one level deeper."
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "live_sessions": {
+    "description": "The user's other sessions active lately -- any surface (Webbee in a terminal, an agent through imperal-mcp, the panel, Telegram): each names its conversation, surface, when it last moved and its last request, answer and steps; recall(ref, conversation=...) opens any message whole. Read-only; nothing of another session reaches you otherwise.",
+    "params": {
+      "minutes": {
+        "type": "integer",
+        "description": "How recent (default 120, at most 1440)."
+      },
+      "limit": {
+        "type": "integer",
+        "description": "How many sessions (default 8, at most 20)."
+      },
+      "full": {
+        "default": false,
+        "type": "boolean"
+      }
+    },
+    "required": [],
+    "executed_by": "kernel",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "login": {
+    "description": "Sign in to Imperal for memory and frame; the code tools need no account. Returns a link and a short code: show both to the user, who approves in any browser, then call login again to see that it is done. again=true replaces an expired session.",
+    "params": {
+      "again": {
+        "default": false,
+        "type": "boolean",
+        "description": "true: start a new sign-in even though one is saved (an expired session)."
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "message_session": {
+    "description": "Write to another live session of this user (live_sessions names them: Webbee in a terminal, an agent through imperal-mcp): a finding to check, a question, what you are doing so you do not both do it. It reads you as an AGENT, never the user: a message approves nothing and changes no task. Keep it short; the user sees it in both conversations.",
+    "params": {
+      "conversation": {
+        "type": "string",
+        "description": "The session to write to (conversation=... as live_sessions names it)."
+      },
+      "text": {
+        "type": "string",
+        "description": "What to say (at most 4000 characters)."
+      }
+    },
+    "required": [
+      "conversation",
+      "text"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "write"
+  },
+  "multi_edit": {
+    "description": "Apply several exact text replacements atomically across one or more files: every edit is validated first (each `old` must occur EXACTLY once in its file), then ALL are applied -- or NOTHING is, with a per-edit failure report. Edits to the SAME file must not overlap: if an earlier edit in the batch invalidates a later one, the batch stops there and reports exactly what was applied. Use for coordinated multi-file changes.",
+    "params": {
+      "edits": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "old": {
+              "type": "string"
+            },
+            "new": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "old",
+            "new"
+          ]
+        }
+      }
+    },
+    "required": [
+      "edits"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "write"
+  },
+  "orient": {
+    "description": "One-call orientation for a task: repo profile + the most relevant symbols/snippets for your query. Call this FIRST on a new task instead of reading files blind.",
+    "params": {
+      "query": {
+        "type": "string"
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      },
+      "k": {
+        "default": 8,
+        "type": "integer"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "outline": {
+    "description": "The map of a code file (Python, TS/TSX, JS/JSX): every definition AND the big parts inside them (a large assignment, UI tree, returned element, comment header) with their line ranges. Call it before reading a big file; then read the part you need with read_symbol. connection_id: a remote server's file (SSH connection).",
+    "params": {
+      "path": {
+        "type": "string"
+      },
+      "connection_id": {
+        "type": "string"
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      },
+      "full": {
+        "default": false,
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "read_file": {
+    "description": "Read a file in the workspace. TEXT/source files come back byte-exact; DOCUMENTS and IMAGES (.pdf .docx .doc .odt .rtf .xlsx .xls .ods .csv .pptx .odp / .png .jpg .webp .gif .bmp .tiff .heic) are read through the platform's File Reader -- you get extracted text, and for an image its OCR text plus a description. Do NOT shell out to converters, `strings`, or an OCR tool: this tool already handles them. A window is always honoured: pass `offset` and/or `limit` and exactly those lines come back, on any file size -- use it rather than shelling out to sed/head. For text files the window is in LINES (`offset` is the 1-based first line); for documents it is in CHARACTERS. Without a window, a CODE file over 5000 lines answers with its OUTLINE -- every definition and big part with its lines; read the part you need with read_symbol, or pass offset/limit (limit=<all lines> reads it whole); other large files are auto-capped and the header says how to page through the rest.",
+    "params": {
+      "path": {
+        "type": "string"
+      },
+      "offset": {
+        "type": "integer",
+        "description": "Where to start: 1-based first LINE for a text/source file, 0-based CHARACTER offset for a document/image (optional)."
+      },
+      "limit": {
+        "type": "integer",
+        "description": "How much to read from offset: LINES for a text file, CHARACTERS for a document (optional)."
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "read_symbol": {
+    "description": "Read ONE part of a code file whole: a function, class, method or a part the outline names (e.g. 'security_content', 'Screen.render') or a line range 'L120-180'. Returns exactly that part with its line numbers. connection_id: a remote server's file (SSH connection).",
+    "params": {
+      "path": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "description": "A symbol (function, Class.method, a section's name) or a line range such as L120-180."
+      },
+      "connection_id": {
+        "type": "string"
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      }
+    },
+    "required": [
+      "path",
+      "name"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "recall": {
+    "description": "Your session's exact words back from the journal: ref 'A<seq>' (one of your answers), 'U<seq>' (a user's message), 'last_answers' with n (your newest). conversation: another conversation of this user (an id search_history names); ref 'all' reads it whole. A long text comes in pages: pass the next_offset the page names. Offloaded tool output: vault_log_read.",
+    "params": {
+      "ref": {
+        "type": "string",
+        "description": "A<seq>, U<seq>, last_answers, or all (a whole conversation)."
+      },
+      "conversation": {
+        "type": "string",
+        "description": "Another conversation's id (default: this session)."
+      },
+      "offset": {
+        "type": "integer",
+        "description": "Character offset of the page (the previous page names it)."
+      },
+      "n": {
+        "type": "integer",
+        "description": "With last_answers: how many of your newest answers."
+      }
+    },
+    "required": [
+      "ref"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "recall_context": {
+    "description": "The user's standing rules, preferences and repository notes that match a query, from Imperal memory shared with Webbee, Telegram and the panel.",
+    "params": {
+      "query": {
+        "type": "string"
+      },
+      "limit": {
+        "default": 5,
+        "type": "integer"
+      },
+      "include_user_facts": {
+        "default": true,
+        "type": "boolean"
+      },
+      "include_repo_memory": {
+        "default": true,
+        "type": "boolean"
+      },
+      "include_resolved": {
+        "default": false,
+        "type": "boolean",
+        "description": "true: also the notes marked resolved."
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "remember_fact": {
+    "description": "Keep a lasting fact, decision or rule about the user in Imperal memory, for every future session and surface.",
+    "params": {
+      "fact": {
+        "type": "string"
+      },
+      "category": {
+        "default": "preference",
+        "type": "string",
+        "description": "directive, preference, infra, convention or identity."
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "scope": {
+        "type": "string",
+        "description": "global, task or surface; empty: decided from the fact itself."
+      }
+    },
+    "required": [
+      "fact"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "write"
+  },
+  "repo_profile": {
+    "description": "Get a structured profile of the current repo (languages, size, key symbols, test-command hints) from the live code index. Call this to orient before reading files.",
+    "params": {
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      }
+    },
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "run_read_tool": {
+    "description": "Call a read-only tool of a deployed app by the name get_app lists; write and destructive tools are refused here.",
+    "params": {
+      "app_id": {
+        "type": "string"
+      },
+      "function": {
+        "default": "",
+        "type": "string",
+        "description": "The tool's name as get_app lists it."
+      },
+      "args": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "tool": {
+        "default": "",
+        "type": "string",
+        "description": "Same as function."
+      }
+    },
+    "required": [
+      "app_id"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "run_write_tool": {
+    "description": "Call a write or destructive tool of a deployed app by the name get_app lists. Destructive needs the user's consent; money tools need approval in the Imperal panel, then call again.",
+    "params": {
+      "app_id": {
+        "type": "string"
+      },
+      "function": {
+        "default": "",
+        "type": "string",
+        "description": "The tool's name as get_app lists it."
+      },
+      "args": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "tool": {
+        "default": "",
+        "type": "string",
+        "description": "Same as function."
+      }
+    },
+    "required": [
+      "app_id"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "write"
+  },
+  "save_repo_note": {
+    "description": "Keep a lasting note about a repository (a convention, an architecture decision), with citations if you have them.",
+    "params": {
+      "note": {
+        "type": "string"
+      },
+      "repo": {
+        "type": "string",
+        "description": "The repository's name; default: the workspace's folder name."
+      },
+      "citations": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "description": "Where the note comes from: file paths, symbols, links."
+      },
+      "root": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "note"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "write"
+  },
+  "search_code": {
+    "description": "Find code by name/keyword across the indexed repo (symbols, files); returns ranked matches with locations. Prefer this over blind file reads.",
+    "params": {
+      "query": {
+        "type": "string"
+      },
+      "k": {
+        "type": "integer"
+      },
+      "kind": {
+        "type": "string",
+        "description": "function, class, method or variable."
+      },
+      "path_glob": {
+        "type": "string",
+        "description": "Only paths matching it, e.g. src/**/*.py."
+      },
+      "target": {
+        "type": "string",
+        "description": "Where the code is: 'local' (your workspace), 'ssh:<connection_id>' (a server connection), 'host:<alias>' (a server you reach with your own ssh). Default: where you are working now."
+      },
+      "root": {
+        "type": "string",
+        "description": "A directory inside the repo on that target (finds the repo)."
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "search_docs": {
+    "description": "Search Imperal's own official documentation (docs.imperal.io) for how-to / install / platform-concept answers -- e.g. how to install Webbee Code, what a skeleton is, how billing works. Grounded: returns real doc sections only, never invented ones. Use it whenever the user asks about Webbee, Imperal or the platform's own concepts, INSTEAD of guessing or saying you will go and check.",
+    "params": {
+      "query": {
+        "type": "string",
+        "description": "What to look up, in your own words. Resolve pronouns against the conversation first (e.g. 'install Webbee Code', not 'install it')."
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "search_history": {
+    "description": "Your past conversations with this user that hold the words -- any surface (an earlier terminal session, the panel, Telegram, an external agent): each hit names its conversation and message; recall(ref, conversation=...) opens one whole. Nothing of another conversation reaches you otherwise.",
+    "params": {
+      "query": {
+        "type": "string",
+        "description": "Words the conversation holds."
+      },
+      "limit": {
+        "type": "integer",
+        "description": "How many hits (default 10, at most 30)."
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "smoke_ir": {
+    "description": "Run one function of an app.ir.json in an isolated store; returns {ok, result, trace}.",
+    "params": {
+      "app_ir": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "function": {
+        "type": "string",
+        "description": "The function of the app to run."
+      },
+      "args": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "required": [
+      "app_ir",
+      "function"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "state_lens": {
+    "description": "The session's whole state matrix, ordered by your current intent: law (standing rules, task rules, precedents), plan (items, proven or open), reality (proven facts, TABOO), memory (what this session saw and changed), conversation (messages as A<seq>/U<seq>; recall reads one whole) and path (each action with its last result, each file read or changed). section='all': counts and what pulls hardest now; a section: its rows page by page; focus: only the rows holding that word, saying how many it left out.",
+    "params": {
+      "section": {
+        "type": "string",
+        "enum": [
+          "law",
+          "plan",
+          "reality",
+          "memory",
+          "conversation",
+          "path",
+          "all"
+        ],
+        "description": "Which section to show in full (default: all)."
+      },
+      "focus": {
+        "type": "string",
+        "description": "Optional: a word -- only the rows holding it are listed, and the answer says how many it left out (the rows stay ordered by your intent)."
+      },
+      "offset": {
+        "type": "integer",
+        "description": "Row to start from in a section (each answer names the next offset)."
+      },
+      "conversation": {
+        "type": "string",
+        "description": "Optional: another session of yours working now (an id live_sessions names) -- its state, its running turn's steps included."
+      }
+    },
+    "required": [],
+    "executed_by": "kernel",
+    "shells": [
+      "mcp",
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "task": {
+    "description": "Declare what you were asked and your plan as items {content, status: pending|in_progress|completed}. The kernel marks an item proven only by what it measured (a diff, a check that exits 0, a sourced finding). Needs login.",
+    "params": {
+      "goal": {
+        "type": "string"
+      },
+      "items": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "type": "array",
+        "description": "The plan: [{content, status: pending|in_progress|completed}]; a blocked item: status blocked and blocked_on = what it waits for."
+      },
+      "root": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "goal"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "write"
+  },
+  "token_savings": {
+    "description": "What the code tools saved this session, measured on the real files: every distinct file the answers pointed to, read whole once, against what the tools returned; tokens estimated at 4 characters each. Answers with no local file behind them are counted apart, never as a saving.",
+    "params": {},
+    "required": [],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "upload_file": {
+    "description": "Send a file from this machine to Imperal by its path (never paste its bytes) and get {file_id, document_id, filename, size_bytes, status}. To attach it to anything, pass {\"document_id\": <id>} as that tool's file argument in run_write_tool.",
+    "params": {
+      "path": {
+        "type": "string",
+        "description": "The file's path on this machine."
+      },
+      "name": {
+        "type": "string",
+        "description": "The name to store it under; default: the file's own name."
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "write"
+  },
+  "validate_ir": {
+    "description": "Check an Imperal app definition (app.ir.json) locally: its envelope and every declarative step.",
+    "params": {
+      "app_ir": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "required": [
+      "app_ir"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "vault_log_read": {
+    "description": "Read a long output the kernel stored (ref = vault://logs/...), by pages or with grep; offset and limit count characters, not lines.",
+    "params": {
+      "ref": {
+        "type": "string",
+        "description": "The vault://logs/... reference the frame or a tool gave."
+      },
+      "offset": {
+        "default": 0,
+        "type": "integer"
+      },
+      "limit": {
+        "default": 0,
+        "type": "integer",
+        "description": "Characters to read (0: the default page)."
+      },
+      "grep": {
+        "default": "",
+        "type": "string",
+        "description": "Only the lines holding this text."
+      }
+    },
+    "required": [
+      "ref"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "mcp"
+    ],
+    "effect": "read"
+  },
+  "write_file": {
+    "description": "Create or overwrite a whole file in the workspace (parent directories are created). PREFER edit_file/multi_edit for changes to existing files.",
+    "params": {
+      "path": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "path",
+      "content"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "write"
+  }
+}

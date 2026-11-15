@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Callable
 
-from imperal_sdk.code_index import normalise_text
+from imperal_sdk.code_index import line_count, normalise_text
 from imperal_sdk.universal.kinds import kind_of
 
 MAX_VIEW_CHARS = 2_000_000       # extracted text per file (spec 2026-11-03 §3.1)
@@ -120,10 +120,6 @@ def close_sections(heads: list[tuple[str, str, int, int]], total_lines: int) -> 
                 break
         out.append(Section(title=title, kind=kind, level=level, start_line=start, end_line=max(start, end)))
     return out
-
-
-def line_count(text: str) -> int:
-    return max(1, len(text.splitlines()))
 
 
 def view_of(rel_path: str, raw: bytes) -> View | None:

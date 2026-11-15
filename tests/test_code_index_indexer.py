@@ -95,7 +95,7 @@ def test_one_table_and_the_old_private_names_stay_aliases():
     assert indexer.DEF_NODES["typescript"]["type_alias_declaration"] == "type"
     assert indexer.DEF_NODES["typescript"]["enum_declaration"] == "class"
     assert indexer._DEF_NODES is indexer.DEF_NODES and indexer._get_language is indexer.language
-    assert indexer.EXTRACTOR_VERSION == "5" and indexer.MAX_FILE_BYTES == 10 * 1024 * 1024
+    assert indexer.EXTRACTOR_VERSION == "6" and indexer.MAX_FILE_BYTES == 10 * 1024 * 1024
     assert indexer.MAX_REPO_FILES == 20_000
 
 
@@ -255,7 +255,7 @@ def test_sync_source_reads_only_changed_and_batches_the_apply(tmp_path):
     # the index, never the code (owner 2026-11-04): no text in a blob or a config, the config's keys parsed here
     assert "text" not in applies[0]["blobs"][0] and "text" not in applies[0]["configs"][0]
     assert applies[0]["configs"][0]["kind"] == "pyproject" and applies[0]["configs"][0]["data"]["name"] == "x"
-    assert applies[0]["blobs"][0]["lines"] == 3 and len(applies[0]["blobs"][0]["line_hashes"]) == 3 * 8
+    assert applies[0]["blobs"][0]["lines"] == 2 and len(applies[0]["blobs"][0]["line_hashes"]) == 2 * 8   # "def a():\n    pass\n": 2 lines (wc -l)
     assert "lost.py" in out["partial_reason"] and "big.py over 10 MB" in out["partial_reason"]
     parts = ci.apply_batches([{"path": "a", "blob": "h1"}, {"path": "b", "blob": "h2"}],
                              [{"hash": "h1", "text": "x" * 10}, {"hash": "h2", "text": "y" * 10}], [], limit=15)
@@ -449,9 +449,10 @@ def test_a_file_whose_facts_do_not_fit_an_apply_is_kept_as_its_size_and_said(mon
     assert "bundle.py kept as its size only" in out["partial_reason"]
 
 
-def test_a_source_with_an_embedder_says_so_to_the_vault_and_one_without_never_does(monkeypatch):
-    """6.3.6 (frame audit 2026-10-21: every repo said "semantic: off"): ``meta.embeds`` lets the vault ask an
-    embedding source, once, for the versions it holds without vectors."""
+def test_a_source_that_sends_chunk_texts_says_so_whatever_its_model(monkeypatch):
+    """6.3.6 (frame audit 2026-10-21: every repo said "semantic: off"): ``meta.embeds`` lets the vault ask, once, for the
+    versions it holds without vectors. Variant A (2026-11-15): the vault embeds, so a source without a model says so
+    too; only embed_chunks=False sends no chunks."""
     import asyncio
     from imperal_sdk import code_index as ci
     seen = []
@@ -471,7 +472,7 @@ def test_a_source_with_an_embedder_says_so_to_the_vault_and_one_without_never_do
     asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, listing, read, embed_chunks=False))
     monkeypatch.setattr(ci, "_backend", lambda: None)
     asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, listing, read))
-    assert [m.get("embeds") for m in seen] == [True, None, None]
+    assert [m.get("embeds") for m in seen] == [True, None, True]
 
 
 def test_sftp_listing_and_reads_run_in_parallel_with_the_same_result():
@@ -552,7 +553,7 @@ def test_a_quoted_line_is_checked_by_its_hash():
     from imperal_sdk import code_index as ci
     text = "def a():\n    return   1\n\n"
     hs = ci.line_hashes(text)
-    assert len(hs) == 4 * 8 and hs[8:16] == ci.line_hash("return 1") and hs[16:24] == "-" * 8
+    assert len(hs) == 3 * 8 and hs[8:16] == ci.line_hash("return 1") and hs[16:24] == "-" * 8
 
 
 
@@ -574,3 +575,27 @@ def test_embed_survives_a_lone_surrogate():
     out = b.embed(["ok", "bad \udcff tail"])
     assert out.shape == (2, 2) and seen[1] == "bad ? tail"
     assert b.embed_query("q \ud800").shape == (2,)
+
+
+def test_a_source_without_a_model_still_sends_its_chunk_texts(monkeypatch):
+    """Variant A (2026-11-15): the vault embeds -- a client with no embedder of its own (a base install) still sends
+    its chunks' texts and says so; before, only a client with a model did, and every other repo stayed lexical."""
+    import asyncio
+    ci = indexer
+    monkeypatch.setattr(ci, "_backend", lambda: None)
+    plans, applies = [], []
+
+    async def plan(items, meta):
+        plans.append(meta)
+        return {"changed": [i["path"] for i in items], "removed": [], "have_blobs": []}
+
+    async def apply(**payload):
+        applies.append(payload)
+        return {"files": len(payload["files"])}
+
+    async def read(paths):
+        return {p: b"def pay(amount):\n    return amount * 2\n" for p in paths}
+    asyncio.run(ci.sync_source(plan, apply, {"source": "t"}, [{"path": "billing.py", "size": 10, "mtime": 1.0}], read))
+    assert plans[0].get("embeds") is True
+    chunks = applies[0]["chunks"]
+    assert chunks and all(c.get("text") and "vector" not in c for c in chunks)

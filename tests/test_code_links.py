@@ -38,8 +38,10 @@ def test_a_function_nobody_calls_has_no_dependents():
 def test_reexport_alias_and_depth_through_the_enclosing_def_only():
     out = impact(_linker(PY), ["compute"], depth=2)
     items = {i["id"]: i for i in out["data"]["items"]}
-    # pkg/__init__.py only re-exports (an import, no use): no user, as in the vault
-    assert set(items) == {"app/use.py", "tests/test_core.py", "app/deep.py"}
+    # pkg/__init__.py re-exports it (an import, no use): a dependent of its own kind, never a scope user
+    # (field test 2026-11-14 П7; the earlier "no user" ruling was never the owner's)
+    assert set(items) == {"app/use.py", "tests/test_core.py", "app/deep.py", "pkg/__init__.py"}
+    assert items["pkg/__init__.py"]["via"] == "reexport" and items["pkg/__init__.py"]["user"] == ""
     assert items["app/use.py"]["depth"] == 1 and items["app/use.py"]["user"] == "run"
     assert items["app/deep.py"]["depth"] == 2 and items["app/deep.py"]["user"] == "outer"
     assert "app/other.py" not in items                       # shares no link, never pulled in by a file's other defs
@@ -130,7 +132,7 @@ def test_the_summary_never_reads_as_no_callers_when_names_match():
     out = impact(_linker(PY), ["lonely"])
     assert out["data"]["items"] == [] and "no file uses lonely by a resolved link" in out["summary"]
     assert "1 more file(s) only mention the name" in out["summary"] and "before concluding" in out["summary"]
-    assert impact(_linker(PY), ["compute"])["summary"].startswith("3 file(s) use compute by resolved links")
+    assert impact(_linker(PY), ["compute"])["summary"].startswith("4 file(s) use compute by resolved links")
     assert "not a definition" in impact(_linker(PY), ["nope"])["summary"]
 
 

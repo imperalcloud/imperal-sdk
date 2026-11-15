@@ -8,7 +8,8 @@ from __future__ import annotations
 import fnmatch
 import os
 
-from imperal_sdk.code_index import _DRIVE, _TSCONFIG, CONFIG_NAMES, SECRET_PATTERNS, SKIP_DIRS, _slashes
+from imperal_sdk.code_index import _DRIVE, _TSCONFIG, CONFIG_NAMES, SKIP_DIRS, _slashes
+from imperal_sdk.secret_mask import SECRET_FILES
 
 # extension -> the tree-sitter language name (tree-sitter-language-pack's names)
 CODE_LANGS: dict[str, str] = {
@@ -29,15 +30,8 @@ DATA_EXT = frozenset({".xlsx", ".xls", ".ods", ".csv", ".tsv", ".json", ".yaml",
 MAIL_EXT = frozenset({".eml", ".mbox"})
 IMAGE_EXT = frozenset({".jpg", ".jpeg", ".png", ".heic", ".tif", ".tiff"})
 
-# never read, whatever the kind: the parent list plus a person's keys, keychains, VPN profiles, wallets and browsers
-_NEVER_NAMES = SECRET_PATTERNS + (
-    "*.keychain", "*.keychain-db", "*.ovpn", "*.mobileconfig", "wallet.dat", "*.kdb",
-    # credential files that look like plain data (security review 2026-11-04): cloud keys, tokens, infra state,
-    # tool logins, browser password exports
-    "credentials*", "*credentials.json", "client_secret*.json", "*service-account*.json", "*service_account*.json",
-    "token.json", "tokens.json", "secrets.*", "*kubeconfig*", "*.tfstate", "*.tfstate.*", "*.tfvars",
-    ".netrc", "_netrc", ".pgpass", ".npmrc", ".pypirc", ".git-credentials", "*.ppk", "*password*.csv",
-    "*passwords*", "*.asc", "*.gpg")
+# never read, whatever the kind: every secret file (imperal_sdk.secret_mask owns the list)
+_NEVER_NAMES = SECRET_FILES
 _NEVER_PATHS = (".gnupg/", "Library/Keychains/", "Library/Application Support/Google/Chrome/",
                 "Library/Application Support/Firefox/Profiles/", "Library/Application Support/BraveSoftware/",
                 "Library/Application Support/Microsoft Edge/", "Library/Safari/", "Library/Cookies/",

@@ -59,7 +59,9 @@ MONO = {
 
 def test_monorepo_packages_exports_and_tsconfig_extends():
     lk = _lk(MONO)
-    assert set(_users(lk, "Button")) == {"apps/web/src/App.tsx"}       # @acme/ui -> exports "." -> src/index.ts
+    users = _users(lk, "Button")                                         # @acme/ui -> exports "." -> src/index.ts
+    assert set(users) == {"apps/web/src/App.tsx", "packages/ui/src/index.ts"}
+    assert users["packages/ui/src/index.ts"]["via"] == "reexport"           # the package's index re-exports it
     assert set(_users(lk, "Fancy")) == {"apps/web/src/App.tsx"}        # @acme/ui/button + its default export
     assert set(_users(lk, "boot")) == {"apps/web/src/App.tsx"}         # main dist/main.js -> src/main.ts
     assert set(_users(lk, "Store")) >= {"apps/web/src/App.tsx"}        # @ui/* from the extended tsconfig

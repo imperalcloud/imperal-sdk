@@ -11,10 +11,13 @@ import ast
 import base64
 import hashlib
 import os
+import fnmatch
 import re
 import dataclasses
 from dataclasses import asdict, dataclass, field
 from typing import Iterable
+
+from imperal_sdk.secret_mask import SECRET_FILES
 
 
 # ---- models (from webbee/intel/models.py) ----
@@ -723,11 +726,13 @@ def _lang_for(path: str) -> str:
 # 3 (2026-11-04): a blob is sent without its text -- facts with descriptions (``Def.doc``, ``BlobFacts.doc``), its
 # line hashes and size; a config as its parsed keys. The vault asks every version of an older extractor again, so the
 # text it held is replaced by the index (owner 2026-11-04: the vault holds the index, never the code)
-EXTRACTOR_VERSION = "5"
+EXTRACTOR_VERSION = "6"
 # 4 (2026-11-06): Go, Rust, Java, Kotlin, C#, PHP, Ruby carry imports and references (``code_langs``); TS/JS default
 # exports, CommonJS exports, dynamic import(); Vue / Svelte / Astro components -- every older blob is asked again
 # 5 (2026-11-13): a function held by a const inside a function (an arrow handler in a React component) is a
 # definition with its doc; a bare route decorator (@door("/x")) declares an endpoint
+# 6 (2026-11-15): a version's line count is line_count (`wc -l` plus a last line without a newline) -- versions
+# 1-5 said one line more for every file ending with a newline (field test 2026-11-14 Н3)
 MAX_FILE_BYTES = 10 * 1024 * 1024     # one file in the code index (Cloud OS: shared vault, many users)
 MAX_REPO_FILES = 20_000
 INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte",
@@ -735,8 +740,8 @@ INDEXABLE_EXT = (".py", ".pyi", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".
 # the resolution configs (read and stored parsed); setup.py is code to execute -- never read
 CONFIG_NAMES = ("pyproject.toml", "setup.cfg", "jsconfig.json", "package.json", "go.mod", "cargo.toml")
 _TSCONFIG = re.compile(r"^tsconfig(?:\.[\w.-]+)?\.json$")
-SECRET_PATTERNS = (".env*", "*.pem", "*.key", "*.crt", "id_*", "*.p12", "*.pfx", "*.kdbx",
-                   "secrets/", ".ssh/", ".aws/", ".git/")
+# what no source indexes: every secret file (imperal_sdk.secret_mask, the one owner) and a repository's own .git
+SKIP_PATTERNS = SECRET_FILES + (".git/",)
 # the client's ``service.skipped_dir`` (every dotted directory, dependency caches) and the kernel's
 # vendored-tree filter (``marathon_graph_feed._VENDOR``) merged: never the project's own code
 SKIP_DIRS = frozenset({"node_modules", "site-packages", "dist-packages", "__pycache__", "venv", "virtualenv",
@@ -764,6 +769,61 @@ def normalise_text(raw: bytes) -> str | None:
     if "\x00" in text:
         return None
     return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def text_lines(text: str) -> list:
+    """A text's lines as `wc -l` and an editor see them -- the one definition every tool uses (outline, read_symbol,
+    read_file, the index's facts and line hashes): a last line without a newline is a line, a final newline opens
+    none, a Unicode line separator is no line break. CRLF is one break (normalise_text gives LF; a raw CRLF keeps its
+    "\r" on the line)."""
+    text = str(text or "")
+    parts = text.split("\n")
+    return parts[:-1] if parts and parts[-1] == "" else parts
+
+
+def _braces(glob: str) -> list:
+    """``src/{a,b}/*.py`` -> ``src/a/*.py``, ``src/b/*.py`` (nested braces too; an unmatched brace stays literal)."""
+    depth, start = 0, -1
+    for i, c in enumerate(glob):
+        if c == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif c == "}" and depth:
+            depth -= 1
+            if depth == 0:
+                parts, d, cur = [], 0, ""
+                for ch in glob[start + 1:i]:
+                    if ch == "," and d == 0:
+                        parts.append(cur)
+                        cur = ""
+                        continue
+                    d += (ch == "{") - (ch == "}")
+                    cur += ch
+                parts.append(cur)
+                return [x for part in parts for x in _braces(glob[:start] + part + glob[i + 1:])]
+    return [glob]
+
+
+def path_matches(path: str, glob: str) -> bool:
+    """Does a repository path match a path glob as every tool reads it -- the one rule (gate 2026-11-15: five copies over
+    fnmatch, which knows no ``{a,b}`` and lets ``src/**/*.py`` miss ``src/a.py``). ``{a,b}`` alternatives; ``**/`` any
+    depth, none included; ``*`` and ``?`` as fnmatch (``*.py`` matches at any depth); case-blind like the vault."""
+    p = str(path or "").replace("\\", "/").lower()
+    p = p[2:] if p.startswith("./") else p
+    for alt in _braces(str(glob or "").replace("\\", "/").lower()):
+        alt = alt[2:] if alt.startswith("./") else alt
+        forms = {alt}
+        while any("**/" in f for f in forms):
+            forms = {g for f in forms for g in ((f.replace("**/", "", 1), f.replace("**/", "*/", 1)) if "**/" in f else (f,))}
+        if any(fnmatch.fnmatchcase(p, f) or fnmatch.fnmatchcase(p, "*/" + f) for f in forms if f):
+            return True
+    return False
+
+
+def line_count(text: str) -> int:
+    """How many lines ``text_lines`` sees (0 for an empty text)."""
+    return len(text_lines(text))
 
 
 def blob_hash(text: str) -> str:
@@ -824,7 +884,7 @@ def indexable(rel_path: str) -> str | None:
         if d.startswith(".") or d in SKIP_DIRS or d.startswith("Program Files"):
             return None
     low = name.lower()
-    if any(fnmatch.fnmatchcase(low, pat) for pat in SECRET_PATTERNS if not pat.endswith("/")):
+    if any(fnmatch.fnmatchcase(low, pat) for pat in SECRET_FILES if not pat.endswith("/")):
         return None
     if low == "setup.py":
         return None
@@ -1953,7 +2013,7 @@ def line_hash(line: str) -> str:
 
 def line_hashes(text: str) -> str:
     """Every line's ``line_hash``, concatenated (8 characters per line, ``--------`` for a blank one)."""
-    return "".join(line_hash(ln) for ln in str(text).split("\n"))
+    return "".join(line_hash(ln) for ln in text_lines(text))
 
 
 def parse_config(path: str, text: str) -> tuple:
@@ -2119,7 +2179,7 @@ def sfc_facts(path: str, text: str) -> BlobFacts | None:
         if re.search(r"\bsrc\s*=", attrs):
             continue
         blocks.append((lang, m.start(2), m.group(2)))
-    total = text.count("\n") + 1
+    total = line_count(text)
     defs = [Def(comp, comp, "class", 1, total, _first_line(text), True)]
     bindings = [Binding("default", "", comp, "default", 1)]
     refs: list = []
@@ -2205,7 +2265,7 @@ def scope_facts(path: str, text: str) -> BlobFacts | None:
         defs = sorted(sc.defs, key=lambda d: (d.start_line, d.qualname))
         strings = string_keys(lang, tree, str(text), defs, path)
         defs, file_doc = _with_docs(lang, str(text), defs)
-        facts = BlobFacts(lang=lang, lines=str(text).count("\n") + 1, defs=defs, bindings=sc.bindings,
+        facts = BlobFacts(lang=lang, lines=line_count(str(text)), defs=defs, bindings=sc.bindings,
                           refs=sc.refs, strings=strings, doc=file_doc, names=_names_of(tree, src))
         return facts
     except Exception:
@@ -2536,7 +2596,10 @@ def chunk_blob(facts: "BlobFacts | dict | None", text: str) -> list:
             for c in chunks if c.text.strip()]
 
 
-_MODEL2VEC_MODEL = "minishlab/potion-base-8M"     # 256-dim, pure-numpy static
+# The one embedder, run by the vault only (owner 2026-11-15, variant A): multilingual, int8 -- measured on Russian and
+# English code queries: top-1 8/8 vs 6/8 for potion-base-8M, 128 MB vs 512 MB float32, 0.1 ms a query
+_MODEL2VEC_MODEL = "minishlab/potion-multilingual-128M"
+_MODEL2VEC_QUANT = "int8"
 _FASTEMBED_MODEL = "BAAI/bge-small-en-v1.5"        # 384-dim, ONNX
 
 
@@ -2555,7 +2618,7 @@ def _embeddable(text) -> str:
 class Model2VecBackend:
     def __init__(self, model) -> None:
         self._m = model
-        self.model_id = f"model2vec:{_MODEL2VEC_MODEL}"
+        self.model_id = f"model2vec:{_MODEL2VEC_MODEL}:{_MODEL2VEC_QUANT}"     # vectors are keyed by it: never mixed
         self.dim = int(model.dim) if hasattr(model, "dim") else int(model.encode(["x"]).shape[1])
 
     def embed(self, texts: list):
@@ -2585,7 +2648,7 @@ class FastEmbedBackend:
 def _try_model2vec():
     try:
         from model2vec import StaticModel
-        return Model2VecBackend(StaticModel.from_pretrained(_MODEL2VEC_MODEL))
+        return Model2VecBackend(StaticModel.from_pretrained(_MODEL2VEC_MODEL, quantize_to=_MODEL2VEC_QUANT))
     except Exception:
         return None
 
@@ -2683,17 +2746,15 @@ def apply_batches(files: list, blobs: list, chunks: list, limit: int = APPLY_BAT
 
 
 def chunks_for(blob: str, facts, text: str) -> list:
-    """A blob's chunks with their vectors (base64 float32) for the vault -- every source sends its own
-    chunks, the vault never embeds; [] without the embedder."""
+    """A blob's chunks for the vault, each with its TEXT and no vector: the vault is the one embedder (owner 2026-11-15,
+    variant A -- one multilingual model in one place; the vault masks the text, embeds it and keeps only the vector,
+    never the text). [] when the blob has no chunks."""
     try:
         chunks = chunk_blob(facts, text)
-        vecs = embed([c["text"] for c in chunks]) if chunks else []
     except Exception:
         return []
-    if len(vecs) != len(chunks):
-        return []
     return [{"blob": blob, "def_qualname": c["def_qualname"], "start_line": c["start_line"],
-             "end_line": c["end_line"], "vector": base64.b64encode(v).decode("ascii")} for c, v in zip(chunks, vecs)]
+             "end_line": c["end_line"], "text": c["text"]} for c in chunks]
 
 
 async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chunks: bool = True) -> dict:
@@ -2706,9 +2767,10 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
     meta = dict(meta or {})
     meta["extractor_version"] = EXTRACTOR_VERSION
     meta.setdefault("listed_at", _time.time())
-    # a source with an embedder says so: the vault then asks, once, for the versions it holds without vectors (a
-    # repo synced by a source without one stayed "semantic: off" forever -- a held version is never sent again)
-    embed_chunks = bool(embed_chunks) and _backend() is not None
+    # a source that sends its chunks' texts says so (wire name "embeds"): the vault embeds them itself (variant A,
+    # 2026-11-15) and asks, once, for the versions it holds without vectors. No model is needed here any more -- the
+    # condition "this client has an embedder" kept every base install's code out of the vault's semantic search
+    embed_chunks = bool(embed_chunks)
     if embed_chunks:
         meta["embeds"] = True
     partial: list = []
@@ -2771,12 +2833,12 @@ async def sync_source(plan, apply, meta: dict, listing: list, read, *, embed_chu
             sent.add(h)
             e0 = _time.monotonic()
             facts = scope_facts(p, text)
-            body = facts.to_dict() if facts is not None else {"lang": "", "lines": text.count("\n") + 1}
+            body = facts.to_dict() if facts is not None else {"lang": "", "lines": line_count(text)}
             extract_ms += (_time.monotonic() - e0) * 1000
             mine = chunks_for(h, facts, text) if embed_chunks else []
             # the index of this version, never its text: facts (with descriptions), size, line hashes (a quoted line
             # is checked against them), vectors computed here (owner 2026-11-04)
-            entry = {"hash": h, "lang": body.get("lang") or "", "facts": body, "lines": text.count("\n") + 1,
+            entry = {"hash": h, "lang": body.get("lang") or "", "facts": body, "lines": line_count(text),
                      "bytes": len(text.encode("utf-8")), "line_hashes": line_hashes(text)}
             if _sent_size(entry, mine) > APPLY_BATCH_BYTES:
                 # a huge generated file (a bundle, a dump): its facts would not fit one apply -- kept as its size

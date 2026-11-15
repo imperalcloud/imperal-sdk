@@ -2,6 +2,42 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.7.0 - 2026-11-15
+
+The truth architecture (spec 2026-11-14, ICNLI §3.5, §7.2, §7.5, §7.7): the SDK is the one owner of every fact the
+kernel, the vault, imperal-mcp and webbee share -- they import it, none keeps its own copy.
+
+### Added
+- `code_index.text_lines` / `line_count`: a text's lines as `wc -l` and an editor count them -- one definition for
+  outline, read_symbol, read_file, the index's facts and line hashes (field test 2026-11-14 Н3: one line more for
+  every file ending with a newline, from `count("\n") + 1` copied into 8+ places). `EXTRACTOR_VERSION` 6.
+- `secret_mask`: the one owner of secrets. `mask(text)` gives the masked text and each mask's rule, place and length
+  (never the value, nor a hash of it); `scrub_secrets`, `scrub_file_text`, `is_secret_file`, `SECRET_FILES`. The kernel's and
+  imperal-mcp's copies had drifted (each lacked rules of the other); this is their union. A URL's scheme now stays
+  before the masked credentials (`postgres://[REDACTED]@host`).
+- `evidence`: the one record of what an agent saw -- whole and masked, addressed by `whole_ref`, its provenance
+  (executed / measured / frame / user / memory / own_write / notification), every cut written on it (`Cut`), one
+  `subject` identity -- and the six verdicts, two of them blocking (`BLOCKING`: contradicted, stated_unproven).
+- `tool_contract` (+ `schemas/tool_contract.json`): one name, description and parameter set per shell tool for Webbee
+  and imperal-mcp; `as_function_schema` (the kernel's LOCAL_TOOL_DEFS shape), `as_mcp_schema`. One name per
+  capability: `checkpoint_diff`, `checkpoint_rollback`, `grep_code`; read_file honours a window on any file;
+  state_lens' focus filters.
+
+- `secret_mask.secret_file_view` / `scrub_secret_file`: a secret file shown by its form (owner 2026-11-15) -- a
+  settings file keeps each key's name and loses every value whatever it looks like (`X=hunter2` too); a line with no
+  key and a comment are masked whole; key material (`KEY_MATERIAL`: keys, certificates, keystores, `.ssh/`) keeps
+  only its line count. `secret_file_values` + `mask_values`: a command that used a secret file loses exactly that
+  file's values (and any random-looking token: a value through base64), the rest of its output stays a fact.
+
+### Changed
+- `code_index.SECRET_PATTERNS` is split: `secret_mask.SECRET_FILES` (content is secret) and
+  `code_index.SKIP_PATTERNS` (= SECRET_FILES + `.git/`: never indexed). `.git/` is no secret.
+- `universal.view.line_count` is `code_index.line_count`; `universal.kinds` never-read names are `SECRET_FILES`.
+- `code_links.impact`: a file that imports the symbol without using it is a dependent -- a package's `__init__`
+  re-export (`via: "reexport"`) or a plain unused import (`via: "import"`), each with its binding's line (field tests
+  2026-11-13 #7, 2026-11-14 П7). The earlier "an import is no user" ruling was never the owner's.
+- `code_index.line_hashes` has one hash per line (no trailing blank entry for a final newline).
+
 ## 6.6.1 - 2026-11-14
 
 From the imperal-mcp 0.9.15 field test (report 2, 13.11).

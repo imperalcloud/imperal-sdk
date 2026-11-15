@@ -33,11 +33,13 @@ def test_a_python_module_constant_is_a_symbol_and_functions_carry_their_docstrin
 
 
 def test_an_import_alone_is_named_by_name_never_hidden():
-    # an import with no use stays no resolved user (as in the vault: test_reexport_alias_...), but impact names it
+    # an import with no use is a dependent by its binding (field test 2026-11-13 #7): a resolved row, via "import"
     from imperal_sdk.code_links import impact
     files = {"config.py": 'PANEL_ORIGIN = "https://x"\n', "onlyimport.py": "from config import PANEL_ORIGIN\n"}
     out = impact(Linker({p: scope_facts(p, t) for p, t in files.items()}), ["PANEL_ORIGIN"])
-    assert [b["path"] for b in out.get("by_name") or []] == ["onlyimport.py"]
+    rows = {i["id"]: i for i in out["data"]["items"]}
+    assert rows["onlyimport.py"]["via"] == "import" and rows["onlyimport.py"]["line"] == 1
+    assert out["by_name"] == []
 
 
 def test_a_projects_own_route_decorator_declares_an_endpoint():

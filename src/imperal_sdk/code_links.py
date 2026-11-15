@@ -777,6 +777,8 @@ def impact(linker: Linker, symbols: list, depth: int = 2) -> dict:
         frontier = nxt
         if not frontier:
             break
+    for row in binding_dependents(linker, targets, skip=set(items) | origin_files):
+        items[row["id"]] = row
     names = sorted({(q or "").rsplit(".", 1)[-1] for _, q in targets if q})
     by_name: list = []
     by_name_files: set = set()
@@ -814,6 +816,32 @@ def impact(linker: Linker, symbols: list, depth: int = 2) -> dict:
             "by_name_count": len(by_name_files), "by_name": by_name[:BY_NAME_SHOWN], "same_file": same_file,
             "resolved": resolved,
             "summary": impact_summary(symbols, resolved, len(out), len(by_name_files), len(same_file))}
+
+
+def binding_dependents(linker: "Linker", targets: list, skip: set | None = None) -> list:
+    """The files that import a target without using it -- a package's ``__init__`` re-exporting it, an
+    ``export { X } from``, or a plain unused import (field tests 2026-11-13 #7, 2026-11-14 П7; ICNLI L7 Relationship):
+    one row per file, its binding's line, ``via`` "reexport" or "import" -- never a scope user. The one rule for every
+    impact: the local answer here and the vault's (``vault_service.stores.repos.impact``)."""
+    skip = set(skip or ())
+    out: list = []
+    for path in sorted(linker.facts):
+        if path in skip:
+            continue
+        for b in linker.bindings(path):
+            if b.kind not in ("import", "reexport") or b.local_name == "*":
+                continue
+            got = linker.target(path, [b.local_name])
+            if not got or not any(got[0] == tp and (not tq or got[1] == tq or got[1].startswith(tq + "."))
+                                  for tp, tq in targets):
+                continue
+            reexport = b.kind == "reexport" or posixpath.basename(path).startswith("__init__.")
+            out.append({"id": path, "title": path, "kind": "file", "via": "reexport" if reexport else "import",
+                        "confidence": 1.0, "targets": [f"{got[0]}::{got[1]}" if got[1] else got[0]],
+                        "origin": "binding", "depth": 1, "line": b.line, "uses": got[1] or got[0], "user": "",
+                        "callers": [], "group": "tests" if is_test_path(path) else "code"})
+            break
+    return out
 
 
 def impact_summary(symbols, resolved, users: int, by_name: int, same_file: int = 0) -> str:
