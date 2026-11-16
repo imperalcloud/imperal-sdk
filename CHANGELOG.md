@@ -2,6 +2,24 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.8.0 - 2026-11-16
+
+The seven guarantees of the kernel (spec 2026-11-16), G3: no silent cut. Live 2026-11-16 a judge read 600-character
+copies ending in a bare "…" and approved a loop; the kernel kept about twenty cutters of its own beside the SDK's.
+
+### Added
+- `evidence.cut_text(text, limit, ref="", address="")`: the one place a text is cut -- the head and the tail in whole
+  lines, and between them a marker saying how many characters and lines are not shown and where the whole is
+  (`address`: the call or the path a reader opens it by). Returns `(shown, Cut | None)`.
+- `evidence.cut_marker(...)`: the one wording of that marker, for a reader that holds only parts of a whole it never
+  loaded (a window of a log).
+- `evidence.Cut`: `kept_lines`, `total_lines`, `address`; `Cut.from_dict` (reads a 6.7 record too).
+- `evidence.make_evidence(..., address="")`: the view's marker names how the whole copy is opened.
+
+### Changed
+- The marker of a cut view: `… [N of M chars (L of K lines) not shown here; the whole: <where>] …` (was
+  `… [N of M chars not shown here; the whole is kept] …`). A view is cut at line breaks.
+
 ## 6.7.1 - 2026-11-15
 
 ### Fixed
