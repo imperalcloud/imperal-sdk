@@ -758,6 +758,23 @@
     ],
     "effect": "read"
   },
+  "read_url": {
+    "description": "Read one web page as clean Markdown (the platform's web-search service).",
+    "params": {
+      "url": {
+        "type": "string",
+        "description": "The page's address."
+      }
+    },
+    "required": [
+      "url"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
   "recall": {
     "description": "Your session's exact words back from the journal: ref 'A<seq>' (one of your answers), 'U<seq>' (a user's message), 'last_answers' with n (your newest). conversation: another conversation of this user (an id search_history names); ref 'all' reads it whole. A long text comes in pages: pass the next_offset the page names. Offloaded tool output: vault_log_read.",
     "params": {
@@ -1203,6 +1220,55 @@
     "executed_by": "client",
     "shells": [
       "mcp"
+    ],
+    "effect": "read"
+  },
+  "view_image": {
+    "description": "Look at an image file of the workspace: the picture itself goes to the model, with its text when it has any.",
+    "params": {
+      "path": {
+        "type": "string",
+        "description": "The image file, relative to the workspace."
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "web_search": {
+    "description": "Search the web (the platform's web-search service). Returns titles, URLs and snippets; read a result with read_url before you state what a page says.",
+    "params": {
+      "query": {
+        "type": "string",
+        "description": "What to search for."
+      },
+      "num_results": {
+        "type": "integer",
+        "description": "How many results (1-50, default 10)."
+      },
+      "include_domains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Only results from these domains."
+      },
+      "recency_days": {
+        "type": "integer",
+        "description": "Only results of the last N days."
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "executed_by": "client",
+    "shells": [
+      "webbee"
     ],
     "effect": "read"
   },
