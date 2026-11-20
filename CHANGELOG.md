@@ -2,6 +2,15 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.8.1 - 2026-11-20
+
+The work that can wait (spec 2026-11-19): what a call does has one source for every reader of a step. Live
+2026-11-19 six `web_search` calls were accounted as changes, because no list held the name.
+
+### Added
+- The tool contract holds the tools a client answers beyond the file and shell tools: `web_search`, `read_url`,
+  `view_image` - each a read.
+
 ## 6.8.0 - 2026-11-16
 
 The seven guarantees of the kernel (spec 2026-11-16), G3: no silent cut. Live 2026-11-16 a judge read 600-character
