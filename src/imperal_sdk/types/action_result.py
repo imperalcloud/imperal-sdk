@@ -61,17 +61,24 @@ class ActionResult(Generic[T]):
     action_receipt: str | None = None
 
     def __post_init__(self) -> None:
-        if (
+        if self.needs_human is not None:
+            from imperal_sdk.types.contracts import validate_needs_human
+
+            self.needs_human = validate_needs_human(self.needs_human)
+        elif (
             self.status == "error"
-            and self.needs_human is None
             and self.error_code
         ):
             from imperal_sdk.chat.error_codes import default_needs_human_for_code
 
-            self.needs_human = default_needs_human_for_code(
+            default_nh = default_needs_human_for_code(
                 self.error_code,
                 self.error if isinstance(self.error, str) else "",
             )
+            if default_nh is not None:
+                from imperal_sdk.types.contracts import validate_needs_human
+
+                self.needs_human = validate_needs_human(default_nh)
 
     @staticmethod
     def morph(
@@ -167,7 +174,7 @@ class ActionResult(Generic[T]):
             error=error,
             retryable=retryable,
             error_code=str(code or ""),
-            needs_human=dict(needs_human) if needs_human is not None else None,
+            needs_human=needs_human,
         )
 
     def to_dict(self) -> dict:
@@ -186,9 +193,9 @@ class ActionResult(Generic[T]):
             d["error_code"] = ec
         nh = getattr(self, "needs_human", None)
         if nh is not None:
-            d["needs_human"] = (
-                nh.model_dump() if isinstance(nh, BaseModel) else dict(nh)
-            )
+            from imperal_sdk.types.contracts import validate_needs_human
+
+            d["needs_human"] = validate_needs_human(nh)
         if self.retryable:
             d["retryable"] = self.retryable
         if self.ui is not None:
@@ -207,6 +214,12 @@ class ActionResult(Generic[T]):
     def from_dict(d: dict) -> ActionResult:
         """Deserialize from dict. Data remains as plain dict."""
         raw_nh = d.get("needs_human", None)
+        if raw_nh is not None:
+            from imperal_sdk.types.contracts import validate_needs_human
+
+            validated_nh: dict[str, str] | None = validate_needs_human(raw_nh)
+        else:
+            validated_nh = None
         return ActionResult(
             status=d.get("status", "error"),
             data=d.get("data", {}),
@@ -215,7 +228,7 @@ class ActionResult(Generic[T]):
             retryable=d.get("retryable", False),
             refresh_panels=d.get("refresh_panels", None),
             error_code=str(d.get("error_code", "") or ""),
-            needs_human=dict(raw_nh) if isinstance(raw_nh, dict) else None,
+            needs_human=validated_nh,
         )
 
     def validate_against(self, model_class):

@@ -12,8 +12,10 @@ from imperal_sdk.types.health import HealthStatus
 from imperal_sdk.types.contributions import Panel, Widget, Command, ContextMenu, Setting, Theme
 from imperal_sdk.types.contracts import (
     # Cross-boundary platform payloads (v1.5.10+)
+    NEEDS_HUMAN_KINDS,
     NeedsHumanModel,
     ActionResultModel, EventModel, FunctionCallModel, ChatResultModel,
+    validate_needs_human,
     validate_action_result_dict, validate_event_dict,
     validate_function_call_dict, validate_chat_result_dict,
     get_action_result_schema, get_event_schema,
@@ -46,8 +48,10 @@ __all__ = [
     "Event", "WebhookRequest", "WebhookResponse", "HealthStatus",
     "Panel", "Widget", "Command", "ContextMenu", "Setting", "Theme",
     # Cross-boundary platform payloads (v1.5.10+)
+    "NEEDS_HUMAN_KINDS",
     "NeedsHumanModel",
     "ActionResultModel", "EventModel", "FunctionCallModel", "ChatResultModel",
+    "validate_needs_human",
     "validate_action_result_dict", "validate_event_dict",
     "validate_function_call_dict", "validate_chat_result_dict",
     "get_action_result_schema", "get_event_schema",

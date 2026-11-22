@@ -145,6 +145,10 @@ HUMAN_ACTION_ERROR_CODES: dict[str, str] = {
 }
 
 
+# Maximum length of ``needs_human["what"]`` derived from extension error text.
+NEEDS_HUMAN_WHAT_LIMIT = 500
+
+
 def default_needs_human_for_code(
     code: str,
     message: str = "",
@@ -152,6 +156,7 @@ def default_needs_human_for_code(
     """Return ``{"what": ..., "kind": ...}`` if ``code`` requires human action.
 
     Returns ``None`` for codes that do not require human intervention.
+    Extension error text is bounded with ``imperal_sdk.evidence.cut_text``.
     """
     kind = HUMAN_ACTION_ERROR_CODES.get(code)
     if kind is None:
@@ -160,12 +165,17 @@ def default_needs_human_for_code(
     if not what:
         entry = ERROR_TAXONOMY.get(code)
         what = (entry.get("default_en") if entry else None) or code
+    else:
+        from imperal_sdk.evidence import cut_text
+
+        what, _ = cut_text(what, NEEDS_HUMAN_WHAT_LIMIT)
     return {"what": what, "kind": kind}
 
 
 __all__ = [
     "ERROR_TAXONOMY",
     "HUMAN_ACTION_ERROR_CODES",
+    "NEEDS_HUMAN_WHAT_LIMIT",
     "default_needs_human_for_code",
     "VALIDATION_MISSING_FIELD",
     "VALIDATION_TYPE_ERROR",

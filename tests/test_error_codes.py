@@ -136,3 +136,36 @@ def test_human_action_error_codes_contract():
         "",
     ):
         assert default_needs_human_for_code(non_human, "details") is None
+
+
+def test_default_needs_human_cuts_long_single_and_multiline_messages():
+    from imperal_sdk.chat.error_codes import (
+        NEEDS_HUMAN_WHAT_LIMIT,
+        default_needs_human_for_code,
+    )
+    from imperal_sdk.types import ActionResult, validate_action_result_dict
+
+    long_single = "A" * (NEEDS_HUMAN_WHAT_LIMIT + 300)
+    nh_single = default_needs_human_for_code("AUTH_EXPIRED", long_single)
+    assert nh_single is not None
+    assert nh_single["kind"] == "means"
+    assert len(nh_single["what"]) <= NEEDS_HUMAN_WHAT_LIMIT
+    assert "not shown here" in nh_single["what"]
+    assert nh_single["what"].startswith("A" * 20)
+    assert nh_single["what"].endswith("A" * 20)
+
+    lines = [f"line-{i:02d}: permission detail payload for extension" for i in range(30)]
+    long_multi = "\n".join(lines)
+    assert len(long_multi) > NEEDS_HUMAN_WHAT_LIMIT
+    nh_multi = default_needs_human_for_code("PERMISSION_DENIED", long_multi)
+    assert nh_multi is not None
+    assert nh_multi["kind"] == "means"
+    assert len(nh_multi["what"]) <= NEEDS_HUMAN_WHAT_LIMIT
+    assert "not shown here" in nh_multi["what"]
+    assert "of 30 lines" in nh_multi["what"]
+    assert lines[0] in nh_multi["what"]
+    assert lines[-1] in nh_multi["what"]
+
+    ar = ActionResult.error(long_multi, code="PERMISSION_DENIED")
+    assert ar.needs_human == nh_multi
+    assert validate_action_result_dict(ar.to_dict()) == []

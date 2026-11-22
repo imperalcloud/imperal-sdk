@@ -59,6 +59,7 @@ EMIT_REFUSAL_TOOL = {
 
 REFUSAL_REASON_NEEDS_HUMAN: dict[str, str] = {
     "no_scope": "means",
+    # Unlike VALIDATION_MISSING_FIELD (fixable tool-arg error), emit_refusal(missing_params) means user-supplied facts are absent.
     "missing_params": "fact",
 }
 
@@ -80,7 +81,14 @@ class RefusalEmission:
         kind = REFUSAL_REASON_NEEDS_HUMAN.get(self.reason)
         if kind is None:
             return None
-        what = (self.user_message or "").strip() or _REFUSAL_DEFAULT_WHAT[self.reason]
+        what = (self.user_message or "").strip()
+        if not what:
+            what = _REFUSAL_DEFAULT_WHAT[self.reason]
+        else:
+            from imperal_sdk.chat.error_codes import NEEDS_HUMAN_WHAT_LIMIT
+            from imperal_sdk.evidence import cut_text
+
+            what, _ = cut_text(what, NEEDS_HUMAN_WHAT_LIMIT)
         return {"what": what, "kind": kind}
 
 

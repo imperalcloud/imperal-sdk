@@ -191,6 +191,29 @@ def test_action_result_schema_includes_needs_human_and_error_code():
     assert nh_def["properties"]["kind"]["enum"] == ["means", "fact", "decision"]
 
 
+def test_validate_needs_human_shared_helper():
+    from imperal_sdk.types.contracts import NeedsHumanModel, validate_needs_human
+
+    assert validate_needs_human({"what": "Reconnect", "kind": "means"}) == {
+        "what": "Reconnect",
+        "kind": "means",
+    }
+    assert validate_needs_human(NeedsHumanModel(what="Confirm", kind="decision")) == {
+        "what": "Confirm",
+        "kind": "decision",
+    }
+    for bad in (
+        {"what": "x", "kind": "means", "source": "kernel"},
+        {"what": "x", "kind": "means", "extra": 1},
+        {"what": "x", "kind": "other"},
+        {"what": "  ", "kind": "fact"},
+        {"what": "x"},
+        "invalid",
+    ):
+        with pytest.raises(ValueError):
+            validate_needs_human(bad)
+
+
 # === Event contract =================================================
 
 @pytest.mark.parametrize("event_type", [

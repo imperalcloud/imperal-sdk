@@ -175,3 +175,47 @@ class TestActionResultNeedsHuman:
             }
         )
         assert restored.needs_human == {"what": "2FA code required", "kind": "means"}
+
+    @pytest.mark.parametrize(
+        "bad_nh",
+        [
+            {"what": "Reconnect", "kind": "means", "source": "kernel"},
+            {"what": "Reconnect", "kind": "means", "extra": "nope"},
+            {"what": "Reconnect", "kind": "unknown_kind"},
+            {"what": "", "kind": "means"},
+            {"what": "   \n\t ", "kind": "fact"},
+            {"what": "Missing kind"},
+            {"kind": "decision"},
+            "not-a-dict",
+            ["means"],
+            123,
+        ],
+    )
+    def test_rejects_invalid_needs_human_in_dataclass_factory_and_from_dict(self, bad_nh):
+        with pytest.raises(ValueError):
+            ActionResult(status="error", error="boom", needs_human=bad_nh)  # type: ignore[arg-type]
+        with pytest.raises(ValueError):
+            ActionResult.error("boom", code="AUTH_EXPIRED", needs_human=bad_nh)  # type: ignore[arg-type]
+        with pytest.raises(ValueError):
+            ActionResult.from_dict(
+                {"status": "error", "error": "boom", "needs_human": bad_nh}
+            )
+
+    def test_to_dict_revalidates_mutated_needs_human(self):
+        r = ActionResult.error("Session expired", code="AUTH_EXPIRED")
+        r.needs_human["source"] = "extension"
+        with pytest.raises(ValueError):
+            r.to_dict()
+
+        r2 = ActionResult.error("Session expired", code="AUTH_EXPIRED")
+        r2.needs_human["kind"] = "bogus"
+        with pytest.raises(ValueError):
+            r2.to_dict()
+
+    def test_accepts_needs_human_model_instance(self):
+        from imperal_sdk.types.contracts import NeedsHumanModel
+
+        nh = NeedsHumanModel(what="Approve charge", kind="decision")
+        r = ActionResult(status="error", error="Approval required", needs_human=nh)  # type: ignore[arg-type]
+        assert r.needs_human == {"what": "Approve charge", "kind": "decision"}
+        assert r.to_dict()["needs_human"] == {"what": "Approve charge", "kind": "decision"}

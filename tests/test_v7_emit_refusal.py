@@ -39,3 +39,19 @@ def test_refusal_needs_human_mapping():
     }
     for non_human in ("already_done", "tool_unavailable", "external_error"):
         assert RefusalEmission(reason=non_human, user_message="msg").needs_human is None
+
+
+def test_refusal_needs_human_cuts_long_multiline_message():
+    from imperal_sdk.chat.error_codes import NEEDS_HUMAN_WHAT_LIMIT
+    from imperal_sdk.chat.refusal import RefusalEmission
+
+    lines = [f"step-{i:02d}: missing parameter explanation from extension" for i in range(25)]
+    msg = "\n".join(lines)
+    assert len(msg) > NEEDS_HUMAN_WHAT_LIMIT
+    nh = RefusalEmission(reason="missing_params", user_message=msg).needs_human
+    assert nh is not None
+    assert nh["kind"] == "fact"
+    assert len(nh["what"]) <= NEEDS_HUMAN_WHAT_LIMIT
+    assert "not shown here" in nh["what"]
+    assert lines[0] in nh["what"]
+    assert lines[-1] in nh["what"]

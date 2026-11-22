@@ -39,7 +39,7 @@ External tooling should prefer the committed static files at
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from pydantic import (
     BaseModel,
@@ -68,6 +68,9 @@ _IMP_TENANT_PATTERN = re.compile(r"^(imp_t_[A-Za-z0-9_]+|default|)$")
 
 # === ActionResult mirror =============================================
 
+NEEDS_HUMAN_KINDS = ("means", "fact", "decision")
+
+
 class NeedsHumanModel(BaseModel):
     """Structured marker for an obstacle only the human can resolve.
 
@@ -87,6 +90,29 @@ class NeedsHumanModel(BaseModel):
         if not v.strip():
             raise ValueError("needs_human.what must be non-empty")
         return v
+
+
+def validate_needs_human(value: Any) -> Dict[str, str]:
+    """Single canonical shape check for ``needs_human`` payloads.
+
+    Used by ``ActionResult`` (dataclass ``__post_init__``, ``from_dict``,
+    ``to_dict``) and backed by ``NeedsHumanModel`` so dataclass construction,
+    deserialization, serialization, and contract validation enforce the exact
+    same schema: ``{"what": <non-blank str>, "kind": "means" | "fact" | "decision"}``
+    with no extra keys (including ``source``, which only the kernel may attach).
+
+    Returns a fresh ``{"what": str, "kind": str}`` dict or raises ``ValueError``
+    (Pydantic ``ValidationError``, a subclass of ``ValueError``).
+    """
+    if isinstance(value, NeedsHumanModel):
+        return value.model_dump()
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            f"needs_human must be a mapping with keys 'what' and 'kind', "
+            f"got {type(value).__name__}"
+        )
+    model = NeedsHumanModel.model_validate(dict(value))
+    return model.model_dump()
 
 
 class ActionResultModel(BaseModel):
@@ -499,12 +525,14 @@ CHAT_RESULT_SCHEMA: Dict[str, Any] = get_chat_result_schema()
 
 __all__ = [
     # Models
+    "NEEDS_HUMAN_KINDS",
     "NeedsHumanModel",
     "ActionResultModel",
     "EventModel",
     "FunctionCallModel",
     "ChatResultModel",
     # Validators
+    "validate_needs_human",
     "validate_action_result_dict",
     "validate_event_dict",
     "validate_function_call_dict",
