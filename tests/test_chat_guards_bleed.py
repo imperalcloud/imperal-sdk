@@ -107,3 +107,13 @@ def test_bleed_skips_when_prior_error_has_no_error_code():
     tu.input = {"body": "VALIDATION_MISSING_FIELD"}
     prior = [{"success": False, "result": {"detail": "oops"}}]
     assert check_write_arg_bleed(tu, prior, "write") is None
+
+
+def test_bleed_blocks_new_k2_human_action_codes():
+    """New K2 codes in ERROR_TAXONOMY are also blocked from bleeding into write args."""
+    for code in ("AUTH_EXPIRED", "MFA_REQUIRED", "CONSENT_REQUIRED", "PAYMENT_REQUIRED"):
+        tu = MagicMock()
+        tu.input = {"body": f"Failed with {code}"}
+        prior = [{"success": False, "result": {"error_code": code}}]
+        reason = check_write_arg_bleed(tu, prior, "write")
+        assert reason is not None and "WRITE_ARG_BLEED" in reason

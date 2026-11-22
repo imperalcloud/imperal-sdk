@@ -16,3 +16,26 @@ def test_parse_refusal_roundtrip():
     assert isinstance(r, RefusalEmission)
     assert r.reason == "missing_params"
     assert r.next_steps == ("provide email",)
+    assert r.needs_human == {"what": "need email", "kind": "fact"}
+
+
+def test_refusal_needs_human_mapping():
+    from imperal_sdk.chat.refusal import RefusalEmission, REFUSAL_REASON_NEEDS_HUMAN
+    assert REFUSAL_REASON_NEEDS_HUMAN == {
+        "no_scope": "means",
+        "missing_params": "fact",
+    }
+    assert RefusalEmission(reason="no_scope", user_message="Grant mail.send").needs_human == {
+        "what": "Grant mail.send",
+        "kind": "means",
+    }
+    assert RefusalEmission(reason="no_scope", user_message="  ").needs_human == {
+        "what": "Required permission or scope is missing",
+        "kind": "means",
+    }
+    assert RefusalEmission(reason="missing_params", user_message="").needs_human == {
+        "what": "Required parameters must be provided",
+        "kind": "fact",
+    }
+    for non_human in ("already_done", "tool_unavailable", "external_error"):
+        assert RefusalEmission(reason=non_human, user_message="msg").needs_human is None

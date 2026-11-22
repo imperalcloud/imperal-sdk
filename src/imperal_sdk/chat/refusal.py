@@ -57,11 +57,31 @@ EMIT_REFUSAL_TOOL = {
 }
 
 
+REFUSAL_REASON_NEEDS_HUMAN: dict[str, str] = {
+    "no_scope": "means",
+    "missing_params": "fact",
+}
+
+_REFUSAL_DEFAULT_WHAT: dict[str, str] = {
+    "no_scope": "Required permission or scope is missing",
+    "missing_params": "Required parameters must be provided",
+}
+
+
 @dataclass(frozen=True, slots=True)
 class RefusalEmission:
     reason: ExtensionRefusalReason
     user_message: str
     next_steps: tuple[str, ...] = ()
+
+    @property
+    def needs_human(self) -> dict[str, str] | None:
+        """Structured human-action marker for refusal reasons only a human can resolve."""
+        kind = REFUSAL_REASON_NEEDS_HUMAN.get(self.reason)
+        if kind is None:
+            return None
+        what = (self.user_message or "").strip() or _REFUSAL_DEFAULT_WHAT[self.reason]
+        return {"what": what, "kind": kind}
 
 
 def parse_refusal_tool_use(tool_use_input: dict) -> RefusalEmission:

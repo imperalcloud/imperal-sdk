@@ -117,6 +117,80 @@ def test_AR_roundtrip_with_refresh_panels():
     assert validate_action_result_dict(ar.to_dict()) == []
 
 
+@pytest.mark.parametrize("kind", ["means", "fact", "decision"])
+def test_AR_valid_error_with_code_and_needs_human(kind):
+    payload = {
+        "status": "error",
+        "summary": "",
+        "data": {},
+        "error": "User action needed",
+        "error_code": "AUTH_EXPIRED",
+        "needs_human": {"what": "Reconnect OAuth token", "kind": kind},
+    }
+    assert validate_action_result_dict(payload) == []
+
+
+def test_AR_roundtrip_human_action_error():
+    ar = ActionResult.error("Session expired", code="AUTH_EXPIRED")
+    d = ar.to_dict()
+    assert d["error_code"] == "AUTH_EXPIRED"
+    assert d["needs_human"] == {"what": "Session expired", "kind": "means"}
+    assert validate_action_result_dict(d) == []
+
+
+def test_AR_needs_human_rejects_invalid_kind():
+    bad = {
+        "status": "error",
+        "summary": "",
+        "data": {},
+        "error": "nope",
+        "needs_human": {"what": "do something", "kind": "magic"},
+    }
+    issues = validate_action_result_dict(bad)
+    assert any("needs_human.kind" in i.message for i in issues)
+
+
+def test_AR_needs_human_rejects_blank_what():
+    bad = {
+        "status": "error",
+        "summary": "",
+        "data": {},
+        "error": "nope",
+        "needs_human": {"what": "   ", "kind": "means"},
+    }
+    issues = validate_action_result_dict(bad)
+    assert any("needs_human.what" in i.message for i in issues)
+
+
+def test_AR_needs_human_forbids_self_declared_source():
+    """Extensions must NOT smuggle `source` inside needs_human; kernel attaches it."""
+    bad = {
+        "status": "error",
+        "summary": "",
+        "data": {},
+        "error": "nope",
+        "needs_human": {"what": "approve", "kind": "decision", "source": "kernel"},
+    }
+    issues = validate_action_result_dict(bad)
+    assert any(i.rule == "AR3" and "needs_human.source" in i.message for i in issues)
+
+
+def test_AR4_success_must_not_carry_error_code():
+    bad = {"status": "success", "summary": "x", "data": {}, "error_code": "AUTH_EXPIRED"}
+    issues = validate_action_result_dict(bad)
+    assert any(i.rule == "AR4" for i in issues)
+
+
+def test_action_result_schema_includes_needs_human_and_error_code():
+    s = get_action_result_schema()
+    assert "error_code" in s["properties"]
+    assert "needs_human" in s["properties"]
+    nh_def = s["$defs"]["NeedsHumanModel"]
+    assert nh_def["additionalProperties"] is False
+    assert set(nh_def["required"]) == {"what", "kind"}
+    assert nh_def["properties"]["kind"]["enum"] == ["means", "fact", "decision"]
+
+
 # === Event contract =================================================
 
 @pytest.mark.parametrize("event_type", [

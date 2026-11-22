@@ -92,3 +92,86 @@ class TestActionResultEdgeCases:
     def test_error_has_empty_summary(self):
         r = ActionResult.error("broke")
         assert r.summary == ""
+
+
+class TestActionResultNeedsHuman:
+    @pytest.mark.parametrize(
+        "code,expected_kind",
+        [
+            ("PERMISSION_DENIED", "means"),
+            ("AUTH_EXPIRED", "means"),
+            ("MFA_REQUIRED", "means"),
+            ("CONSENT_REQUIRED", "decision"),
+            ("PAYMENT_REQUIRED", "decision"),
+        ],
+    )
+    def test_auto_marks_human_action_codes(self, code, expected_kind):
+        r = ActionResult.error("Action requires user step", code=code)
+        assert r.error_code == code
+        assert r.needs_human == {
+            "what": "Action requires user step",
+            "kind": expected_kind,
+        }
+        d = r.to_dict()
+        assert d["error_code"] == code
+        assert d["needs_human"] == {
+            "what": "Action requires user step",
+            "kind": expected_kind,
+        }
+        restored = ActionResult.from_dict(d)
+        assert restored.error_code == code
+        assert restored.needs_human == r.needs_human
+
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "",
+            "VALIDATION_MISSING_FIELD",
+            "BACKEND_TIMEOUT",
+            "BACKEND_5XX",
+            "RATE_LIMITED",
+            "INTERNAL",
+            "EXT_UNSTRUCTURED_ERROR",
+            "CUSTOM_APP_CODE",
+        ],
+    )
+    def test_does_not_auto_mark_non_human_codes(self, code):
+        r = ActionResult.error("Some error", code=code)
+        assert r.needs_human is None
+        d = r.to_dict()
+        assert "needs_human" not in d
+
+    def test_explicit_needs_human_overrides_default(self):
+        explicit = {"what": "Reconnect Gmail OAuth in Integrations", "kind": "means"}
+        r = ActionResult.error(
+            "401 Unauthorized",
+            code="AUTH_EXPIRED",
+            needs_human=explicit,
+        )
+        assert r.needs_human == explicit
+        # Mutating caller dict does not mutate ActionResult
+        explicit["what"] = "mutated"
+        assert r.needs_human["what"] == "Reconnect Gmail OAuth in Integrations"
+
+    def test_explicit_needs_human_allowed_on_custom_code(self):
+        r = ActionResult.error(
+            "Multiple projects match 'prod'",
+            code="AMBIGUOUS_PROJECT",
+            needs_human={"what": "Choose which project: prod-eu or prod-us", "kind": "decision"},
+        )
+        assert r.needs_human == {
+            "what": "Choose which project: prod-eu or prod-us",
+            "kind": "decision",
+        }
+        restored = ActionResult.from_dict(r.to_dict())
+        assert restored.needs_human == r.needs_human
+
+    def test_from_dict_auto_marks_when_human_code_present_without_needs_human(self):
+        restored = ActionResult.from_dict(
+            {
+                "status": "error",
+                "error": "2FA code required",
+                "error_code": "MFA_REQUIRED",
+            }
+        )
+        assert restored.needs_human == {"what": "2FA code required", "kind": "means"}

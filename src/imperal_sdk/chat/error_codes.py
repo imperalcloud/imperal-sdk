@@ -37,6 +37,10 @@ FABRICATED_ID_SHAPE = "FABRICATED_ID_SHAPE"
 UNKNOWN_TOOL = "UNKNOWN_TOOL"
 UNKNOWN_SUB_FUNCTION = "UNKNOWN_SUB_FUNCTION"
 PERMISSION_DENIED = "PERMISSION_DENIED"
+AUTH_EXPIRED = "AUTH_EXPIRED"
+MFA_REQUIRED = "MFA_REQUIRED"
+CONSENT_REQUIRED = "CONSENT_REQUIRED"
+PAYMENT_REQUIRED = "PAYMENT_REQUIRED"
 BACKEND_TIMEOUT = "BACKEND_TIMEOUT"
 BACKEND_5XX = "BACKEND_5XX"
 RATE_LIMITED = "RATE_LIMITED"
@@ -75,6 +79,26 @@ ERROR_TAXONOMY: dict[str, dict[str, str]] = {
         "default_en": "Permission denied for this action",
         "default_ru": "Нет прав на это действие",
     },
+    "AUTH_EXPIRED": {
+        "user_hint_i18n_key": "errors.auth.expired",
+        "default_en": "Authentication has expired; please reconnect the account",
+        "default_ru": "Авторизация истекла; переподключите аккаунт",
+    },
+    "MFA_REQUIRED": {
+        "user_hint_i18n_key": "errors.auth.mfa_required",
+        "default_en": "Multi-factor verification is required to continue",
+        "default_ru": "Для продолжения требуется двухфакторная проверка",
+    },
+    "CONSENT_REQUIRED": {
+        "user_hint_i18n_key": "errors.auth.consent_required",
+        "default_en": "Explicit approval is required before performing this action",
+        "default_ru": "Для выполнения этого действия требуется явное подтверждение",
+    },
+    "PAYMENT_REQUIRED": {
+        "user_hint_i18n_key": "errors.billing.payment_required",
+        "default_en": "Payment or plan upgrade is required to continue",
+        "default_ru": "Для продолжения требуется оплата или обновление тарифа",
+    },
     "BACKEND_TIMEOUT": {
         "user_hint_i18n_key": "errors.backend.timeout",
         "default_en": "The backend service timed out; please retry",
@@ -108,14 +132,51 @@ ERROR_TAXONOMY: dict[str, dict[str, str]] = {
 }
 
 
+# Error codes that ONLY the human can resolve — auto-marked as ``needs_human``
+# by ActionResult when emitted. Every other code (validation, transient backend
+# errors, unknown tool, EXT_UNSTRUCTURED_ERROR) is NOT auto-marked here: the
+# model, retries, or the platform handles them without guessing from prose.
+HUMAN_ACTION_ERROR_CODES: dict[str, str] = {
+    PERMISSION_DENIED: "means",
+    AUTH_EXPIRED: "means",
+    MFA_REQUIRED: "means",
+    CONSENT_REQUIRED: "decision",
+    PAYMENT_REQUIRED: "decision",
+}
+
+
+def default_needs_human_for_code(
+    code: str,
+    message: str = "",
+) -> dict[str, str] | None:
+    """Return ``{"what": ..., "kind": ...}`` if ``code`` requires human action.
+
+    Returns ``None`` for codes that do not require human intervention.
+    """
+    kind = HUMAN_ACTION_ERROR_CODES.get(code)
+    if kind is None:
+        return None
+    what = (message or "").strip()
+    if not what:
+        entry = ERROR_TAXONOMY.get(code)
+        what = (entry.get("default_en") if entry else None) or code
+    return {"what": what, "kind": kind}
+
+
 __all__ = [
     "ERROR_TAXONOMY",
+    "HUMAN_ACTION_ERROR_CODES",
+    "default_needs_human_for_code",
     "VALIDATION_MISSING_FIELD",
     "VALIDATION_TYPE_ERROR",
     "FABRICATED_ID_SHAPE",
     "UNKNOWN_TOOL",
     "UNKNOWN_SUB_FUNCTION",
     "PERMISSION_DENIED",
+    "AUTH_EXPIRED",
+    "MFA_REQUIRED",
+    "CONSENT_REQUIRED",
+    "PAYMENT_REQUIRED",
     "BACKEND_TIMEOUT",
     "BACKEND_5XX",
     "RATE_LIMITED",

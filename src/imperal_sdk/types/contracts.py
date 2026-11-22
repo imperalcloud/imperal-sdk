@@ -68,6 +68,27 @@ _IMP_TENANT_PATTERN = re.compile(r"^(imp_t_[A-Za-z0-9_]+|default|)$")
 
 # === ActionResult mirror =============================================
 
+class NeedsHumanModel(BaseModel):
+    """Structured marker for an obstacle only the human can resolve.
+
+    ``source`` is intentionally omitted here — the kernel attaches the
+    authoritative origin at the dispatch boundary and quotes ``what``
+    to the human without trusting self-declared sources.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    what: str = Field(..., min_length=1)
+    kind: Literal["means", "fact", "decision"]
+
+    @field_validator("what")
+    @classmethod
+    def _what_non_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("needs_human.what must be non-empty")
+        return v
+
+
 class ActionResultModel(BaseModel):
     """Pydantic contract for `ActionResult.to_dict()` output.
 
@@ -82,6 +103,8 @@ class ActionResultModel(BaseModel):
     summary: str = ""
     data: Dict[str, Any] = Field(default_factory=dict)
     error: Optional[str] = None
+    error_code: Optional[str] = None
+    needs_human: Optional[NeedsHumanModel] = None
     retryable: bool = False
     ui: Optional[Dict[str, Any]] = None
     refresh_panels: Optional[List[str]] = None
@@ -103,6 +126,10 @@ class ActionResultModel(BaseModel):
             raise ValueError(
                 "status='success' must not carry an 'error' field "
                 "(factory: ActionResult.success(...))"
+            )
+        if self.status == "success" and self.error_code:
+            raise ValueError(
+                "status='success' must not carry an 'error_code' field"
             )
         return self
 
@@ -472,6 +499,7 @@ CHAT_RESULT_SCHEMA: Dict[str, Any] = get_chat_result_schema()
 
 __all__ = [
     # Models
+    "NeedsHumanModel",
     "ActionResultModel",
     "EventModel",
     "FunctionCallModel",

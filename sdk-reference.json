@@ -81,6 +81,15 @@
           }
         },
         {
+          "annotation": "dict[str, str] | None",
+          "default": null,
+          "name": "needs_human",
+          "required": false,
+          "type": {
+            "ref": "dict[str, str] | None"
+          }
+        },
+        {
           "annotation": "Any | None",
           "default": null,
           "name": "undo",

@@ -37,13 +37,19 @@ except ImportError:  # pragma: no cover — defensive
     ERROR_TAXONOMY = frozenset({
         "VALIDATION_MISSING_FIELD",
         "VALIDATION_TYPE_ERROR",
+        "FABRICATED_ID_SHAPE",
         "UNKNOWN_TOOL",
         "UNKNOWN_SUB_FUNCTION",
         "PERMISSION_DENIED",
+        "AUTH_EXPIRED",
+        "MFA_REQUIRED",
+        "CONSENT_REQUIRED",
+        "PAYMENT_REQUIRED",
         "BACKEND_TIMEOUT",
         "BACKEND_5XX",
         "RATE_LIMITED",
         "INTERNAL",
+        "EXT_UNSTRUCTURED_ERROR",
     })
 
 log = logging.getLogger(__name__)

@@ -1,4 +1,32 @@
 {
+  "$defs": {
+    "NeedsHumanModel": {
+      "additionalProperties": false,
+      "description": "Structured marker for an obstacle only the human can resolve.\n\n``source`` is intentionally omitted here \u2014 the kernel attaches the\nauthoritative origin at the dispatch boundary and quotes ``what``\nto the human without trusting self-declared sources.",
+      "properties": {
+        "what": {
+          "minLength": 1,
+          "title": "What",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "means",
+            "fact",
+            "decision"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "what",
+        "kind"
+      ],
+      "title": "NeedsHumanModel",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "description": "Canonical return-value contract for every @chat.function. Produced by `ActionResult.to_dict()`; consumed by the Imperal kernel executor, Temporal activity history, automation template resolver, and SSE delivery.",
   "properties": {
@@ -31,6 +59,29 @@
       ],
       "default": null,
       "title": "Error"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "needs_human": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NeedsHumanModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "retryable": {
       "default": false,

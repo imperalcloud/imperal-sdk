@@ -50,10 +50,28 @@ class ActionResult(Generic[T]):
     # the user MUST carry a stable code; a code-less error is stamped
     # EXT_UNSTRUCTURED_ERROR by the kernel at the dispatch boundary.
     error_code: str = ""
+    # Structured marker when resolution requires the human (not the model or
+    # retries): ``{"what": str, "kind": "means" | "fact" | "decision"}``.
+    # Auto-populated for codes in ``HUMAN_ACTION_ERROR_CODES``; extensions may
+    # also set it explicitly with a more specific ``what``.
+    needs_human: dict[str, str] | None = None
     # Unified Action Ledger & Time-Travel (Point 2: undo / diff / receipt)
     undo: Any | None = None
     diff: dict[str, Any] | None = None
     action_receipt: str | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            self.status == "error"
+            and self.needs_human is None
+            and self.error_code
+        ):
+            from imperal_sdk.chat.error_codes import default_needs_human_for_code
+
+            self.needs_human = default_needs_human_for_code(
+                self.error_code,
+                self.error if isinstance(self.error, str) else "",
+            )
 
     @staticmethod
     def morph(
@@ -115,7 +133,13 @@ class ActionResult(Generic[T]):
         )
 
     @staticmethod
-    def error(error: str, retryable: bool = False, *, code: str = "") -> ActionResult:
+    def error(
+        error: str,
+        retryable: bool = False,
+        *,
+        code: str = "",
+        needs_human: dict[str, str] | None = None,
+    ) -> ActionResult:
         """Create an error result.
 
         Args:
@@ -128,10 +152,22 @@ class ActionResult(Generic[T]):
                 what the platform taxonomy, self-diagnosis and honest
                 narration key on. A code-less error is stamped
                 ``EXT_UNSTRUCTURED_ERROR`` by the kernel.
+            needs_human: Optional structured marker
+                ``{"what": str, "kind": "means" | "fact" | "decision"}``
+                when only the human can resolve the error. When omitted,
+                automatically populated for error codes in
+                ``HUMAN_ACTION_ERROR_CODES`` (e.g. ``PERMISSION_DENIED``,
+                ``AUTH_EXPIRED``, ``MFA_REQUIRED``, ``CONSENT_REQUIRED``,
+                ``PAYMENT_REQUIRED``).
         """
         return ActionResult(
-            status="error", data={}, summary="", error=error,
-            retryable=retryable, error_code=str(code or ""),
+            status="error",
+            data={},
+            summary="",
+            error=error,
+            retryable=retryable,
+            error_code=str(code or ""),
+            needs_human=dict(needs_human) if needs_human is not None else None,
         )
 
     def to_dict(self) -> dict:
@@ -148,6 +184,11 @@ class ActionResult(Generic[T]):
         ec = getattr(self, "error_code", "")
         if ec and isinstance(ec, str):
             d["error_code"] = ec
+        nh = getattr(self, "needs_human", None)
+        if nh is not None:
+            d["needs_human"] = (
+                nh.model_dump() if isinstance(nh, BaseModel) else dict(nh)
+            )
         if self.retryable:
             d["retryable"] = self.retryable
         if self.ui is not None:
@@ -165,6 +206,7 @@ class ActionResult(Generic[T]):
     @staticmethod
     def from_dict(d: dict) -> ActionResult:
         """Deserialize from dict. Data remains as plain dict."""
+        raw_nh = d.get("needs_human", None)
         return ActionResult(
             status=d.get("status", "error"),
             data=d.get("data", {}),
@@ -172,6 +214,8 @@ class ActionResult(Generic[T]):
             error=d.get("error", None),
             retryable=d.get("retryable", False),
             refresh_panels=d.get("refresh_panels", None),
+            error_code=str(d.get("error_code", "") or ""),
+            needs_human=dict(raw_nh) if isinstance(raw_nh, dict) else None,
         )
 
     def validate_against(self, model_class):
