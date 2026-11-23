@@ -48,11 +48,15 @@ class FunctionCall:
 
     @staticmethod
     def from_dict(d: dict) -> FunctionCall:
+        from collections.abc import Mapping
         from imperal_sdk.types.action_result import ActionResult
 
         result = None
-        if d.get("result"):
-            result = ActionResult.from_dict(d["result"])
+        raw_result = d.get("result")
+        if isinstance(raw_result, ActionResult):
+            result = raw_result
+        elif isinstance(raw_result, Mapping) and raw_result:
+            result = ActionResult.from_dict(raw_result)
         return FunctionCall(
             name=d.get("name", ""),
             params=d.get("params", {}),

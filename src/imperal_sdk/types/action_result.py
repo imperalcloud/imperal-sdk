@@ -212,15 +212,29 @@ class ActionResult(Generic[T]):
 
     @staticmethod
     def from_dict(d: dict) -> ActionResult:
-        """Deserialize from dict. Data remains as plain dict."""
+        """Deserialize from a wire dict without throwing on kernel metadata or bad shapes.
+
+        Kernel boundaries stamp ``needs_human`` with authoritative metadata
+        (``source``, ``trusted``). ``from_dict`` extracts the canonical
+        ``{"what", "kind"}`` pair and turns malformed ``needs_human`` values
+        into ``None`` instead of raising ``ValidationError``. Strict validation
+        remains enforced on creation (``ActionResult(...)``, ``.error()``) and
+        emission (``.to_dict()``).
+        """
+        from collections.abc import Mapping
+
+        if not isinstance(d, Mapping):
+            return ActionResult(status="error", error="Invalid ActionResult payload")
+
         raw_nh = d.get("needs_human", None)
         if raw_nh is not None:
-            from imperal_sdk.types.contracts import validate_needs_human
+            from imperal_sdk.types.contracts import parse_needs_human_wire
 
-            validated_nh: dict[str, str] | None = validate_needs_human(raw_nh)
+            parsed_nh: dict[str, str] | None = parse_needs_human_wire(raw_nh)
         else:
-            validated_nh = None
-        return ActionResult(
+            parsed_nh = None
+
+        res = ActionResult(
             status=d.get("status", "error"),
             data=d.get("data", {}),
             summary=d.get("summary", ""),
@@ -228,8 +242,13 @@ class ActionResult(Generic[T]):
             retryable=d.get("retryable", False),
             refresh_panels=d.get("refresh_panels", None),
             error_code=str(d.get("error_code", "") or ""),
-            needs_human=validated_nh,
+            needs_human=parsed_nh,
         )
+        # If an explicit needs_human was present on the wire but malformed,
+        # keep it None rather than silently re-synthesizing from error_code.
+        if raw_nh is not None and parsed_nh is None:
+            res.needs_human = None
+        return res
 
     def validate_against(self, model_class):
         """Validate ``self.data`` against a Pydantic ``BaseModel`` class.

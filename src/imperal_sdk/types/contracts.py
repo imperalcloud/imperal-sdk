@@ -93,13 +93,18 @@ class NeedsHumanModel(BaseModel):
 
 
 def validate_needs_human(value: Any) -> Dict[str, str]:
-    """Single canonical shape check for ``needs_human`` payloads.
+    """Single canonical shape check for ``needs_human`` payloads on emission.
 
-    Used by ``ActionResult`` (dataclass ``__post_init__``, ``from_dict``,
-    ``to_dict``) and backed by ``NeedsHumanModel`` so dataclass construction,
-    deserialization, serialization, and contract validation enforce the exact
-    same schema: ``{"what": <non-blank str>, "kind": "means" | "fact" | "decision"}``
-    with no extra keys (including ``source``, which only the kernel may attach).
+    Used by ``ActionResult`` (dataclass ``__post_init__``, ``to_dict``) and
+    backed by ``NeedsHumanModel`` so dataclass construction, serialization,
+    and contract validation enforce the exact same strict schema:
+    ``{"what": <non-blank str>, "kind": "means" | "fact" | "decision"}``
+    with no extra keys (including ``source`` / ``trusted``, which only the
+    kernel may attach at its boundary).
+
+    For reading wire payloads that may already have crossed the kernel
+    boundary (carrying ``source`` / ``trusted``) or may be malformed, use
+    :func:`parse_needs_human_wire` instead — wire readers never raise.
 
     Returns a fresh ``{"what": str, "kind": str}`` dict or raises ``ValueError``
     (Pydantic ``ValidationError``, a subclass of ``ValueError``).
@@ -113,6 +118,33 @@ def validate_needs_human(value: Any) -> Dict[str, str]:
         )
     model = NeedsHumanModel.model_validate(dict(value))
     return model.model_dump()
+
+
+def parse_needs_human_wire(value: Any) -> Optional[Dict[str, str]]:
+    """Non-throwing wire reader for ``needs_human`` payloads.
+
+    Accepts both extension-emitted ``{"what", "kind"}`` dicts and
+    kernel-stamped dicts carrying boundary metadata (such as ``source`` and
+    ``trusted`` added by ``sanitize_untrusted_result``). Extracts only the
+    canonical ``{"what": str, "kind": str}`` pair so re-serialization via
+    ``ActionResult.to_dict()`` remains contract-clean and kernel trust stamps
+    never leak into SDK objects.
+
+    Returns ``None`` on any malformed input — never raises.
+    """
+    if value is None:
+        return None
+    if isinstance(value, NeedsHumanModel):
+        return value.model_dump()
+    if not isinstance(value, Mapping):
+        return None
+    what = value.get("what")
+    kind = value.get("kind")
+    if not isinstance(what, str) or not what.strip():
+        return None
+    if not isinstance(kind, str) or kind not in NEEDS_HUMAN_KINDS:
+        return None
+    return {"what": what, "kind": kind}
 
 
 class ActionResultModel(BaseModel):
@@ -533,6 +565,7 @@ __all__ = [
     "ChatResultModel",
     # Validators
     "validate_needs_human",
+    "parse_needs_human_wire",
     "validate_action_result_dict",
     "validate_event_dict",
     "validate_function_call_dict",

@@ -101,3 +101,57 @@ class TestChatResultToDict:
         assert restored.response == r.response
         assert restored.handled == r.handled
         assert restored.message_type == r.message_type
+
+    def test_from_dict_accepts_kernel_sanitized_needs_human_in_function_calls(self):
+        """ChatResult.from_dict -> FunctionCall.from_dict -> ActionResult.from_dict
+        must not raise when the kernel has stamped source/trusted onto needs_human."""
+        ar = ActionResult.error("token expired", code="AUTH_EXPIRED")
+        fc = FunctionCall(
+            name="check_inbox",
+            params={},
+            action_type="read",
+            success=False,
+            result=ar,
+        )
+        wire = ChatResult(
+            response="Reconnect mailbox",
+            handled=True,
+            functions_called=[fc],
+            message_type="function_call",
+        ).to_dict()
+        # Simulate kernel sanitize_untrusted_result stamping source & trusted
+        wire["_functions_called"][0]["result"]["needs_human"].update(
+            {"source": "tool:mail.check_inbox", "trusted": False}
+        )
+
+        restored = ChatResult.from_dict(wire)
+        assert len(restored.functions_called) == 1
+        restored_ar = restored.functions_called[0].result
+        assert restored_ar is not None
+        assert restored_ar.error_code == "AUTH_EXPIRED"
+        assert restored_ar.needs_human == {"what": "token expired", "kind": "means"}
+
+    def test_from_dict_survives_malformed_needs_human_in_function_call(self):
+        wire = {
+            "response": "Failed",
+            "_handled": True,
+            "_functions_called": [
+                {
+                    "name": "send",
+                    "params": {},
+                    "action_type": "write",
+                    "success": True,
+                    "event": "mail.sent",
+                    "result": {
+                        "status": "success",
+                        "summary": "sent",
+                        "data": {},
+                        "needs_human": {"what": "   ", "kind": "bogus"},
+                    },
+                }
+            ],
+        }
+        restored = ChatResult.from_dict(wire)
+        assert restored.functions_called[0].result is not None
+        assert restored.functions_called[0].result.status == "success"
+        assert restored.functions_called[0].result.needs_human is None

@@ -180,6 +180,7 @@ class TestActionResultNeedsHuman:
         "bad_nh",
         [
             {"what": "Reconnect", "kind": "means", "source": "kernel"},
+            {"what": "Reconnect", "kind": "means", "trusted": True},
             {"what": "Reconnect", "kind": "means", "extra": "nope"},
             {"what": "Reconnect", "kind": "unknown_kind"},
             {"what": "", "kind": "means"},
@@ -191,15 +192,61 @@ class TestActionResultNeedsHuman:
             123,
         ],
     )
-    def test_rejects_invalid_needs_human_in_dataclass_factory_and_from_dict(self, bad_nh):
+    def test_rejects_invalid_needs_human_in_dataclass_and_factory(self, bad_nh):
         with pytest.raises(ValueError):
             ActionResult(status="error", error="boom", needs_human=bad_nh)  # type: ignore[arg-type]
         with pytest.raises(ValueError):
             ActionResult.error("boom", code="AUTH_EXPIRED", needs_human=bad_nh)  # type: ignore[arg-type]
-        with pytest.raises(ValueError):
-            ActionResult.from_dict(
-                {"status": "error", "error": "boom", "needs_human": bad_nh}
-            )
+
+    @pytest.mark.parametrize("trusted", [False, True])
+    def test_from_dict_accepts_kernel_stamped_needs_human_wire_payload(self, trusted):
+        """Wire payloads stamped by the kernel (source/trusted) deserialize without raising."""
+        d = ActionResult.error("token expired", code="AUTH_EXPIRED").to_dict()
+        d["needs_human"] = {
+            **d["needs_human"],
+            "source": "tool:mail.inbox",
+            "trusted": trusted,
+        }
+        restored = ActionResult.from_dict(d)
+        assert restored.status == "error"
+        assert restored.error_code == "AUTH_EXPIRED"
+        assert restored.needs_human == {"what": "token expired", "kind": "means"}
+        # Re-serialization stays strictly contract-clean (no kernel metadata leaked)
+        out = restored.to_dict()
+        assert out["needs_human"] == {"what": "token expired", "kind": "means"}
+        from imperal_sdk.types.contracts import validate_action_result_dict
+
+        assert validate_action_result_dict(out) == []
+
+    @pytest.mark.parametrize(
+        "bad_nh",
+        [
+            {"what": "Reconnect", "kind": "unknown_kind"},
+            {"what": "", "kind": "means"},
+            {"what": "   \n\t ", "kind": "fact"},
+            {"what": 123, "kind": "means"},
+            {"what": "Missing kind"},
+            {"kind": "decision"},
+            "not-a-dict",
+            ["means"],
+            123,
+        ],
+    )
+    def test_from_dict_turns_malformed_needs_human_into_none_without_raising(self, bad_nh):
+        restored = ActionResult.from_dict(
+            {"status": "error", "error": "boom", "needs_human": bad_nh}
+        )
+        assert restored.needs_human is None
+        # Even with a human-action error_code, an explicit malformed needs_human becomes None
+        restored_coded = ActionResult.from_dict(
+            {
+                "status": "error",
+                "error": "boom",
+                "error_code": "AUTH_EXPIRED",
+                "needs_human": bad_nh,
+            }
+        )
+        assert restored_coded.needs_human is None
 
     def test_to_dict_revalidates_mutated_needs_human(self):
         r = ActionResult.error("Session expired", code="AUTH_EXPIRED")
