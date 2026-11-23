@@ -2,6 +2,27 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.9.0 - 2026-11-23
+
+A refusal that only the person can lift says so by structure (slice K2 of the 2026-11-19 marathon audit): the
+kernel no longer has to read it out of the error text.
+
+### Added
+- `ActionResult.needs_human` - `{"what": str, "kind": "means" | "fact" | "decision"}`, in the dataclass, the
+  Pydantic contract (`NeedsHumanModel`, `validate_needs_human`) and `action_result.schema.json`. No `source` key:
+  the kernel names the source at its own boundary and passes `what` to the person as a quote.
+- Error codes `AUTH_EXPIRED`, `MFA_REQUIRED`, `CONSENT_REQUIRED`, `PAYMENT_REQUIRED`, and
+  `HUMAN_ACTION_ERROR_CODES` - the codes only the person can resolve (with `PERMISSION_DENIED`). An error result
+  with one of them carries `needs_human` by itself; `ActionResult.error(..., needs_human=...)` sets a more exact one.
+- `RefusalEmission.needs_human` for the refusal reasons `no_scope` and `missing_params`.
+- `ActionResult.from_dict` keeps `error_code` and `needs_human`, and never raises on what came over the wire: a
+  result that crossed the kernel boundary carries `source` and `trusted` beside `what` and `kind`; the reader
+  (`parse_needs_human_wire`) takes the two keys of the contract and reads a broken shape as none. The strict
+  check stays where a result is made (`ActionResult(...)`, `.error()`, `.to_dict()`).
+
+### Changed
+- `ActionResultModel` refuses `status="success"` with an `error_code`.
+
 ## 6.8.1 - 2026-11-20
 
 The work that can wait (spec 2026-11-19): what a call does has one source for every reader of a step. Live
