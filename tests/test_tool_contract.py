@@ -47,4 +47,15 @@ def test_every_tool_has_one_effect():
     assert effects <= {"read", "write", "run", "snapshot"}
     assert {"read_file", "grep_code", "checkpoint_diff", "outline"} <= names_by_effect("read", "webbee")
     assert {"write_file", "edit_file", "checkpoint_rollback"} <= names_by_effect("write", "webbee")
-    assert names_by_effect("run") == {"bash"} and names_by_effect("snapshot") == {"checkpoint"}
+    # a tool that carries a command is judged by what it runs, wherever it runs (job_start: on a machine of the account)
+    assert names_by_effect("run") == {"bash", "job_start"} and names_by_effect("snapshot") == {"checkpoint"}
+    assert names_by_effect("run", executed_by="client") == {"bash"}
+
+
+def test_session_jobs_are_kernel_tools_of_one_shape():
+    # a long command runs as a job of the session: started and ended through the kernel, watched by it (2026-11-25)
+    for name, effect in (("job_start", "run"), ("job_status", "read"), ("job_cancel", "write")):
+        t = tool(name)
+        assert t.executed_by == "kernel" and t.shells == frozenset({"webbee"}) and t.effect == effect, name
+    assert tool("job_start").required == ("connection_id", "command", "title")
+    assert tool("job_cancel").required == ("id",) and tool("job_status").required == ()

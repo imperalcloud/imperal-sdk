@@ -1291,5 +1291,64 @@
       "webbee"
     ],
     "effect": "write"
+  },
+  "job_start": {
+    "description": "Start a long command on one of the account's machines as a JOB of this session and return at once with its id: the turn is not held while it runs (a full test run, a build, a migration). The command starts through the same door as any command on that machine (the same question to the person when one is due). The kernel watches the job: its state stays in every step's frame, job_status reads it, job_cancel ends it, and when it ends -- any outcome -- this session is told with the exit code and the end of its output. Use it for work longer than one call may hold; a short command stays an ordinary command.",
+    "params": {
+      "connection_id": {
+        "type": "string",
+        "description": "The machine it runs on: a connection id of the account (conn-ssh list_targets names them)."
+      },
+      "command": {
+        "type": "string",
+        "description": "The command, as you would run it there (one shell line; its output goes to the job's log)."
+      },
+      "title": {
+        "type": "string",
+        "description": "What the job is, in a few words -- how the frame and the report name it."
+      }
+    },
+    "required": [
+      "connection_id",
+      "command",
+      "title"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "run"
+  },
+  "job_status": {
+    "description": "The jobs of this session as the kernel holds them: each with its state (running / done / failed / cancelled / lost), how long it runs, its exit code when it ended and the end of its output. With id: that one job and a fresh read of its log.",
+    "params": {
+      "id": {
+        "type": "string",
+        "description": "A job's id (job_start gave it); empty: every job of this session."
+      }
+    },
+    "required": [],
+    "executed_by": "kernel",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "read"
+  },
+  "job_cancel": {
+    "description": "End a running job of this session: its processes are stopped on its machine (through the same door as any command there) and the session is told when it has ended.",
+    "params": {
+      "id": {
+        "type": "string",
+        "description": "The job's id (job_start gave it; job_status lists them)."
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "executed_by": "kernel",
+    "shells": [
+      "webbee"
+    ],
+    "effect": "write"
   }
 }
