@@ -2,6 +2,18 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.10.0 - 2026-11-25
+
+A long command runs as a job of the session: the shell starts it and goes on, the kernel watches it and tells the
+session when it ended (owner 2026-11-25: a full test run must not hold a turn, and the session controls it fully).
+
+### Added
+- Tool contract (`schemas/tool_contract.json`): `job_start` (`connection_id`, `command`, `title`), `job_status`
+  (`id`, optional) and `job_cancel` (`id`) - answered by the kernel, for the `webbee` shell.
+- `job_start` has the effect `run`: a tool that carries a command is judged by what it runs, wherever it runs.
+  `names_by_effect("run")` is now `{"bash", "job_start"}`; with `executed_by="client"` it stays `{"bash"}`, so a
+  client that lists the commands it runs itself is unchanged.
+
 ## 6.9.0 - 2026-11-23
 
 A refusal that only the person can lift says so by structure (slice K2 of the 2026-11-19 marathon audit): the
