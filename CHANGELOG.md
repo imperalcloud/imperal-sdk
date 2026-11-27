@@ -2,6 +2,17 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.11.0 - 2026-11-27
+
+A job of a session on its machine has one owner of its format (one-loop plan, rule 8: a command in the background
+on the person's own machine, not only on a server of the account).
+
+### Added
+- `imperal_sdk.session_jobs`: the job's folder (`job_dir`, `local_dir`, `job_of_dir`, `session_part`), the three
+  shell lines (`start_line`, `poll_line`, `cancel_line`), the reading of a poll (`read_poll`), the states and the
+  pacing of a watch. Moved from the kernel as they were: the kernel writes the lines and reads the poll, the
+  client runs the same lines on its own machine - no copy of a shell line anywhere else.
+
 ## 6.10.1 - 2026-11-27
 
 The link table of a repository is built in time linear in its size. Live 2026-11-27 (the stall file of a terminal
