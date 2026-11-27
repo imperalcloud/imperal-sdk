@@ -2,6 +2,14 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.14.0 - 2026-11-27
+
+### Changed
+- Tool contract: `bash` and `job_start` say when to wait and when not to. `bash` is for a command whose result
+  the step needs now; what need not be waited for - a test run, a build, a deploy, a wait - and several things at
+  once go to `job_start`. The wording that offered a long command a `timeout` of up to an hour as the way to run
+  it is gone: on the person's own machine a command that outlasts its wait runs on as a job (webbee 0.7.34).
+
 ## 6.13.0 - 2026-11-27
 
 ### Added
