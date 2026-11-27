@@ -2,6 +2,12 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.12.0 - 2026-11-27
+
+### Changed
+- Tool contract: `job_start` no longer requires `connection_id`. With none the job runs on the person's own
+  machine - the one the terminal runs on (one-loop plan, rule 8). `command` and `title` stay required.
+
 ## 6.11.1 - 2026-11-27
 
 ### Fixed

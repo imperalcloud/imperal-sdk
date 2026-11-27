@@ -57,5 +57,7 @@ def test_session_jobs_are_kernel_tools_of_one_shape():
     for name, effect in (("job_start", "run"), ("job_status", "read"), ("job_cancel", "write")):
         t = tool(name)
         assert t.executed_by == "kernel" and t.shells == frozenset({"webbee"}) and t.effect == effect, name
-    assert tool("job_start").required == ("connection_id", "command", "title")
+    # the machine is optional (6.12.0): no connection_id is the person's own machine, where the terminal runs
+    assert tool("job_start").required == ("command", "title")
+    assert "connection_id" in tool("job_start").params
     assert tool("job_cancel").required == ("id",) and tool("job_status").required == ()

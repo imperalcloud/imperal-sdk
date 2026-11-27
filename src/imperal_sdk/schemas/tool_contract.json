@@ -1293,11 +1293,11 @@
     "effect": "write"
   },
   "job_start": {
-    "description": "Start a long command on one of the account's machines as a JOB of this session and return at once with its id: the turn is not held while it runs (a full test run, a build, a migration). The command starts through the same door as any command on that machine (the same question to the person when one is due). The kernel watches the job: its state stays in every step's frame, job_status reads it, job_cancel ends it, and when it ends -- any outcome -- this session is told with the exit code and the end of its output. Use it for work longer than one call may hold; a short command stays an ordinary command.",
+    "description": "Start a long command as a JOB of this session and return at once with its id: the turn is not held while it runs (a full test run, a build, a migration). It runs on one of the account's machines (connection_id) or, with no connection_id, on the person's own machine -- the one this terminal runs on. The command starts through the same door as any command on that machine (the same question to the person when one is due). The job is watched: its state stays in every step's frame, job_status reads it, job_cancel ends it, and when it ends -- any outcome -- this session is told with the exit code and the end of its output. Use it for work longer than one call may hold; a short command stays an ordinary command.",
     "params": {
       "connection_id": {
         "type": "string",
-        "description": "The machine it runs on: a connection id of the account (conn-ssh list_targets names them)."
+        "description": "The machine it runs on: a connection id of the account (conn-ssh list_targets names them). Leave it out to run on the person's own machine, where this terminal runs."
       },
       "command": {
         "type": "string",
@@ -1309,7 +1309,6 @@
       }
     },
     "required": [
-      "connection_id",
       "command",
       "title"
     ],
