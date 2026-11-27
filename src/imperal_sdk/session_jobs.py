@@ -19,6 +19,7 @@ from imperal_sdk.evidence import cut_text
 
 JOB_ROOT = "$HOME/.imperal-jobs"       # on the job's machine: <root>/<dir>/{log,exit,pid,cancel}
 TAIL_CHARS = 2000                      # the end of the log a poll reads and a report shows
+TITLE_CHARS = 120                      # a job's title as its folder keeps it
 
 RUNNING, DONE, FAILED, CANCELLED, LOST = "running", "done", "failed", "cancelled", "lost"
 ENDED = frozenset({DONE, FAILED, CANCELLED, LOST})
@@ -56,15 +57,24 @@ def job_dir(session_id: str, n: int) -> str:
     return f"{JOB_ROOT}/{part}-{int(n)}"
 
 
-def start_line(command: str, directory: str) -> str:
+def _names(command: str, title: str, directory: str) -> str:
+    """PURE. The piece of a line that writes what the job is beside its log (``cmd``, ``title``): whoever looks into
+    the folder on the machine -- the person's terminal listing its jobs -- reads them there. Each is one quoted
+    word."""
+    return (f"printf %s {shlex.quote(str(command))} > {directory}/cmd && "
+            f"printf %s {shlex.quote(' '.join(str(title or '').split())[:TITLE_CHARS])} > {directory}/title && ")
+
+
+def start_line(command: str, directory: str, title: str = "") -> str:
     """PURE. The shell line that starts ``command`` detached in its own process group: output to the job's log, exit
-    code to its exit file, the group's id to its pid file. The line returns at once and the command runs where a
-    command on that machine starts (its own ``cd`` is its own). The command is passed as ONE quoted word to
-    ``sh -c`` -- nothing of it is read by the line itself."""
+    code to its exit file, the group's id to its pid file, what it is to ``cmd`` and ``title``. The line returns at
+    once and the command runs where a command on that machine starts (its own ``cd`` is its own). The command is
+    passed as ONE quoted word to ``sh -c`` -- nothing of it is read by the line itself."""
     directory = _dir(directory)
     inner = f"sh -c {shlex.quote(str(command))}; echo $? > {directory}/exit"
     q = shlex.quote(inner)
     return (f"mkdir -p {directory} && rm -f {directory}/exit {directory}/cancel && "
+            + _names(command, title, directory) +
             # its own process group either way: setsid where the machine has it, else the shell's job control
             # (measured 2026-11-25: macOS has no setsid -- the job died at once and read as "lost")
             f"(if command -v setsid >/dev/null 2>&1; then setsid nohup sh -c {q} > {directory}/log 2>&1 < /dev/null & "
@@ -87,10 +97,15 @@ def poll_line(directory: str) -> str:
 
 def cancel_line(directory: str) -> str:
     """PURE. The line that ends the job: the mark first (the poll then reads "cancelled", not "lost"), then the
-    whole process group (the process alone only where no group formed)."""
+    whole process group (the process alone only where no group formed). Exit 0 and "cancel sent" only when a signal
+    reached it."""
     directory = _dir(directory)
-    return (f"cd {directory} && touch cancel && p=$(cat pid) && {{ kill -TERM -$p 2>/dev/null || kill -TERM $p; }} ; "
-            f"echo {_MARK} cancel sent")
+    # "cancel sent" only when a signal was sent (review k33, 2026-11-27: the line said it after a failed cd or kill
+    # too). A job that had already ended keeps its own outcome: the mark is taken back, so its exit code is not
+    # read as a cancel.
+    return (f"cd {directory} && touch cancel && p=$(cat pid) && "
+            f"{{ kill -TERM -$p 2>/dev/null || kill -TERM $p 2>/dev/null; }} && echo {_MARK} cancel sent || "
+            f"{{ rm -f {directory}/cancel; echo {_MARK} cancel failed: no such job is running; exit 1; }}")
 
 
 def read_poll(stdout: str) -> Dict[str, Any]:
@@ -113,6 +128,21 @@ def read_poll(stdout: str) -> Dict[str, Any]:
     if f.get("alive") == "1":
         return {"state": RUNNING, "exit_code": None, "tail": tail}
     return {"state": CANCELLED if f.get("cancel") == "1" else LOST, "exit_code": None, "tail": tail}
+
+
+RUNS = ".runs"                         # under the jobs' root: folders of commands a terminal is waiting for
+
+
+def held_command(command: str, folder: str, shell: str = "sh") -> str:
+    """PURE. ``command`` as a terminal runs it when it WAITS for it, in the job's own form: the caller starts this
+    text in a new session with its output sent to ``<folder>/log`` and writes the process id to ``<folder>/pid``;
+    the text itself writes the exit code to ``<folder>/exit`` and ends with that code. So a command somebody waits
+    for and a job are one thing on the machine: "to the background" is to stop waiting -- nothing of the process
+    changes, and it outlives the terminal (owner 2026-11-27: "to throw it into the background myself, to come back
+    to it"). ``folder`` is a path on the machine itself (the terminal's own), ``shell`` what runs the command --
+    both quoted whole."""
+    f = shlex.quote(str(folder).rstrip("/"))
+    return f"{shlex.quote(str(shell))} -c {shlex.quote(str(command))}; c=$?; echo $c > {f}/exit; exit $c"
 
 
 def local_dir(directory: str, home: str) -> str:

@@ -70,3 +70,45 @@ def test_a_cancelled_job_reads_as_cancelled_and_a_missing_folder_as_lost(tmp_pat
     assert _wait(tmp_path, d, sj.ENDED)["state"] == sj.CANCELLED
     assert sj.read_poll(_sh(sj.poll_line(sj.job_dir(SID, 99)), tmp_path).stdout)["state"] == sj.LOST
     assert sj.read_poll("a banner\nnothing of ours") == {"state": "", "exit_code": None, "tail": ""}
+
+
+def test_a_job_keeps_what_it_is_beside_its_log(tmp_path):
+    d = sj.job_dir(SID, 4)
+    _sh(sj.start_line("echo 'a b'; echo \"$HOME\"", d, title="the  suite;\n rm -rf x"), tmp_path)
+    folder = sj.local_dir(d, str(tmp_path))
+    assert _wait(tmp_path, d, sj.ENDED)["state"] == sj.DONE
+    assert open(os.path.join(folder, "cmd")).read() == "echo 'a b'; echo \"$HOME\""
+    assert open(os.path.join(folder, "title")).read() == "the suite; rm -rf x"      # one line, written, never run
+    assert not os.path.exists(tmp_path / "x")
+
+
+def test_cancel_says_sent_only_when_a_signal_was_sent_and_an_ended_job_keeps_its_outcome(tmp_path):
+    d = sj.job_dir(SID, 5)
+    _sh(sj.start_line("exit 3", d), tmp_path)
+    assert _wait(tmp_path, d, sj.ENDED)["state"] == sj.FAILED
+    late = _sh(sj.cancel_line(d), tmp_path)
+    assert late.returncode != 0 and "cancel sent" not in late.stdout and "cancel failed" in late.stdout
+    got = sj.read_poll(_sh(sj.poll_line(d), tmp_path).stdout)
+    assert (got["state"], got["exit_code"]) == (sj.FAILED, 3)          # not rewritten as a cancel
+    none = _sh(sj.cancel_line(sj.job_dir(SID, 98)), tmp_path)
+    assert none.returncode != 0 and "cancel sent" not in none.stdout
+
+
+def test_a_command_somebody_waits_for_is_a_job_on_the_machine(tmp_path):
+    """The held form: started by its caller in a new session with its output in the folder's log, it writes its own
+    exit code -- the poll line then reads it as any job, through a link of the job's name."""
+    run = tmp_path / ".imperal-jobs" / sj.RUNS / "r1"
+    run.mkdir(parents=True)
+    with open(run / "log", "wb") as log:
+        proc = subprocess.Popen(["sh", "-c", sj.held_command("echo out; echo err >&2; sleep 1; exit 4", str(run))],
+                                stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                start_new_session=True, env={"HOME": str(tmp_path), "PATH": os.environ["PATH"]})
+    (run / "pid").write_text(str(proc.pid))
+    d = sj.job_dir(SID, 6)
+    os.symlink(str(run), sj.local_dir(d, str(tmp_path)))               # adopted: the job's name leads to the run
+    assert sj.read_poll(_sh(sj.poll_line(d), tmp_path).stdout)["state"] == sj.RUNNING
+    assert proc.wait(timeout=10) == 4                                   # the caller that waits gets the code too
+    got = sj.read_poll(_sh(sj.poll_line(d), tmp_path).stdout)
+    assert (got["state"], got["exit_code"], got["tail"].split()) == (sj.FAILED, 4, ["out", "err"])
+    quoted = sj.held_command("echo 'it''s'", "/tmp/a b/c", shell="/bin/ba sh")
+    assert "'/tmp/a b/c'/exit" in quoted and quoted.startswith("'/bin/ba sh' -c ")

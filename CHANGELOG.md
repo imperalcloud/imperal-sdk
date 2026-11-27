@@ -2,6 +2,19 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.13.0 - 2026-11-27
+
+### Added
+- `session_jobs.held_command`: a command its caller waits for, in the job's own form (output in the folder's log,
+  exit code in its exit file). A terminal that runs every command this way sends one to the background by no
+  longer waiting for it - the process is not touched and outlives the terminal.
+- `session_jobs.start_line(..., title=)`: the job keeps what it is beside its log (`cmd`, `title`), so the
+  person's terminal can list its jobs from the machine alone.
+
+### Fixed
+- `session_jobs.cancel_line`: says "cancel sent" and exits 0 only when a signal reached the job. It said so after
+  a failed `cd` or `kill` too, and a cancel of a job that had already ended rewrote its outcome as cancelled.
+
 ## 6.12.0 - 2026-11-27
 
 ### Changed
