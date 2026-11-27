@@ -33,11 +33,17 @@ def test_the_folder_is_the_kernels_own_form_and_nothing_else_enters_a_line():
     d = sj.job_dir(SID, 7)
     assert d == "$HOME/.imperal-jobs/marathon-imp_u_x-r8ff-s1-7" and sj.job_id(7) == "j7"
     assert sj.job_dir("a/b c;rm", 1) == "$HOME/.imperal-jobs/a_b_c_rm-1"
-    for bad in ("$HOME/.imperal-jobs/x; touch y", "/tmp/x", "$HOME/.imperal-jobs/../x", ""):
+    for odd in ("", "..", "x-", "trailing.", "-"):                       # every id gives a folder its own lines take
+        assert sj.poll_line(sj.job_dir(odd, 3)) and sj.job_of_dir(sj.job_dir(odd, 3).rsplit("/", 1)[1]) == (sj.session_part(odd), 3)
+    for bad in ("$HOME/.imperal-jobs/x; touch y", "/tmp/x", "$HOME/.imperal-jobs/../x", "", "$HOME/.imperal-jobs/..",
+                "$HOME/.imperal-jobs/.", "$HOME/.imperal-jobs/notes", "$HOME/.imperal-jobs/..-1",
+                "$HOME/.imperal-jobs/x-12345"):
         with pytest.raises(ValueError):
             sj.poll_line(bad)
         with pytest.raises(ValueError):
             sj.start_line("true", bad)
+        with pytest.raises(ValueError):
+            sj.cancel_line(bad)
     assert sj.local_dir(d, "/home/u") == "/home/u/.imperal-jobs/marathon-imp_u_x-r8ff-s1-7"
     assert sj.job_of_dir("marathon-imp_u_x-r8ff-s1-7") == (sj.session_part(SID), 7)
     assert sj.job_of_dir("notes") is None and sj.job_of_dir("x-0007") == ("x", 7)

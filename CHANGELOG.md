@@ -2,6 +2,12 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.11.1 - 2026-11-27
+
+### Fixed
+- `session_jobs`: a job folder is taken only in the exact form `job_dir` gives (a name ending in the job's
+  number). The looser form took `..`, and a job line then worked one folder above the jobs (security review).
+
 ## 6.11.0 - 2026-11-27
 
 A job of a session on its machine has one owner of its format (one-loop plan, rule 8: a command in the background

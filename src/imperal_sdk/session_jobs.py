@@ -28,7 +28,9 @@ ENDED = frozenset({DONE, FAILED, CANCELLED, LOST})
 POLL_FIRST_S, POLL_S, POLLS_FIRST = 5, 30, 12
 _MARK = "---imperal-job---"
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]")
-_DIR = re.compile(r"\$HOME/\.imperal-jobs/[A-Za-z0-9_.-]+")
+# exactly the form ``job_dir`` gives: a name that ends in the job's number -- so never ".", ".." or a bare word
+# (security review 2026-11-27: the looser form took ".." and a line then worked one folder above the jobs)
+_DIR = re.compile(r"\$HOME/\.imperal-jobs/[A-Za-z0-9_.-]*[A-Za-z0-9_]-\d{1,4}")
 
 
 def _dir(directory: str) -> str:
@@ -47,8 +49,11 @@ def job_id(n: int) -> str:
 
 def job_dir(session_id: str, n: int) -> str:
     """PURE. The job's folder on its machine; the session's id whole, reduced to file-safe characters (a session id
-    is at most 200 characters -- workflows.agent_messages._SESSION_ID)."""
-    return f"{JOB_ROOT}/{_SAFE.sub('_', str(session_id))}-{int(n)}"
+    is at most 200 characters). The name always ends ``<word character>-<n>`` -- the one form ``_dir`` takes."""
+    part = _SAFE.sub("_", str(session_id))
+    if not part or part[-1] in ".-":
+        part += "_"
+    return f"{JOB_ROOT}/{part}-{int(n)}"
 
 
 def start_line(command: str, directory: str) -> str:
@@ -124,4 +129,4 @@ def job_of_dir(name: str):
 
 def session_part(session_id: str) -> str:
     """PURE. The session's id as a job folder's name carries it."""
-    return _SAFE.sub("_", str(session_id))
+    return job_dir(session_id, 1)[len(JOB_ROOT) + 1:-2]
