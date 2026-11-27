@@ -304,6 +304,7 @@ class Linker:
     def __post_init__(self):
         self.modules = module_index(list(self.facts), self.configs, self.roots)
         self._defs: dict = {}
+        self._where = None                    # qualname -> the files defining it (defined_in)
         self._pkgs: dict = {}                 # module key -> (files, names before the asked ones)
         self.ns: dict = {}                    # (family, package) -> files that declare it
         self.dirs: dict = {}                  # Go: directory -> its .go files (one package)
@@ -336,6 +337,18 @@ class Linker:
             fx = self.facts.get(path)
             self._defs[path] = {d.qualname: d for d in (fx.defs if fx else [])}
         return self._defs[path]
+
+    def defined_in(self, qualname: str):
+        """The files that define ``qualname`` (a set; empty when none does) -- one table for the repo, built once.
+        Live 2026-11-27: a reference was looked for by asking every file of its package in turn, for every
+        reference -- files x references; a home folder indexed as one workspace stood for minutes in it."""
+        if self._where is None:
+            where: dict = {}
+            for path, fx in self.facts.items():
+                for d in (fx.defs if fx else []):
+                    where.setdefault(d.qualname, set()).add(path)
+            self._where = where
+        return self._where.get(qualname) or ()
 
     def bindings(self, path: str) -> list:
         fx = self.facts.get(path)
@@ -465,14 +478,16 @@ class Linker:
                 return f if not left else self._pkg(f"rs:{f}:{'.'.join(left)}", [f], left)
         return None
 
-    def _def_in_any(self, files: list, names: list):
+    def _def_in_any(self, files: list, names: list, skip: str = ""):
         """The longest qualified match over a group of files (a C# partial class / Ruby reopened class: ``Repo`` in
         one file, ``Repo.Open`` in another -- the member wins)."""
         for k in range(min(len(names), 3), 0, -1):
             q = ".".join(names[:k])
-            for f in files:
-                if q in self.defs(f):
-                    return f, q
+            has = self.defined_in(q)
+            if has:
+                for f in files:
+                    if f in has and f != skip:
+                        return f, q
         return None
 
     def _def_in(self, path: str, names: list):
@@ -504,7 +519,7 @@ class Linker:
                 if got and self.defs(got[0])[got[1]].kind != "class":     # a nested type is a constant, below
                     return got[0], got[1], "self"
         if lang == "go":
-            got = self._def_in_any([f for f in self.dirs.get(posixpath.dirname(path)) or [] if f != path], names)
+            got = self._def_in_any(self.dirs.get(posixpath.dirname(path)) or [], names, skip=path)
             return (got[0], got[1], "package") if got else None
         fam = _FAMILY.get(lang)
         if fam:
@@ -520,7 +535,7 @@ class Linker:
                     if p in seen:
                         continue
                     seen.add(p)
-                    got = self._def_in_any([f for f in self.ns.get((fam, p)) or [] if f != path], names)
+                    got = self._def_in_any(self.ns.get((fam, p)) or [], names, skip=path)
                     if got:
                         return got[0], got[1], "package"
             for k in range(len(names) - 1, 0, -1):     # a fully qualified name: com.acme.Repo.save
@@ -542,6 +557,9 @@ class Linker:
         """``self.member`` defined in another file of the same type: a Go method in another file of the package,
         a reopened Ruby class, a C# partial class, a PHP / Kotlin type split over files."""
         q = f"{cls}.{member}"
+        has = self.defined_in(q)
+        if not has:                 # no file defines it: no group of files is gathered to be asked
+            return None
         if lang == "go":
             files = self.dirs.get(posixpath.dirname(path)) or []
         elif lang == "ruby":
@@ -552,7 +570,7 @@ class Linker:
             files = [f for p in pk for f in self.ns.get((_FAMILY[lang], p)) or []]
         else:
             return None
-        return next(((f, q) for f in files if f != path and q in self.defs(f)), None)
+        return next(((f, q) for f in files if f != path and f in has), None)
 
     def target(self, path: str, names: list, depth: int = 0):
         """``(path, qualname)`` of ``names`` inside the module ``path`` (re-exports and star exports followed, a

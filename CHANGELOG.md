@@ -2,6 +2,17 @@
 
 All notable changes to `imperal-sdk` are documented here.
 
+## 6.10.1 - 2026-11-27
+
+The link table of a repository is built in time linear in its size. Live 2026-11-27 (the stall file of a terminal
+whose workspace was a home folder): a reference was looked for by asking every file of its package in turn, for
+every reference - files x references. Measured on a synthetic folder of 12000 C# files: 52.81 s before, 0.14 s now.
+
+### Changed
+- `code_links.Linker`: one table "qualified name -> the files defining it" (`defined_in`), built once; the lookups
+  of a member in another file of the type and of a name in the files of a package ask it instead of every file.
+  The links found are the same.
+
 ## 6.10.0 - 2026-11-25
 
 A long command runs as a job of the session: the shell starts it and goes on, the kernel watches it and tells the

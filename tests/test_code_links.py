@@ -170,3 +170,21 @@ def test_depth_never_grows_through_a_module_level_use_as_the_whole_file():
                   "uses_mod.py": "from mod import unrelated\n\n\ndef f():\n    return unrelated()\n"})
     got = {(i["id"], i["depth"]) for i in impact(lk, ["linker"], depth=2)["data"]["items"]}
     assert got == {("mod.py", 1)}                      # uses_mod.py only uses another definition of mod.py
+
+
+def test_a_reference_is_not_looked_for_in_every_file_of_its_package():
+    """Live 2026-11-27 (a terminal's stall file): a home folder indexed as one workspace stood for minutes in
+    ``_member_elsewhere`` -- each reference asked every file of its package in turn. The lookup is one table."""
+    import time
+    files = {"a.cs": "public partial class Repo {\n    public void Open() { Flush(); Missing(); }\n}\n",
+             "b.cs": "public partial class Repo {\n    public void Flush() { }\n}\n"}
+    for i in range(1500):
+        files[f"m/f{i}.cs"] = (f"public partial class K{i} {{\n    public void Run{i}() {{ Gone{i}(); Other{i}(); }}\n"
+                               f"    public void Other{i}() {{ }}\n}}\n")
+    lk = _linker(files)
+    t = time.monotonic()
+    links = lk.links()
+    took = time.monotonic() - t
+    assert ("a.cs", "Repo.Open", "b.cs", "Repo.Flush") in {(s, u, d, q) for s, u, _k, _l, d, q, _o in links}
+    assert lk.defined_in("Repo.Flush") == {"b.cs"} and not lk.defined_in("Repo.Missing")
+    assert took < 5.0, took                  # 3000 unresolved references over 1500 files: seconds before, not now
